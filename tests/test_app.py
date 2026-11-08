@@ -243,6 +243,193 @@ def main():
         check("hangout done opens log with bud tagged", page.locator("#log-form input[value=rina]:checked").count() == 1)
         page.locator("#dlg-log [data-close]").first.click()
 
+
+        # ---- nutrition, targets, recipes (pure logic) ----
+        logic2 = page.evaluate(
+            """() => {
+              const N = window.LahapNutrition;
+              const R = window.LahapRecipes;
+              const male = N.targets({ sex: 'm', age: 30, height: 175, weight: 70, activity: 'light', goal: 'maintain' });
+              const tiny = N.targets({ sex: 'f', age: 40, height: 150, weight: 45, activity: 'low', goal: 'lose' });
+              const regular = N.estimate({ name: 'Nasi goreng kampung', plate: { veg: 1, protein: 1, carbs: 2 } });
+              const large = N.estimate({ name: 'Nasi goreng kampung', plate: { veg: 1, protein: 1, carbs: 2 }, portion: 'l' });
+              const unknown = N.estimate({ name: 'Mystery plate', plate: { veg: 2, protein: 1, carbs: 1 } });
+              const fromRecipe = N.estimate({ name: 'x', nutrition: { kcal: 512, p: 40, c: 50, f: 12, fiber: 6 } });
+              const parsed = R.parseIngredients('3 telur, tempe, kangkung dan nasi putih, bawang merah');
+              const lose = R.suggest(['egg', 'rice'], { goal: 'lose', limit: 30 });
+              const gain = R.suggest(['egg', 'rice'], { goal: 'gain', limit: 30 });
+              const shared = lose.find((r) => gain.some((g) => g.id === r.id) && r.items.some((i) => i.id === 'rice'));
+              const riceIn = (list, id) => list.find((r) => r.id === id).items.find((i) => i.id === 'rice').grams;
+              const veg = R.suggest([], { diet: { vegetarian: true }, limit: 40 });
+              const meaty = veg.filter((r) => r.items.some((i) => ['meat', 'fish', 'seafood', 'beef'].some((t) => R.INGREDIENTS[i.id].tags.includes(t))));
+              const tips = N.mealTips({ plate: { veg: 0, protein: 1, carbs: 2, fried: true } }, regular, { goal: 'lose', sex: 'm', age: 30, height: 175, weight: 70 }, { kcal: 900, p: 30 });
+              return {
+                maleKcal: male.kcal, maleProtein: male.protein, tinyKcal: tiny.kcal,
+                food: regular.food, regularKcal: regular.kcal, largeKcal: large.kcal, unknownSource: unknown.source, recipeKcal: fromRecipe.kcal,
+                parsed, top: lose[0] && lose[0].id, topHasEgg: lose[0] && lose[0].items.some((i) => i.id === 'egg'),
+                riceLose: shared ? riceIn(lose, shared.id) : 0, riceGain: shared ? riceIn(gain, shared.id) : 0,
+                vegCount: veg.length, meaty: meaty.map((r) => r.id), tips,
+              };
+            }"""
+        )
+        # Mifflin-St Jeor: 10*70 + 6.25*175 - 5*30 + 5 = 1648.75; x1.375 = 2267 -> rounded to 2270
+        check("targets: Mifflin-St Jeor maintain = 2270 kcal", logic2["maleKcal"] == 2270, logic2["maleKcal"])
+        check("targets: protein 1.2 g/kg = 84 g", logic2["maleProtein"] == 84, logic2["maleProtein"])
+        check("targets: weight-loss floor 1200 kcal", logic2["tinyKcal"] == 1200, logic2["tinyKcal"])
+        check("estimate: matches nasi goreng", logic2["food"] == "Nasi goreng", logic2["food"])
+        check("estimate: large portion is 1.4x", abs(logic2["largeKcal"] - logic2["regularKcal"] * 1.4) < 15, (logic2["regularKcal"], logic2["largeKcal"]))
+        check("estimate: unknown dish uses plate model", logic2["unknownSource"] == "plate", logic2["unknownSource"])
+        check("estimate: recipe nutrition wins", logic2["recipeKcal"] == 512, logic2["recipeKcal"])
+        check("tips: lose goal gets fried + rice tips", len(logic2["tips"]) >= 2 and any("goreng" in t or "rice" in t for t in logic2["tips"]), logic2["tips"])
+        check("parse: Indonesian list", set(logic2["parsed"]) >= {"egg", "tempeh", "kangkung", "rice", "shallot"} and "garlic" not in logic2["parsed"], logic2["parsed"])
+        check("suggest: egg + rice ranks an egg recipe first", logic2["topHasEgg"], logic2["top"])
+        check("suggest: lose uses less rice than gain", 0 < logic2["riceLose"] < logic2["riceGain"], (logic2["riceLose"], logic2["riceGain"]))
+        check("suggest: vegetarian filter drops meat and fish", logic2["vegCount"] > 3 and not logic2["meaty"], logic2["meaty"])
+
+        # ---- first run: quiz, lab, cutout, OCR in a clean browser profile ----
+        fresh = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=1, permissions=["clipboard-read", "clipboard-write"])
+        page2 = fresh.new_page()
+        errors2 = []
+        page2.on("pageerror", lambda error: errors2.append(str(error)))
+        page2.on("console", lambda message: errors2.append(message.text) if message.type == "error" else None)
+        page2.goto(base + "?nosw=1")
+        page2.wait_for_selector("html[data-ready='1']")
+        check("quiz opens on first run", page2.evaluate("() => document.getElementById('dlg-quiz').open"))
+        page2.locator("[data-quiz-goal=lose]").click()
+        page2.locator("#dlg-quiz [data-seg=sex][data-value=m]").click()
+        page2.fill("#quiz-age", "30")
+        page2.fill("#quiz-height", "175")
+        page2.fill("#quiz-weight", "70")
+        page2.locator("[data-quiz-next]").click()
+        page2.locator("[data-quiz-activity=light]").click()
+        page2.locator("[data-quiz-next]").click()
+        page2.locator("#dlg-quiz input[value=vegetarian]").check()
+        page2.locator("[data-quiz-next]").click()
+        summary = page2.inner_text("#dlg-quiz .sheet-body")
+        check("quiz summary shows targets (2270 - 450 = 1820 kcal)", "1820" in summary and "112" in summary, summary[:120])
+        page2.locator("[data-quiz-next]").click()
+        page2.wait_for_timeout(200)
+        prof = page2.evaluate("() => window.Lahap.state.settings.profile")
+        check("quiz saves goal and diet", prof and prof["goal"] == "lose" and prof["diet"].get("vegetarian") is True, prof)
+        page2.reload()
+        page2.wait_for_selector("html[data-ready='1']")
+        check("quiz does not reopen after finishing", not page2.evaluate("() => document.getElementById('dlg-quiz').open"))
+        page2.evaluate("() => location.hash = 'me'")
+        page2.wait_for_timeout(150)
+        check("Me shows goal and retake", "Retake the quiz" in page2.inner_text("#view-me") and "1820" in page2.inner_text("#view-me"))
+
+        # lab: typed list -> recipes for the goal, vegetarian respected, log as meal
+        page2.evaluate("() => location.hash = 'lab'")
+        page2.wait_for_selector("#lab-text")
+        page2.fill("#lab-text", "telur, tempe, kangkung, nasi")
+        page2.locator("[data-lab-find]").click()
+        page2.wait_for_timeout(150)
+        have = page2.evaluate("() => window.Lahap.state.lab.have")
+        check("lab: typed list detected", set(have) >= {"egg", "tempeh", "kangkung", "rice"}, have)
+        cards = page2.locator(".recipe").count()
+        names = page2.locator(".recipe h3").all_inner_texts()
+        check("lab: 3 recipes", cards == 3, cards)
+        check("lab: vegetarian recipes only", not any(word in " ".join(names).lower() for word in ("ayam", "chicken", "beef", "fish", "ikan", "udang")), names)
+        page2.locator("[data-lab-remove=rice]").click()
+        check("lab: remove chip", "rice" not in page2.evaluate("() => window.Lahap.state.lab.have"))
+        page2.locator("[data-lab-add=rice]").click()
+        page2.locator("[data-lab-log]").first.click()
+        page2.wait_for_selector("#log-form")
+        logged_name = page2.input_value("#log-form input[name=name]")
+        nutri_text = page2.inner_text("#log-nutri")
+        check("lab: log prefilled with recipe", logged_name == names[0], (logged_name, names[0]))
+        check("lab: log shows recipe nutrition", "From the Lab recipe" in nutri_text, nutri_text[:80])
+        page2.locator("#log-form button[type=submit]").click()
+        page2.wait_for_timeout(300)
+        saved = page2.evaluate("() => window.Lahap.state.entries.find((e) => e.recipe)")
+        check("lab: cooked meal saved with nutrition", saved and saved["source"] == "home" and saved["nutrition"]["kcal"] > 0, saved and saved.get("nutrition"))
+
+        # diary: today bar against targets
+        page2.evaluate("() => location.hash = 'diary'")
+        page2.wait_for_selector(".today")
+        today_text = page2.inner_text(".today")
+        check("diary: today bar vs 1820 kcal", "/ 1820 kcal" in today_text, today_text[:80])
+
+        # cutout: real photo through the log form, model runs on device
+        page2.locator("[data-action=log]:visible").first.click()
+        page2.wait_for_selector("#log-form")
+        page2.set_input_files("#log-photo", str(ROOT / "tests" / "fixtures" / "plate.jpg"))
+        page2.wait_for_selector("#cut-toggle:not([hidden])", timeout=90000)
+        status = page2.inner_text("#photo-status")
+        preview = page2.evaluate("() => { const p = document.getElementById('log-preview'); return { cut: p.classList.contains('cut'), src: p.src.slice(0, 22) }; }")
+        check("cutout: model removed the background", "cut out on this device" in status, status)
+        check("cutout: preview shows the transparent cutout", preview["cut"] and preview["src"].startswith(("data:image/webp", "data:image/png")), preview)
+        alpha = page2.evaluate(
+            """async () => {
+              const img = new Image();
+              img.src = document.getElementById('log-preview').src;
+              await img.decode();
+              const c = document.createElement('canvas');
+              c.width = img.width;
+              c.height = img.height;
+              const ctx = c.getContext('2d');
+              ctx.drawImage(img, 0, 0);
+              const d = ctx.getImageData(0, 0, c.width, c.height).data;
+              let clear = 0;
+              let solid = 0;
+              for (let i = 3; i < d.length; i += 4) {
+                if (d[i] < 10) clear++;
+                if (d[i] > 245) solid++;
+              }
+              const corner = ctx.getImageData(2, 2, 1, 1).data[3];
+              const centre = ctx.getImageData(c.width >> 1, c.height >> 1, 1, 1).data[3];
+              return { clear: clear / (d.length / 4), solid: solid / (d.length / 4), corner, centre };
+            }"""
+        )
+        check("cutout: corners transparent, food solid", alpha["corner"] < 10 and alpha["centre"] > 245 and alpha["clear"] > 0.1, alpha)
+        plate_note = page2.inner_text("#plate-source")
+        check("cutout: plate guessed from colours", "colours" in plate_note, plate_note)
+        page2.fill("#log-form input[name=name]", "Nasi goreng test")
+        page2.locator("#log-form input[name=name]").dispatch_event("change")
+        check("dish name sets the plate from the food table", "typical nasi goreng" in page2.inner_text("#plate-source"), page2.inner_text("#plate-source"))
+        page2.locator("#log-form [data-seg=photoview][data-value=full]").click()
+        check("cutout: Original toggle restores the photo", not page2.evaluate("() => document.getElementById('log-preview').classList.contains('cut')"))
+        page2.locator("#log-form [data-seg=photoview][data-value=cut]").click()
+        page2.locator("#log-form button[type=submit]").click()
+        page2.wait_for_timeout(300)
+        cut_entry = page2.evaluate("() => { const e = window.Lahap.state.entries.find((x) => x.name === 'Nasi goreng test'); return e && { cut: !!e.cutout, photo: !!e.photo }; }")
+        check("cutout: saved with the original kept", cut_entry == {"cut": True, "photo": True}, cut_entry)
+        page2.locator(".ticket", has_text="Nasi goreng test").click()
+        page2.wait_for_selector("#dlg-detail .nutri .macros")
+        detail_text = page2.inner_text("#dlg-detail")
+        check("detail: nutrition and tips shown", "Estimated nutrition" in detail_text and "kcal" in detail_text)
+        check("detail: food-only photo with original toggle", page2.locator("#detail-swap").count() == 1)
+        page2.locator("#dlg-detail [data-share]").click()
+        page2.wait_for_timeout(500)
+        check("share: card draws the cutout", page2.evaluate("() => document.querySelector('#dlg-share canvas') !== null"))
+        page2.evaluate("() => document.getElementById('dlg-share').close()")
+
+        # OCR: a written list read on the device with Tesseract
+        ocr_text = page2.evaluate(
+            """async () => {
+              const c = document.createElement('canvas');
+              c.width = 640;
+              c.height = 300;
+              const ctx = c.getContext('2d');
+              ctx.fillStyle = '#fff';
+              ctx.fillRect(0, 0, c.width, c.height);
+              ctx.fillStyle = '#111';
+              ctx.font = '40px Arial';
+              ['telur 6', 'tempe', 'kangkung 1 ikat', 'beras 1 kg'].forEach((line, i) => ctx.fillText(line, 30, 60 + i * 62));
+              const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+              return window.Lahap.readListPhoto(blob);
+            }"""
+        )
+        parsed_ocr = page2.evaluate("(t) => window.LahapRecipes.parseIngredients(t)", ocr_text)
+        check("ocr: reads a written list on device", set(parsed_ocr) >= {"egg", "tempeh", "kangkung"}, (ocr_text[:80], parsed_ocr))
+
+        page2.set_viewport_size({"width": 1280, "height": 900})
+        page2.evaluate("() => location.hash = 'lab'")
+        page2.wait_for_timeout(150)
+        check("lab: no overflow on desktop", page2.evaluate("() => document.documentElement.scrollWidth - window.innerWidth") <= 0)
+        check("first-run flows: no JS errors", not errors2, "; ".join(errors2[:3]))
+        fresh.close()
+
         # ---- persistence ----
         page.reload()
         page.wait_for_selector("html[data-ready='1']")
@@ -252,7 +439,7 @@ def main():
         # ---- layout ----
         for width in (320, 390, 768, 1024, 1440):
             page.set_viewport_size({"width": width, "height": 900})
-            for view in ("diary", "insights", "buds", "me"):
+            for view in ("diary", "insights", "lab", "buds", "me"):
                 page.evaluate(f"() => location.hash = '{view}'")
                 page.wait_for_timeout(80)
                 overflow = page.evaluate("() => document.documentElement.scrollWidth - window.innerWidth")

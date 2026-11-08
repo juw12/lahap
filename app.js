@@ -23,7 +23,7 @@
 
   const state = {
     entries: [],
-    settings: { name: "", currency: "IDR" },
+    settings: { name: "", currency: "IDR", profile: null, quizSeen: false },
     friends: [],
     points: {},
     invites: [],
@@ -32,6 +32,7 @@
     sourceFilter: "all",
     tasteFilter: [],
     period: 7,
+    lab: { text: "", have: [], goal: null, status: "" },
   };
 
   /* ---------------- storage: IndexedDB, in-memory fallback ---------------- */
@@ -354,7 +355,64 @@
   }
 
   function imageFor(entry) {
-    return entry.photo || plateThumb(entry);
+    return entry.cutout || entry.photo || plateThumb(entry);
+  }
+
+  /* ---------------- nutrition and goals ---------------- */
+  const N = window.LahapNutrition;
+  const R = window.LahapRecipes;
+  const SAMPLE_PROFILE = { goal: "healthy", sex: "m", age: 30, height: 170, weight: 68, activity: "light", diet: {}, cookMinutes: 30 };
+
+  function profileOrDefault() {
+    return state.settings.profile || { goal: "healthy" };
+  }
+
+  function nutritionFor(entry) {
+    return N.estimate(entry);
+  }
+
+  function dayTotals(key, exceptId) {
+    return N.sum(state.entries.filter((entry) => L.dayKey(entry.ts) === key && entry.id !== exceptId).map(nutritionFor));
+  }
+
+  function nutriHtml(nutrition, tips) {
+    return `
+      <div class="nutri-head"><h3>Estimated nutrition</h3><span class="hint">${esc(nutrition.label)}</span></div>
+      <dl class="macros">
+        <div><dt>Energy</dt><dd>${nutrition.kcal}<small> kcal</small></dd></div>
+        <div><dt>Protein</dt><dd>${nutrition.p}<small> g</small></dd></div>
+        <div><dt>Carbs</dt><dd>${nutrition.c}<small> g</small></dd></div>
+        <div><dt>Fat</dt><dd>${nutrition.f}<small> g</small></dd></div>
+        <div><dt>Fiber</dt><dd>${nutrition.fiber}<small> g</small></dd></div>
+      </dl>
+      ${tips && tips.length ? `<ul class="tips">${tips.map((tip) => `<li>${esc(tip)}</li>`).join("")}</ul>` : ""}
+      <p class="hint small">Estimated from typical portions, not measured. Not medical advice.</p>`;
+  }
+
+  function todayHtml() {
+    const key = L.dayKey(new Date());
+    const today = state.entries.filter((entry) => L.dayKey(entry.ts) === key);
+    const goals = profileOrDefault();
+    const target = N.targets(goals);
+    const total = N.sum(today.map(nutritionFor));
+    const pct = (value, of) => Math.min(100, Math.round((value / Math.max(1, of)) * 100));
+    const kcalPct = pct(total.kcal, target.kcal);
+    const proteinPct = pct(total.p, target.protein);
+    return `
+      <section class="today" aria-label="Today against your targets">
+        <div class="today-grid">
+          <div>
+            <div class="today-row"><span>Today</span><span class="mono">${total.kcal} / ${target.kcal} kcal</span></div>
+            <div class="bar" role="img" aria-label="${kcalPct}% of today's calories"><span style="width:${kcalPct}%"></span></div>
+          </div>
+          <div>
+            <div class="today-row"><span>Protein</span><span class="mono">${total.p} / ${target.protein} g</span></div>
+            <div class="bar protein" role="img" aria-label="${proteinPct}% of today's protein"><span style="width:${proteinPct}%"></span></div>
+          </div>
+        </div>
+        <p class="today-tip">${esc(N.dayTip(total, goals, new Date().getHours()))}</p>
+        ${state.settings.profile ? "" : '<button type="button" class="btn small" data-quiz>Set my goal for personal targets</button>'}
+      </section>`;
   }
 
   /* ---------------- sample data ---------------- */
@@ -420,7 +478,7 @@
   }
 
   /* ---------------- router ---------------- */
-  const VIEWS = ["diary", "insights", "buds", "me"];
+  const VIEWS = ["diary", "insights", "lab", "buds", "me"];
 
   function route() {
     const hash = location.hash.replace("#", "");
@@ -436,6 +494,7 @@
   function render() {
     if (state.view === "diary") renderDiary();
     if (state.view === "insights") renderInsights();
+    if (state.view === "lab") renderLab();
     if (state.view === "buds") renderBuds();
     if (state.view === "me") renderMe();
   }
@@ -462,7 +521,7 @@
     const withWho = who.length ? `<span class="tag">with ${esc(who.join(", "))}</span>` : "";
     return `
       <button type="button" class="ticket" data-open="${esc(entry.id)}">
-        <img class="thumb" src="${imageFor(entry)}" alt="${entry.photo ? "Photo of " + esc(entry.name) : "Plate drawing of " + esc(entry.name)}" width="72" height="72" loading="lazy">
+        <img class="thumb${entry.cutout ? " cut" : ""}" src="${imageFor(entry)}" alt="${entry.photo ? "Photo of " + esc(entry.name) : "Plate drawing of " + esc(entry.name)}" width="72" height="72" loading="lazy">
         <span>
           <span class="title">${esc(entry.name)}</span>
           <span class="meta">${meta.map((part) => `<span class="seg">${esc(part)}</span>`).join(" · ")}</span>
@@ -470,6 +529,7 @@
         </span>
         <span class="stub">
           <span class="price">${entry.price ? esc(money(entry.price)) : "free"}</span>
+          <span class="kcal mono">${nutritionFor(entry).kcal} kcal</span>
           ${scoreBadge(score)}
         </span>
       </button>`;
@@ -619,6 +679,7 @@
             <input id="q" type="search" placeholder="Have I eaten this? Try “bakso”" value="${esc(state.query)}" autocomplete="off">
           </form>
           ${filters}
+          ${state.query ? "" : todayHtml()}
           ${weekLineHtml()}
           ${answerHtml(state.query, list)}
           ${days ? days.replace("</section>", () => `</section>${state.query ? "" : budNudgeHtml()}`) : '<p class="muted">No meals match these filters.</p>'}
@@ -964,6 +1025,7 @@
     root.innerHTML = `
       <div class="view-head"><div><h1>Me</h1><p>Your diary lives in this browser only. No account, no server, no ads.</p></div></div>
       <div class="grid-2">
+        ${goalPanelHtml()}
         <section class="panel">
           <h2>Settings</h2>
           <label class="field"><span>Your name <span class="hint">shown on share cards</span></span><input type="text" id="set-name" value="${esc(state.settings.name)}" placeholder="e.g. Juwen" autocomplete="nickname"></label>
@@ -1023,9 +1085,358 @@
       state.friends = [];
       state.points = {};
       state.invites = [];
+      state.settings.profile = null;
+      state.settings.quizSeen = false;
+      await saveMeta();
       toast("Everything erased");
       render();
     });
+  }
+
+
+  /* ---------------- start quiz ---------------- */
+  const DIETS = [["vegetarian", "Vegetarian"], ["noBeef", "No beef"], ["noSeafood", "No seafood"], ["noNuts", "No nuts"], ["noDairy", "No dairy"], ["noEgg", "No egg"], ["noGluten", "No gluten"]];
+  const ACTIVITY_LABELS = {
+    low: ["Mostly sitting", "Desk job, little walking"],
+    light: ["Lightly active", "Daily walks, 1-2 workouts a week"],
+    active: ["Active", "3-5 workouts a week"],
+    very: ["Very active", "Physical job or training every day"],
+  };
+  const GOAL_HINTS = {
+    lose: "Plates that fill you up for fewer calories",
+    maintain: "Stay where you are and eat well",
+    gain: "More energy and bigger plates",
+    muscle: "Protein first, to go with training",
+    healthy: "More veg, less fried and sugary",
+  };
+  const QUIZ_STEPS = 5;
+
+  function openQuiz() {
+    const dialog = $("#dlg-quiz");
+    const answers = Object.assign(
+      { goal: "healthy", sex: "", age: "", height: "", weight: "", activity: "light", diet: {}, cookMinutes: 30 },
+      JSON.parse(JSON.stringify(state.settings.profile || {}))
+    );
+    let step = 0;
+
+    function stepHtml() {
+      if (step === 0) {
+        return `
+          <h3 class="quiz-q">What do you want from your food?</h3>
+          <div class="options">${Object.entries(N.GOALS).map(([key, goal]) => `<button type="button" class="option" data-quiz-goal="${key}" aria-pressed="${answers.goal === key}"><strong>${esc(goal.label)}</strong><span>${esc(GOAL_HINTS[key])}</span></button>`).join("")}</div>`;
+      }
+      if (step === 1) {
+        return `
+          <h3 class="quiz-q">A little about you</h3>
+          <p class="muted small">Only used to size your daily targets. It never leaves this device.</p>
+          <div class="field"><span>Body</span>${segHtml("sex", [["f", "Female"], ["m", "Male"]], answers.sex)}</div>
+          <div class="row three">
+            <label class="field"><span>Age</span><input type="number" inputmode="numeric" id="quiz-age" min="14" max="100" value="${esc(answers.age)}" placeholder="30"></label>
+            <label class="field"><span>Height, cm</span><input type="number" inputmode="numeric" id="quiz-height" min="120" max="230" value="${esc(answers.height)}" placeholder="165"></label>
+            <label class="field"><span>Weight, kg</span><input type="number" inputmode="decimal" id="quiz-weight" min="30" max="250" step="any" value="${esc(answers.weight)}" placeholder="60"></label>
+          </div>`;
+      }
+      if (step === 2) {
+        return `
+          <h3 class="quiz-q">How active is a normal week?</h3>
+          <div class="options">${Object.entries(ACTIVITY_LABELS).map(([key, [label, hint]]) => `<button type="button" class="option" data-quiz-activity="${key}" aria-pressed="${answers.activity === key}"><strong>${label}</strong><span>${hint}</span></button>`).join("")}</div>
+          <div class="field" style="margin-top:16px"><span>Time to cook on a weekday</span>${segHtml("cook", [[15, "15 min"], [30, "30 min"], [60, "An hour"]], answers.cookMinutes)}</div>`;
+      }
+      if (step === 3) {
+        return `
+          <h3 class="quiz-q">Anything you do not eat?</h3>
+          <p class="muted small">The Lab leaves these out of every recipe.</p>
+          <div class="chips">${DIETS.map(([key, label]) => `<label class="chip"><input type="checkbox" name="diet" value="${key}" ${answers.diet[key] ? "checked" : ""}><span>${label}</span></label>`).join("")}</div>`;
+      }
+      const target = N.targets(answers);
+      const goal = N.GOALS[answers.goal] || N.GOALS.healthy;
+      const missing = !answers.sex || !answers.age || !answers.height || !answers.weight;
+      return `
+        <h3 class="quiz-q">Your daily targets</h3>
+        <dl class="macros big">
+          <div><dt>Energy</dt><dd>${target.kcal}<small> kcal</small></dd></div>
+          <div><dt>Protein</dt><dd>${target.protein}<small> g</small></dd></div>
+          <div><dt>Carbs</dt><dd>${target.carbs}<small> g</small></dd></div>
+          <div><dt>Fat</dt><dd>${target.fat}<small> g</small></dd></div>
+        </dl>
+        <p class="small">Goal: <strong>${esc(goal.label)}</strong>. Your body burns about ${target.tdee} kcal a day (Mifflin-St Jeor, ${target.bmr} kcal at rest, times your activity)${goal.kcal ? `, ${goal.kcal > 0 ? "plus" : "minus"} ${Math.abs(goal.kcal)} kcal for your goal` : ""}.</p>
+        ${missing ? '<p class="notice">Some details were blank, so these use average values. Retake the quiz from Me any time.</p>' : ""}
+        <p class="hint small">A starting point, not medical advice. If you have a health condition, are pregnant or under 18, ask a doctor or dietitian.</p>`;
+    }
+
+    function paint() {
+      dialog.innerHTML = `
+        <div class="sheet-head">
+          <div><p class="eyebrow">Step ${step + 1} of ${QUIZ_STEPS}</p><h2 id="quiz-title">${step === QUIZ_STEPS - 1 ? "Here is your plan" : "Set Lahap up for you"}</h2></div>
+          <button type="button" class="icon-btn" data-quiz-skip aria-label="Skip the quiz">${ICON_CLOSE}</button>
+        </div>
+        <div class="quiz-progress" aria-hidden="true"><span style="width:${Math.round(((step + 1) / QUIZ_STEPS) * 100)}%"></span></div>
+        <div class="sheet-body quiz">${stepHtml()}</div>
+        <div class="sheet-foot">
+          ${step === 0 ? '<button type="button" class="btn ghost" data-quiz-skip>Skip for now</button>' : '<button type="button" class="btn ghost" data-quiz-back>Back</button>'}
+          <button type="button" class="btn primary" data-quiz-next>${step === QUIZ_STEPS - 1 ? "Start logging" : "Next"}</button>
+        </div>`;
+    }
+
+    function readStep() {
+      if (step === 1) {
+        answers.age = Number($("#quiz-age").value) || "";
+        answers.height = Number($("#quiz-height").value) || "";
+        answers.weight = Number($("#quiz-weight").value) || "";
+      }
+      if (step === 3) {
+        answers.diet = {};
+        for (const box of $$('input[name="diet"]:checked', dialog)) answers.diet[box.value] = true;
+      }
+    }
+
+    async function finish(save) {
+      if (save) state.settings.profile = answers;
+      state.settings.quizSeen = true;
+      await saveMeta();
+      dialog.close();
+      if (save) toast(`Targets set: ${N.targets(answers).kcal} kcal and ${N.targets(answers).protein} g protein a day`);
+      render();
+    }
+
+    dialog.onclick = (event) => {
+      const target = event.target;
+      const goal = target.closest("[data-quiz-goal]");
+      if (goal) {
+        answers.goal = goal.dataset.quizGoal;
+        step = 1;
+        paint();
+        return;
+      }
+      const activity = target.closest("[data-quiz-activity]");
+      if (activity) {
+        answers.activity = activity.dataset.quizActivity;
+        for (const button of $$("[data-quiz-activity]", dialog)) button.setAttribute("aria-pressed", String(button === activity));
+        return;
+      }
+      const seg = target.closest("[data-seg]");
+      if (seg) {
+        if (seg.dataset.seg === "sex") answers.sex = seg.dataset.value;
+        if (seg.dataset.seg === "cook") answers.cookMinutes = Number(seg.dataset.value);
+        for (const sibling of $$(`[data-seg="${seg.dataset.seg}"]`, dialog)) sibling.setAttribute("aria-pressed", String(sibling === seg));
+        return;
+      }
+      if (target.closest("[data-quiz-next]")) {
+        readStep();
+        if (step === QUIZ_STEPS - 1) {
+          finish(true);
+          return;
+        }
+        step += 1;
+        paint();
+        return;
+      }
+      if (target.closest("[data-quiz-back]")) {
+        readStep();
+        step = Math.max(0, step - 1);
+        paint();
+        return;
+      }
+      if (target.closest("[data-quiz-skip]")) finish(false);
+    };
+    dialog.onclose = () => {
+      if (!state.settings.quizSeen) {
+        state.settings.quizSeen = true;
+        saveMeta();
+      }
+    };
+    paint();
+    dialog.showModal();
+  }
+
+  function goalPanelHtml() {
+    const prof = state.settings.profile;
+    if (!prof) {
+      return `
+        <section class="panel">
+          <h2>Your goal</h2>
+          <p class="muted" style="margin-bottom:12px">Take the one-minute quiz for daily calorie and protein targets, tips that fit your goal, and Lab recipes sized for you.</p>
+          <button type="button" class="btn primary" data-quiz>Take the quiz</button>
+        </section>`;
+    }
+    const target = N.targets(prof);
+    const diet = DIETS.filter(([key]) => prof.diet && prof.diet[key]).map(([, label]) => label);
+    return `
+      <section class="panel">
+        <h2>Your goal</h2>
+        <p><strong>${esc((N.GOALS[prof.goal] || N.GOALS.healthy).label)}</strong></p>
+        <dl class="macros" style="margin:12px 0">
+          <div><dt>Energy</dt><dd>${target.kcal}<small> kcal</small></dd></div>
+          <div><dt>Protein</dt><dd>${target.protein}<small> g</small></dd></div>
+          <div><dt>Carbs</dt><dd>${target.carbs}<small> g</small></dd></div>
+          <div><dt>Fat</dt><dd>${target.fat}<small> g</small></dd></div>
+        </dl>
+        <p class="muted small" style="margin-bottom:12px">${esc(ACTIVITY_LABELS[prof.activity] ? ACTIVITY_LABELS[prof.activity][0] : "Lightly active")} · cooks ${prof.cookMinutes || 30} min${diet.length ? " · " + esc(diet.join(", ")) : ""}</p>
+        <button type="button" class="btn" data-quiz>Retake the quiz</button>
+      </section>`;
+  }
+
+  /* ---------------- lab: recipes from what you have ---------------- */
+  const QUICK_ADD = ["egg", "chicken", "tempeh", "tofu", "fish", "rice", "noodles", "oats", "potato", "kangkung", "spinach", "cabbage", "carrot", "tomato", "garlic", "shallot", "chili", "banana", "milk"];
+  const ICON_MIC = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+  const ICON_SCAN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M8 9h8M8 12h8M8 15h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+  const ICON_X = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7L7 17" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
+  let labResults = [];
+  let recognition = null;
+  let ocrWorker = null;
+  let ocrStatus = null;
+
+  function ingredientLabel(id) {
+    return (R.INGREDIENTS[id] || { label: id }).label;
+  }
+
+  function labGoal() {
+    return state.lab.goal || profileOrDefault().goal || "healthy";
+  }
+
+  function labLang() {
+    return state.lab.lang || (/^id\b/i.test(navigator.language || "") ? "id-ID" : "en-US");
+  }
+
+  function recipeCardHtml(recipe, index) {
+    const have = state.lab.have;
+    const fit = have.length ? `You have ${recipe.have.length} of ${recipe.items.length}.` : "";
+    const need = recipe.missingCore.length ? ` Still need ${recipe.missingCore.map((label) => label.toLowerCase()).join(", ")}.` : "";
+    return `
+      <article class="recipe">
+        <div class="recipe-head">
+          <h3>${esc(recipe.name)}</h3>
+          <span class="mono small">${recipe.minutes} min · ${recipe.nutrition.kcal} kcal · ${recipe.nutrition.p} g protein</span>
+        </div>
+        ${fit || need ? `<p class="small">${esc(fit + need)}</p>` : ""}
+        <details${index === 0 ? " open" : ""}>
+          <summary>Ingredients and steps</summary>
+          <ul class="ingredients">${recipe.items.map((item) => `<li class="${recipe.have.includes(item.id) ? "got" : ""}">${esc(R.amountLabel(item))}</li>`).join("")}</ul>
+          <ol class="steps">${recipe.steps.map((stepText) => `<li>${esc(stepText)}</li>`).join("")}</ol>
+        </details>
+        <div class="btn-row">
+          <button type="button" class="btn small primary" data-lab-log="${esc(recipe.id)}">Cooked it, log the meal</button>
+          ${recipe.missing.length ? `<button type="button" class="btn small" data-lab-shop="${esc(recipe.id)}">Copy shopping list</button>` : ""}
+        </div>
+      </article>`;
+  }
+
+  function renderLab() {
+    const root = $("#view-lab");
+    const prof = profileOrDefault();
+    const goal = labGoal();
+    const have = state.lab.have;
+    const speech = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const options = { goal, diet: prof.diet || {}, limit: 3, maxMinutes: prof.cookMinutes ? prof.cookMinutes + 15 : 0 };
+    labResults = R.suggest(have, options);
+    if (!labResults.length && options.maxMinutes) labResults = R.suggest(have, Object.assign({}, options, { maxMinutes: 0 }));
+    const quick = QUICK_ADD.filter((id) => R.INGREDIENTS[id] && !have.includes(id)).slice(0, 12);
+    const defaultStatus = speech ? "Type, speak (English or Bahasa Indonesia) or scan a written list or receipt." : "Type or scan a written list or receipt. Voice input is not available in this browser.";
+    root.innerHTML = `
+      <div class="view-head"><div><h1>Lab</h1><p>Tell Lahap what is in your kitchen and get home recipes sized for your goal, with the calories and protein worked out.</p></div></div>
+      <div class="lab-grid">
+        <section class="panel lab-input">
+          <h2>What do you have?</h2>
+          <label class="field"><span class="sr-only">Ingredients you have</span><textarea id="lab-text" rows="3" placeholder="e.g. 3 telur, tempe, kangkung, nasi, bawang putih">${esc(state.lab.text)}</textarea></label>
+          <div class="btn-row">
+            <button type="button" class="btn primary" data-lab-find>Find recipes</button>
+            ${speech ? `<button type="button" class="btn" data-lab-voice aria-pressed="${recognition ? "true" : "false"}">${ICON_MIC}<span>${recognition ? "Listening, tap to stop" : "Speak"}</span></button>` : ""}
+            <label class="btn" for="lab-photo">${ICON_SCAN}<span>Scan a list</span></label>
+            <input type="file" id="lab-photo" accept="image/*" hidden>
+          </div>
+          ${speech ? `<div class="lang-pick"><span class="small muted">Voice language</span>${segHtml("lablang", [["en-US", "English"], ["id-ID", "Bahasa"]], labLang())}</div>` : ""}
+          <p class="hint small" id="lab-status" role="status" aria-live="polite">${esc(state.lab.status || defaultStatus)}</p>
+          ${have.length ? `<h3 class="small-head">In your kitchen</h3><div class="chips">${have.map((id) => `<button type="button" class="chip on" data-lab-remove="${id}" aria-label="Remove ${esc(ingredientLabel(id))}"><span>${esc(ingredientLabel(id))}</span>${ICON_X}</button>`).join("")}</div>` : ""}
+          <h3 class="small-head">Quick add</h3>
+          <div class="chips">${quick.map((id) => `<button type="button" class="chip" data-lab-add="${id}">+ ${esc(ingredientLabel(id))}</button>`).join("")}</div>
+        </section>
+        <section class="lab-results" aria-label="Recipe ideas">
+          <div class="goal-pick"><span class="small muted">Cooking for</span>${segHtml("labgoal", Object.entries(N.GOALS).map(([key, value]) => [key, value.label]), goal)}</div>
+          <p class="muted small">${esc(R.GOAL_NOTE[goal] || "")}${prof.diet && Object.values(prof.diet).some(Boolean) ? " Your food rules from the quiz are applied." : ""}</p>
+          ${have.length ? "" : '<p class="small-head">Ideas for your goal. Add what you have to rank them by what is in your kitchen.</p>'}
+          ${labResults.length ? labResults.map(recipeCardHtml).join("") : '<p class="notice">No recipe fits these yet. Add a protein (egg, tempe, chicken) or a starch (rice, noodles).</p>'}
+        </section>
+      </div>`;
+  }
+
+  function labAdd(ids, source) {
+    const before = state.lab.have.length;
+    state.lab.have = Array.from(new Set(state.lab.have.concat(ids)));
+    const added = state.lab.have.length - before;
+    if (source) {
+      state.lab.status = ids.length
+        ? `${source}: found ${ids.map(ingredientLabel).join(", ").toLowerCase()}${added < ids.length ? " (some were already in)" : ""}.`
+        : `${source}: no ingredients recognised. Try names like telur, ayam, tempe, nasi, kangkung.`;
+    }
+    renderLab();
+  }
+
+  function loadScriptOnce(src) {
+    if (document.querySelector(`script[src="${src}"]`)) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const tag = document.createElement("script");
+      tag.src = src;
+      tag.onload = resolve;
+      tag.onerror = () => reject(new Error("Could not load " + src));
+      document.head.appendChild(tag);
+    });
+  }
+
+  // OCR of a written list, receipt or label. Runs on this device with Tesseract; reads text, not food photos.
+  async function readListPhoto(file) {
+    const status = (text) => {
+      state.lab.status = text;
+      const node = $("#lab-status");
+      if (node) node.textContent = text;
+    };
+    ocrStatus = status;
+    status("Loading the text reader (first time only)…");
+    await loadScriptOnce("vendor/tesseract/tesseract.min.js");
+    if (!ocrWorker) {
+      const base = new URL("vendor/tesseract/", location.href).href;
+      ocrWorker = await window.Tesseract.createWorker("eng", 1, {
+        workerPath: base + "worker.min.js",
+        corePath: base,
+        langPath: base.replace(/\/$/, ""),
+        gzip: true,
+        logger: (message) => {
+          if (message.status === "recognizing text" && ocrStatus) ocrStatus(`Reading the list… ${Math.round(message.progress * 100)}%`);
+        },
+      });
+    }
+    const result = await ocrWorker.recognize(file);
+    return result.data.text || "";
+  }
+
+  function toggleVoice() {
+    const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!Speech) return;
+    if (recognition) {
+      recognition.stop();
+      return;
+    }
+    const box = $("#lab-text");
+    const base = box.value ? box.value.replace(/\s*$/, ", ") : "";
+    recognition = new Speech();
+    recognition.lang = labLang();
+    recognition.interimResults = true;
+    recognition.continuous = false;
+    recognition.onresult = (event) => {
+      const said = Array.from(event.results).map((result) => result[0].transcript).join(" ");
+      const field = $("#lab-text");
+      if (field) field.value = base + said;
+      state.lab.text = base + said;
+    };
+    recognition.onerror = (event) => {
+      state.lab.status = event.error === "not-allowed" ? "Microphone permission was blocked. Allow it in the browser to use voice." : "Did not catch that. Try again or type it.";
+    };
+    recognition.onend = () => {
+      recognition = null;
+      labAdd(R.parseIngredients(state.lab.text), "Heard");
+    };
+    recognition.start();
+    state.lab.status = "Listening… say what is in your fridge, then pause.";
+    renderLab();
   }
 
   /* ---------------- log form ---------------- */
@@ -1060,6 +1471,10 @@
       JSON.parse(JSON.stringify(prefill || {}))
     );
     draft.plate = Object.assign({ veg: 1, protein: 1, carbs: 1, fried: false, sugary: false, processed: false }, draft.plate || {});
+    draft.portion = draft.portion || "m";
+    draft.useCutout = draft.cutout ? true : false;
+    // a plate the user (or a recipe) set by hand is never overwritten by the auto guess
+    draft.plateTouched = !!editing || !!draft.nutrition || !!(prefill && prefill.name);
     const dialog = $("#dlg-log");
     const names = Array.from(new Set(sortedEntries().map((entry) => entry.name)));
     const places = Array.from(new Set(sortedEntries().map((entry) => entry.place).filter(Boolean)));
@@ -1069,11 +1484,12 @@
         <div class="sheet-head"><h2 id="log-title">${editing ? "Edit meal" : "Log a meal"}</h2><button type="button" class="icon-btn" data-close aria-label="Close">${ICON_CLOSE}</button></div>
         <div class="sheet-body">
           <div class="field photo-pick">
-            <img class="preview" id="log-preview" alt="Meal photo preview" src="${draft.photo || plateThumb(draft, 192)}">
+            <img class="preview${draft.cutout ? " cut" : ""}" id="log-preview" alt="Meal photo preview" src="${draft.cutout || draft.photo || plateThumb(draft, 192)}">
             <div>
               <label class="btn" for="log-photo">${draft.photo ? "Change photo" : "Take or pick a photo"}</label>
               <input type="file" id="log-photo" accept="image/*" capture="environment" hidden>
-              <p class="hint small muted" style="margin-top:6px">Optional. Without one, Lahap draws your plate.</p>
+              <p class="hint small muted photo-status" id="photo-status" role="status" aria-live="polite">Optional. Lahap cuts the food out of the photo on this phone and estimates what is on the plate.</p>
+              <div id="cut-toggle"${draft.cutout && draft.photo ? "" : " hidden"}>${segHtml("photoview", [["cut", "Food only"], ["full", "Original"]], "cut")}</div>
             </div>
           </div>
           <label class="field"><span>Dish</span><input type="text" name="name" list="dish-list" value="${esc(draft.name)}" placeholder="e.g. Nasi lemak ayam" required autocomplete="off"></label>
@@ -1097,6 +1513,7 @@
                 <div class="portion"><span>Veg</span>${segHtml("veg", [[0, "None"], [1, "Some"], [2, "Half"]], draft.plate.veg)}</div>
                 <div class="portion"><span>Protein</span>${segHtml("protein", [[0, "None"], [1, "Some"], [2, "Lots"]], draft.plate.protein)}</div>
                 <div class="portion"><span>Starch</span>${segHtml("carbs", [[0, "None"], [1, "Normal"], [2, "Big"]], draft.plate.carbs)}</div>
+                <div class="portion"><span>Portion</span>${segHtml("portion", [["s", "Small"], ["m", "Regular"], ["l", "Large"]], draft.portion)}</div>
                 <div class="chips" style="margin-top:8px">
                   <label class="chip"><input type="checkbox" name="fried" ${draft.plate.fried ? "checked" : ""}><span>Deep-fried</span></label>
                   <label class="chip"><input type="checkbox" name="sugary" ${draft.plate.sugary ? "checked" : ""}><span>Sugary drink</span></label>
@@ -1105,7 +1522,9 @@
               </div>
               <div class="plate-live"><canvas id="log-plate" width="264" height="264" aria-hidden="true"></canvas><div id="log-score"></div></div>
             </div>
+            <p class="hint small" id="plate-source"></p>
           </fieldset>
+          <section class="nutri" id="log-nutri" aria-live="polite"></section>
           <div class="field"><span>Rating</span>${segHtml("rating", [[1, "1"], [2, "2"], [3, "3"], [4, "4"], [5, "5"]], draft.rating)}</div>
           <fieldset class="field"><legend>Ate with <span class="hint">${esc(closestBudNudge() || `+${L.POINTS.tag} connection points each`)}</span></legend>
             ${buds.length ? `<div class="chips">${buds.map((person) => `<label class="chip"><input type="checkbox" name="friend" value="${person.id}" ${draft.friends.includes(person.id) ? "checked" : ""}><span>${esc(person.name)}</span></label>`).join("")}</div>` : '<p class="muted small">Add buds on the Taste buds tab to tag them here.</p>'}
@@ -1139,6 +1558,54 @@
       drawPlate(ctx, 132, 132, 112, draft.plate, form.name.value || "draft");
       $("#log-score").innerHTML = scoreBadge(L.healthScore(draft.plate));
       if (!draft.photo) $("#log-preview").src = plateThumb(Object.assign({}, draft, { name: form.name.value }), 192);
+      updateNutri();
+    }
+
+    function updateNutri() {
+      const probe = Object.assign({}, draft, { name: form.name.value, plate: draft.plate });
+      const nutrition = N.estimate(probe);
+      const when = form.ts.value ? new Date(form.ts.value) : new Date();
+      const before = dayTotals(L.dayKey(when), editing ? editing.id : null);
+      $("#log-nutri").innerHTML = nutriHtml(nutrition, N.mealTips(probe, nutrition, profileOrDefault(), before));
+    }
+
+    function updatePreview() {
+      const preview = $("#log-preview");
+      const showCut = draft.useCutout && draft.cutout;
+      preview.src = showCut ? draft.cutout : draft.photo || plateThumb(Object.assign({}, draft, { name: form.name.value }), 192);
+      preview.classList.toggle("cut", !!showCut);
+    }
+
+    function syncSegs() {
+      for (const button of $$("[data-seg]", form)) {
+        const key = button.dataset.seg;
+        const current =
+          key === "source" ? draft.source : key === "rating" ? draft.rating : key === "portion" ? draft.portion : key === "photoview" ? (draft.useCutout ? "cut" : "full") : draft.plate[key];
+        button.setAttribute("aria-pressed", String(String(current) === button.dataset.value));
+      }
+    }
+
+    // Fill the plate automatically until the user touches it: a known dish wins, then the photo colours.
+    function autoPlate(colourGuess) {
+      if (draft.plateTouched) return;
+      const food = N.matchFood(form.name.value);
+      const note = $("#plate-source");
+      if (food) {
+        Object.assign(draft.plate, { veg: food.plate.veg, protein: food.plate.protein, carbs: food.plate.carbs });
+        form.fried.checked = !!food.fried;
+        form.sugary.checked = !!food.sugary;
+        form.processed.checked = !!food.processed;
+        note.textContent = `Filled in from a typical ${food.name.toLowerCase()}. Change anything that looks different.`;
+      } else if (colourGuess || draft.colourGuess) {
+        const guess = colourGuess || draft.colourGuess;
+        draft.colourGuess = guess;
+        Object.assign(draft.plate, { veg: guess.veg, protein: guess.protein, carbs: guess.carbs });
+        note.textContent = "Guessed from the colours in your photo (green veg, brown and red protein, pale starch). Check it.";
+      } else {
+        return;
+      }
+      syncSegs();
+      updatePlate();
     }
 
     function updateSeen() {
@@ -1164,15 +1631,13 @@
       draft.source = entry.source;
       draft.plate = Object.assign({}, entry.plate);
       draft.rating = entry.rating || 0;
+      draft.portion = entry.portion || "m";
+      draft.plateTouched = true;
       for (const box of $$('input[name="taste"]', form)) box.checked = (entry.tastes || []).includes(box.value);
       form.fried.checked = !!entry.plate.fried;
       form.sugary.checked = !!entry.plate.sugary;
       form.processed.checked = !!entry.plate.processed;
-      for (const button of $$("[data-seg]", form)) {
-        const key = button.dataset.seg;
-        const current = key === "source" ? draft.source : key === "rating" ? draft.rating : draft.plate[key];
-        button.setAttribute("aria-pressed", String(String(current) === button.dataset.value));
-      }
+      syncSegs();
       updatePlate();
     }
 
@@ -1180,10 +1645,18 @@
       const segButton = event.target.closest("[data-seg]");
       if (segButton) {
         const key = segButton.dataset.seg;
-        const value = key === "source" ? segButton.dataset.value : Number(segButton.dataset.value);
+        const value = ["source", "portion", "photoview"].includes(key) ? segButton.dataset.value : Number(segButton.dataset.value);
         if (key === "source") draft.source = value;
         else if (key === "rating") draft.rating = value;
-        else draft.plate[key] = value;
+        else if (key === "portion") draft.portion = value;
+        else if (key === "photoview") {
+          draft.useCutout = value === "cut";
+          updatePreview();
+        } else {
+          draft.plate[key] = value;
+          draft.plateTouched = true;
+          $("#plate-source").textContent = "";
+        }
         for (const sibling of $$(`[data-seg="${key}"]`, form)) sibling.setAttribute("aria-pressed", String(sibling === segButton));
         updatePlate();
       }
@@ -1194,18 +1667,59 @@
       }
     });
     form.addEventListener("change", (event) => {
-      if (["fried", "sugary", "processed"].includes(event.target.name)) updatePlate();
+      if (["fried", "sugary", "processed"].includes(event.target.name)) {
+        draft.plateTouched = true;
+        updatePlate();
+      }
+      if (event.target.name === "ts") updateNutri();
     });
-    form.name.addEventListener("input", updateSeen);
-    form.name.addEventListener("change", updatePlate);
+    form.name.addEventListener("input", () => {
+      updateSeen();
+      updateNutri();
+    });
+    form.name.addEventListener("change", () => {
+      autoPlate(null);
+      updatePlate();
+    });
     $("#log-photo").addEventListener("change", async (event) => {
       const file = event.target.files[0];
       if (!file) return;
+      const status = $("#photo-status");
       try {
         draft.photo = await resizePhoto(file);
-        $("#log-preview").src = draft.photo;
+        draft.cutout = null;
+        draft.useCutout = false;
+        $("#cut-toggle").hidden = true;
+        updatePreview();
       } catch (error) {
         toast("Could not read that photo");
+        return;
+      }
+      if (!window.LahapVision) return;
+      const token = (draft.cutToken = (draft.cutToken || 0) + 1);
+      status.textContent = "Removing the background…";
+      dialog.classList.add("working");
+      try {
+        const result = await window.LahapVision.cutout(draft.photo, {
+          onStatus: (text) => {
+            if (token === draft.cutToken) status.textContent = text;
+          },
+        });
+        if (token !== draft.cutToken) return;
+        draft.cutout = result.cutout;
+        draft.useCutout = true;
+        $("#cut-toggle").hidden = false;
+        syncSegs();
+        updatePreview();
+        status.textContent =
+          result.method === "model"
+            ? `Food cut out on this device in ${(result.ms / 1000).toFixed(1)} s. Tap Original to keep the full photo.`
+            : "The cutout model could not load (offline?), so this is a soft oval crop. Tap Original to keep the full photo.";
+        autoPlate(result.plate);
+      } catch (error) {
+        status.textContent = "Could not cut out the food, so the original photo is kept.";
+      } finally {
+        dialog.classList.remove("working");
       }
     });
     form.addEventListener("submit", async (event) => {
@@ -1229,7 +1743,11 @@
         friends: $$('input[name="friend"]:checked', form).map((box) => box.value),
         notes: form.notes.value.trim(),
         photo: draft.photo || null,
+        cutout: draft.useCutout && draft.cutout ? draft.cutout : null,
+        portion: draft.portion,
       };
+      if (draft.nutrition) entry.nutrition = draft.nutrition;
+      if (draft.recipe) entry.recipe = draft.recipe;
       const before = editing ? editing.friends || [] : [];
       const newlyTagged = entry.friends.filter((id) => !before.includes(id));
       for (const id of newlyTagged) state.points[id] = (state.points[id] || 0) + L.POINTS.tag;
@@ -1256,10 +1774,12 @@
     const score = L.healthScore(entry.plate);
     const who = (entry.friends || []).map((friendId) => (personById(friendId) || {}).name).filter(Boolean);
     const past = state.entries.filter((item) => L.normalize(item.name) === L.normalize(entry.name)).length;
+    const nutrition = nutritionFor(entry);
     dialog.innerHTML = `
       <div class="sheet-head"><h2 id="detail-title">${esc(entry.name)}</h2><button type="button" class="icon-btn" data-close aria-label="Close">${ICON_CLOSE}</button></div>
       <div class="sheet-body">
-        <img class="detail-photo" src="${entry.photo || plateThumb(entry, 480)}" alt="${entry.photo ? "Photo of " + esc(entry.name) : "Plate drawing of " + esc(entry.name)}">
+        <img class="detail-photo${entry.cutout ? " cut" : ""}" id="detail-photo" src="${entry.cutout || entry.photo || plateThumb(entry, 480)}" alt="${entry.photo ? "Photo of " + esc(entry.name) : "Plate drawing of " + esc(entry.name)}">
+        ${entry.cutout && entry.photo ? '<button type="button" class="btn small" id="detail-swap" style="margin-top:8px">Show original photo</button>' : ""}
         <p class="muted" style="margin-top:12px">${esc(new Date(entry.ts).toLocaleString(undefined, { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }))} · ${esc(SOURCES[entry.source])}${entry.place ? " · " + esc(entry.place) : ""}</p>
         <div class="stat-grid" style="margin-top:16px">
           <div class="stat"><div class="label">Price</div><div class="value money">${esc(money(entry.price))}</div></div>
@@ -1269,6 +1789,7 @@
         </div>
         <p style="margin-top:16px">${(entry.tastes || []).map((taste) => `<span class="tag">${esc(taste)}</span>`).join(" ")} <span class="tag">${esc(entry.cuisine || "Other")}</span>${who.length ? ` <span class="tag">with ${esc(who.join(", "))}</span>` : ""}</p>
         ${entry.notes ? `<p style="margin-top:12px">${esc(entry.notes)}</p>` : ""}
+        <section class="nutri" style="margin-top:20px">${nutriHtml(nutrition, N.mealTips(entry, nutrition, profileOrDefault(), dayTotals(L.dayKey(entry.ts), entry.id)))}</section>
         <h3 style="margin-top:20px">Why ${score}?</h3>
         <table class="breakdown">${breakdown.map((part) => `<tr><td>${esc(part.label)}</td><td>${part.value > 0 && part.label !== "Base" ? "+" : ""}${part.value}</td></tr>`).join("")}<tr class="total"><td>Plate score (0 to 100)</td><td>${score}</td></tr></table>
       </div>
@@ -1278,6 +1799,16 @@
         <button type="button" class="btn" data-again="${esc(entry.id)}">Ate it again</button>
         <button type="button" class="btn primary" data-share="${esc(entry.id)}">Share card</button>
       </div>`;
+    const swap = $("#detail-swap");
+    if (swap) {
+      swap.addEventListener("click", () => {
+        const img = $("#detail-photo");
+        const showingCut = img.classList.contains("cut");
+        img.src = showingCut ? entry.photo : entry.cutout;
+        img.classList.toggle("cut", !showingCut);
+        swap.textContent = showingCut ? "Show food only" : "Show original photo";
+      });
+    }
     dialog.showModal();
   }
 
@@ -1341,6 +1872,7 @@
     const entry = isWeek ? null : share.subject;
     const bg = share.background;
     const photo = entry && entry.photo ? await loadImage(entry.photo) : null;
+    const cutout = entry && entry.cutout ? await loadImage(entry.cutout) : null;
     const light = bg === "paper";
     const ink = light ? "#1d1813" : "#ffffff";
     const sub = light ? "#5e554a" : "rgba(255,255,255,0.86)";
@@ -1526,7 +2058,18 @@
       const box = square ? 420 : 760;
       const x = (W - box) / 2;
       const y = square ? 130 : 200;
-      if (photo) {
+      if (cutout) {
+        // food-only cutout sits on the card like a sticker, no box around it
+        const fit = Math.min(box / cutout.width, box / cutout.height);
+        const cw = cutout.width * fit;
+        const ch = cutout.height * fit;
+        ctx.save();
+        ctx.shadowColor = "rgba(29,24,19,0.28)";
+        ctx.shadowBlur = 40;
+        ctx.shadowOffsetY = 18;
+        ctx.drawImage(cutout, x + (box - cw) / 2, y + (box - ch) / 2, cw, ch);
+        ctx.restore();
+      } else if (photo) {
         ctx.save();
         ctx.beginPath();
         ctx.roundRect ? ctx.roundRect(x, y, box, box, 36) : ctx.rect(x, y, box, box);
@@ -1779,6 +2322,72 @@
       openLog();
       return;
     }
+    if (target.closest("[data-quiz]")) {
+      openQuiz();
+      return;
+    }
+    const labSeg = target.closest('#view-lab [data-seg]');
+    if (labSeg) {
+      if (labSeg.dataset.seg === "labgoal") state.lab.goal = labSeg.dataset.value;
+      if (labSeg.dataset.seg === "lablang") state.lab.lang = labSeg.dataset.value;
+      renderLab();
+      return;
+    }
+    if (target.closest("[data-lab-find]")) {
+      state.lab.text = $("#lab-text").value;
+      labAdd(R.parseIngredients(state.lab.text), "From your list");
+      return;
+    }
+    if (target.closest("[data-lab-voice]")) {
+      toggleVoice();
+      return;
+    }
+    const labAddChip = target.closest("[data-lab-add]");
+    if (labAddChip) {
+      state.lab.status = "";
+      labAdd([labAddChip.dataset.labAdd], null);
+      return;
+    }
+    const labRemove = target.closest("[data-lab-remove]");
+    if (labRemove) {
+      state.lab.have = state.lab.have.filter((id) => id !== labRemove.dataset.labRemove);
+      state.lab.status = "";
+      renderLab();
+      return;
+    }
+    const labLog = target.closest("[data-lab-log]");
+    if (labLog) {
+      const recipe = labResults.find((item) => item.id === labLog.dataset.labLog);
+      if (!recipe) return;
+      openLog({
+        name: recipe.name,
+        source: "home",
+        place: "Home",
+        cuisine: recipe.cuisine || "Home-cooked",
+        price: "",
+        plate: R.plateFor(recipe),
+        nutrition: Object.assign({ label: `From the Lab recipe, sized for ${(N.GOALS[labGoal()] || N.GOALS.healthy).label.toLowerCase()}` }, recipe.nutrition),
+        recipe: recipe.id,
+        notes: "",
+      });
+      return;
+    }
+    const labShop = target.closest("[data-lab-shop]");
+    if (labShop) {
+      const recipe = labResults.find((item) => item.id === labShop.dataset.labShop);
+      if (!recipe) return;
+      const lines = recipe.items.filter((item) => !recipe.have.includes(item.id)).map((item) => "- " + R.amountLabel(item));
+      const text = `Shopping for ${recipe.name}:\n${lines.join("\n")}`;
+      try {
+        await navigator.clipboard.writeText(text);
+        toast(`Shopping list copied (${lines.length} items)`);
+      } catch (error) {
+        state.lab.text = text;
+        renderLab();
+        toast("Could not reach the clipboard, so the list is in the box above");
+      }
+      return;
+    }
     const open = target.closest("[data-open]");
     if (open) {
       openDetail(open.dataset.open);
@@ -1789,7 +2398,7 @@
       const entry = state.entries.find((item) => item.id === again.dataset.again);
       const detail = $("#dlg-detail");
       if (detail.open) detail.close();
-      const copy = Object.assign({}, entry, { ts: new Date().toISOString(), photo: null, friends: [], notes: "" });
+      const copy = Object.assign({}, entry, { ts: new Date().toISOString(), photo: null, cutout: null, friends: [], notes: "" });
       delete copy.id;
       delete copy.sample;
       openLog(copy);
@@ -1883,6 +2492,20 @@
     }
   });
 
+  document.addEventListener("change", async (event) => {
+    if (event.target.id !== "lab-photo") return;
+    const file = event.target.files[0];
+    if (!file) return;
+    try {
+      const text = await readListPhoto(file);
+      state.lab.text = [state.lab.text, text.replace(/\s+/g, " ").trim()].filter(Boolean).join(", ");
+      labAdd(R.parseIngredients(text), "Scanned list");
+    } catch (error) {
+      state.lab.status = "Could not read that photo. The scanner reads written lists, receipts and labels, not photos of the food itself.";
+      renderLab();
+    }
+  });
+
   document.addEventListener("input", (event) => {
     if (event.target.id === "q") {
       state.query = event.target.value;
@@ -1908,15 +2531,18 @@
     state.invites = await store.get("invites", []);
     const params = new URLSearchParams(location.search);
     if (params.has("demo") && !state.entries.length) await loadSample();
+    if (params.has("demo") && !state.settings.profile) state.settings.profile = Object.assign({}, SAMPLE_PROFILE);
     route();
     document.documentElement.dataset.ready = "1";
+    // first run: a short quiz to learn the goal (skippable, never in the demo or tests)
+    if (!state.settings.quizSeen && !state.settings.profile && !params.has("demo") && !params.has("noquiz")) openQuiz();
     if ("serviceWorker" in navigator && location.protocol.startsWith("http") && !params.has("nosw")) {
       navigator.serviceWorker.register("sw.js").catch(() => {});
     }
   }
 
   // test hook
-  window.Lahap = { state, openLog, openShare, openHangout, drawShare, loadSample, sampleEntries };
+  window.Lahap = { state, openLog, openShare, openHangout, openQuiz, drawShare, loadSample, sampleEntries, renderLab, nutritionFor, readListPhoto };
 
   init();
 })();

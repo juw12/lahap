@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#f5efe3">
-  <meta name="description" content="Lahap is a private food diary for restaurant meals and home cooking. Search everything you ate, see variety, health and spend, share story cards and find friends with the same taste.">
+  <meta name="description" content="Lahap is a private food diary for restaurant meals and home cooking. Snap a meal and Lahap cuts out the food, estimates calories and protein, and gives tips for your goal. The Lab turns what is in your kitchen into home recipes. All on your device.">
   <title>Lahap · food diary you can search</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -21,6 +21,7 @@
     <nav class="tabs" aria-label="Sections">
       <a href="#diary" data-tab="diary">Diary</a>
       <a href="#insights" data-tab="insights">Insights</a>
+      <a href="#lab" data-tab="lab">Lab</a>
       <a href="#buds" data-tab="buds">Taste buds</a>
       <a href="#me" data-tab="me">Me</a>
     </nav>
@@ -33,6 +34,7 @@
   <main id="main" tabindex="-1">
     <section id="view-diary" class="view" data-view="diary"></section>
     <section id="view-insights" class="view" data-view="insights" hidden></section>
+    <section id="view-lab" class="view" data-view="lab" hidden></section>
     <section id="view-buds" class="view" data-view="buds" hidden></section>
     <section id="view-me" class="view" data-view="me" hidden></section>
   </main>
@@ -40,6 +42,7 @@
   <nav class="bottombar" aria-label="Sections">
     <a href="#diary" data-tab="diary"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h11l3 3v13H5z M8 9h8M8 13h8M8 17h5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg><span>Diary</span></a>
     <a href="#insights" data-tab="insights"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V11M10 20V5M15 20v-7M20 20V9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Insights</span></a>
+    <a href="#lab" data-tab="lab"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6.5L4.8 18.2A1.9 1.9 0 0 0 6.4 21h11.2a1.9 1.9 0 0 0 1.6-2.8L14 9.5V3M7.5 14h9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>Lab</span></a>
     <button type="button" class="fab" data-action="log" aria-label="Log a meal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg><span class="fab-label" aria-hidden="true">Log</span></button>
     <a href="#buds" data-tab="buds"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="16.5" cy="10" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 19c.8-3 3-4.6 5.5-4.6s4.7 1.6 5.5 4.6M14 15.2c.8-.5 1.6-.7 2.5-.7 2 0 3.6 1.3 4.2 4" fill="none" stroke="currentColor" stroke-width="1.8"/></svg><span>Buds</span></a>
     <a href="#me" data-tab="me"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5 20c1-3.6 3.8-5.4 7-5.4s6 1.8 7 5.4" fill="none" stroke="currentColor" stroke-width="1.8"/></svg><span>Me</span></a>
@@ -49,10 +52,14 @@
   <dialog id="dlg-detail" class="sheet" aria-labelledby="detail-title"></dialog>
   <dialog id="dlg-share" class="sheet wide" aria-labelledby="share-title"></dialog>
   <dialog id="dlg-hangout" class="sheet" aria-labelledby="hangout-title"></dialog>
+  <dialog id="dlg-quiz" class="sheet" aria-labelledby="quiz-title"></dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="logic.js"></script>
+  <script src="nutrition.js"></script>
+  <script src="recipes.js"></script>
+  <script src="vision.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

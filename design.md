@@ -30,3 +30,12 @@ Health is a "plate score": a nudge, never medical advice.
 ## Banned defaults
 Purple/indigo gradients, glow blobs, glassmorphism, emoji as icons, identical icon+heading card grids,
 gradient text, fake testimonials, "Get started" hero.
+
+## Food photos, nutrition, Lab, quiz (added 2026-11-08)
+- Cut-out food sits on a warm paper tile (`--card`) with one soft drop shadow; never on a checkerboard in the app,
+  only in the transparent share preview. "Original" is always one tap away.
+- Nutrition uses the same mono labels + serif numbers as the stat row. Tips are one line each, max two, plain verbs.
+  Every estimate carries "Estimated from typical portions, not measured. Not medical advice."
+- Today bar: two thin bars (kcal chili, protein leaf), no rings or gauges.
+- Lab recipe cards are paper cards with mono meta (min, kcal, protein); ingredients you have turn leaf green.
+- Quiz is a bottom sheet with a thin chili progress line, one question per step, always skippable.
