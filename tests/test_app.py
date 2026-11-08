@@ -434,6 +434,26 @@ def main():
         parsed_ocr = page2.evaluate("(t) => window.LahapRecipes.parseIngredients(t)", ocr_text)
         check("ocr: reads a written list on device", set(parsed_ocr) >= {"egg", "tempeh", "kangkung"}, (ocr_text[:80], parsed_ocr))
 
+        # Indonesian bumbu are known ingredients, and "asam manis" is not read as tamarind
+        bumbu = page2.evaluate(
+            "() => window.LahapRecipes.parseIngredients('lengkuas, daun salam, kemiri 3 butir, terasi, kunyit, ketumbar, gula merah, asam jawa, daun jeruk, ikan teri')"
+        )
+        check(
+            "lab: Indonesian bumbu parsed",
+            set(bumbu) == {"galangal", "salamleaf", "candlenut", "shrimppaste", "turmeric", "coriander", "palmsugar", "tamarind", "limeleaf", "fish"},
+            bumbu,
+        )
+        sweet_sour = page2.evaluate("() => window.LahapRecipes.parseIngredients('ayam asam manis')")
+        check("lab: asam manis is not tamarind", "tamarind" not in sweet_sour and "chicken" in sweet_sour, sweet_sour)
+        soto = page2.evaluate(
+            "() => window.LahapRecipes.suggest(['chicken', 'turmeric', 'galangal', 'lemongrass', 'salamleaf'], { goal: 'healthy', limit: 3 }).map((r) => r.id)"
+        )
+        check("lab: soto bumbu ranks soto ayam first", soto[:1] == ["soto-ayam"], soto)
+        no_nuts = page2.evaluate(
+            "() => window.LahapRecipes.suggest(['chicken', 'potato'], { goal: 'healthy', limit: 10, diet: { noNuts: true } }).map((r) => r.id)"
+        )
+        check("lab: no-nuts diet drops candlenut curry", "kari-ayam" not in no_nuts, no_nuts)
+
         # OCR in Bahasa: the List language switch loads the Indonesian model (ind+eng) for a handwriting-style list
         ind_requests = []
         page2.on("request", lambda request: ind_requests.append(request.url) if "ind.traineddata" in request.url else None)

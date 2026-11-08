@@ -21,7 +21,8 @@ What it does
 - Nutrition estimate and tips: kcal, protein, carbs, fat and fiber from typical recipes for known dishes, or from the
   plate you tick, scaled by portion. Today bar shows calories and protein against your targets, with one tip.
 - Lab: type what is in your kitchen, say it (English or Bahasa Indonesia), or scan a written list or receipt.
-  Set List language to Bahasa and the scanner reads with the Indonesian OCR model too.
+  Set List language to Bahasa and the scanner reads with the Indonesian OCR model too. It knows everyday bumbu
+  (lengkuas, daun salam, kemiri, terasi, kunyit, ketumbar, gula merah, asam jawa, daun jeruk).
   Lahap ranks home recipes by what you have, sizes them to your goal and diet, and fits your cooking time.
   "Cooked it, log the meal" fills in the log; "Copy shopping list" copies what is missing.
 - Search "Have I eaten this?": count, last time and place, average price and range, plate score, rating.
@@ -45,7 +46,7 @@ Limits (honest)
   scan, then stay cached for offline use.
 - Suggested buds are example profiles: there is no server yet, so buds, matching and points live on this device only.
 
-Tests: `python tests/test_app.py` (Playwright, 134 checks, including a real cut-out and OCR run). Design rules: `design.md`.
+Tests: `python tests/test_app.py` (Playwright, 138 checks, including a real cut-out and OCR run). Design rules: `design.md`.
 
 Why another food diary: PlateDiary is a private restaurant photo journal and Mynu is a home-cooking journal.
 Lahap logs both (ate out, home-cooked, delivery), answers "have I eaten this before?", estimates what is on the
