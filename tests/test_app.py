@@ -434,9 +434,43 @@ def main():
         parsed_ocr = page2.evaluate("(t) => window.LahapRecipes.parseIngredients(t)", ocr_text)
         check("ocr: reads a written list on device", set(parsed_ocr) >= {"egg", "tempeh", "kangkung"}, (ocr_text[:80], parsed_ocr))
 
+        # OCR in Bahasa: the List language switch loads the Indonesian model (ind+eng) for a handwriting-style list
+        ind_requests = []
+        page2.on("request", lambda request: ind_requests.append(request.url) if "ind.traineddata" in request.url else None)
+        ocr_id = page2.evaluate(
+            """async () => {
+              window.Lahap.state.lab.lang = 'id-ID';
+              const lines = ['bawang merah', 'kecap manis', 'daun salam', 'lengkuas', 'ikan teri'];
+              const c = document.createElement('canvas');
+              c.width = 640;
+              c.height = 380;
+              const ctx = c.getContext('2d');
+              ctx.fillStyle = '#f4efe2';
+              ctx.fillRect(0, 0, c.width, c.height);
+              ctx.fillStyle = '#1d2a5a';
+              ctx.font = "36px 'Segoe Print', 'Comic Sans MS', cursive";
+              lines.forEach((line, i) => ctx.fillText(line, 30, 60 + i * 64));
+              const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+              const text = await window.Lahap.readListPhoto(blob);
+              const expected = window.LahapRecipes.parseIngredients(lines.join(', '));
+              const got = window.LahapRecipes.parseIngredients(text);
+              window.Lahap.state.lab.lang = 'en-US';
+              return { text, expected, got };
+            }"""
+        )
+        check(
+            "ocr: Bahasa list reads with the Indonesian model",
+            bool(ind_requests)
+            and all(word in ocr_id["text"].lower() for word in ["bawang merah", "kecap manis", "daun salam", "lengkuas", "ikan teri"])
+            and len(ocr_id["expected"]) >= 3
+            and set(ocr_id["got"]) >= set(ocr_id["expected"]),
+            (ind_requests[:1], ocr_id["text"][:90], ocr_id["expected"], ocr_id["got"]),
+        )
+
         page2.set_viewport_size({"width": 1280, "height": 900})
         page2.evaluate("() => location.hash = 'lab'")
         page2.wait_for_timeout(150)
+        check("lab: list language picker shown", "List language" in page2.inner_text("#view-lab") if page2.query_selector("#view-lab") else "List language" in page2.content())
         check("lab: no overflow on desktop", page2.evaluate("() => document.documentElement.scrollWidth - window.innerWidth") <= 0)
         check("first-run flows: no JS errors", not errors2, "; ".join(errors2[:3]))
         fresh.close()
