@@ -1400,7 +1400,10 @@
         langPath: base.replace(/\/$/, ""),
         gzip: true,
         logger: (message) => {
-          if (message.status === "recognizing text" && ocrStatus) ocrStatus(`Reading the list… ${Math.round(message.progress * 100)}%`);
+          if (!ocrStatus) return;
+          const percent = Math.round((message.progress || 0) * 100);
+          if (message.status === "recognizing text") ocrStatus(`Reading the list… ${percent}%`);
+          else if (/^loading/.test(message.status || "")) ocrStatus(`Getting the text reader ready (first time only): ${percent}%`);
         },
       });
     }

@@ -353,8 +353,19 @@ def main():
         # cutout: real photo through the log form, model runs on device
         page2.locator("[data-action=log]:visible").first.click()
         page2.wait_for_selector("#log-form")
+        page2.evaluate(
+            """() => {
+                window.__photoStatuses = [];
+                const node = document.getElementById('photo-status');
+                new MutationObserver(() => window.__photoStatuses.push(node.textContent))
+                    .observe(node, { childList: true, characterData: true, subtree: true });
+            }"""
+        )
         page2.set_input_files("#log-photo", str(ROOT / "tests" / "fixtures" / "plate.jpg"))
         page2.wait_for_selector("#cut-toggle:not([hidden])", timeout=90000)
+        statuses = page2.evaluate("() => window.__photoStatuses")
+        progress_lines = [line for line in statuses if " of " in line and "MB" in line]
+        check("cutout: first run shows model download progress in MB", len(progress_lines) >= 2, statuses[:4])
         status = page2.inner_text("#photo-status")
         preview = page2.evaluate("() => { const p = document.getElementById('log-preview'); return { cut: p.classList.contains('cut'), src: p.src.slice(0, 22) }; }")
         check("cutout: model removed the background", "cut out on this device" in status, status)

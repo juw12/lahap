@@ -20,20 +20,94 @@
     });
   }
 
+  // Sizes of the vendored files, so the first download can show "x of y MB" even when the server compresses them.
+  const FILES = {
+    model: { path: "vendor/u2netp.onnx", bytes: 4574861 },
+    simd: { path: "vendor/ort/ort-wasm-simd.wasm", bytes: 10551547 },
+    plain: { path: "vendor/ort/ort-wasm.wasm", bytes: 9726745 },
+  };
+  // Smallest wasm module that uses a SIMD instruction (same probe as wasm-feature-detect).
+  const SIMD_PROBE = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11]);
+  let progressListener = null;
+
+  function hasSimd() {
+    try {
+      return WebAssembly.validate(SIMD_PROBE);
+    } catch (error) {
+      return false;
+    }
+  }
+
+  // Fetch a file and report bytes as they arrive. Falls back to one chunk when streams are not available.
+  async function download(url, onBytes) {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("HTTP " + response.status + " for " + url);
+    if (!response.body || !response.body.getReader) {
+      const whole = new Uint8Array(await response.arrayBuffer());
+      onBytes(whole.length);
+      return whole;
+    }
+    const reader = response.body.getReader();
+    const chunks = [];
+    let received = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      received += value.length;
+      onBytes(received);
+    }
+    const bytes = new Uint8Array(received);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return bytes;
+  }
+
   function session() {
     if (!sessionPromise) {
       sessionPromise = (async () => {
         if (!root.ort) await loadScript(BASE + "vendor/ort/ort.wasm.min.js");
-        root.ort.env.wasm.wasmPaths = BASE + "vendor/ort/";
+        const wasm = hasSimd() ? FILES.simd : FILES.plain;
+        const total = wasm.bytes + FILES.model.bytes;
+        const loaded = { wasm: 0, model: 0 };
+        let lastShown = -1;
+        const report = () => {
+          const done = Math.min(total, loaded.wasm + loaded.model);
+          const tenths = Math.floor((done / 1e6) * 10);
+          if (tenths === lastShown || !progressListener) return;
+          lastShown = tenths;
+          progressListener(done, total);
+        };
+        report();
+        const [wasmBytes, modelBytes] = await Promise.all([
+          download(BASE + wasm.path, (count) => {
+            loaded.wasm = count;
+            report();
+          }),
+          download(BASE + FILES.model.path, (count) => {
+            loaded.model = count;
+            report();
+          }),
+        ]);
+        const wasmName = wasm === FILES.simd ? "ort-wasm-simd.wasm" : "ort-wasm.wasm";
+        const wasmUrl = URL.createObjectURL(new Blob([wasmBytes], { type: "application/wasm" }));
+        root.ort.env.wasm.wasmPaths = { [wasmName]: wasmUrl };
         root.ort.env.wasm.numThreads = 1;
         root.ort.env.wasm.proxy = false;
-        return root.ort.InferenceSession.create(BASE + "vendor/u2netp.onnx", { executionProviders: ["wasm"], graphOptimizationLevel: "all" });
+        return root.ort.InferenceSession.create(modelBytes, { executionProviders: ["wasm"], graphOptimizationLevel: "all" });
       })().catch((error) => {
         sessionPromise = null;
         throw error;
       });
     }
     return sessionPromise;
+  }
+
+  function megabytes(bytes) {
+    return (bytes / 1e6).toFixed(1);
   }
 
   function canvasOf(width, height) {
@@ -355,8 +429,11 @@
     let mask;
     let method = "model";
     try {
-      if (opts.onStatus) opts.onStatus("Loading the cutout model (first time only)…");
+      progressListener = opts.onStatus
+        ? (done, total) => opts.onStatus(`Getting the cutout model ready (first time only): ${megabytes(done)} of ${megabytes(total)} MB`)
+        : null;
       await session();
+      progressListener = null;
       if (opts.onStatus) opts.onStatus("Removing the background…");
       mask = await saliency(image);
     } catch (error) {
