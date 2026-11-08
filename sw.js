@@ -1,5 +1,5 @@
 // Offline cache: app shell only. Meals and photos live in IndexedDB, not here.
-const CACHE = "lahap-v1";
+const CACHE = "lahap-v2";
 const SHELL = ["./", "index.html", "styles.css", "logic.js", "app.js", "icon.svg", "manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {

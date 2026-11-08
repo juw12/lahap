@@ -1462,3 +1462,57 @@ dialog.sheet::backdrop {
   display: block;
   line-height: 1.35;
 }
+
+/* phone diary: meals above the fold */
+@media (max-width: 760px) {
+  .diary-head {
+    margin-bottom: var(--s3);
+  }
+  .diary-head p {
+    display: none;
+  }
+  .filters {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin: 0 calc(-1 * var(--s4)) var(--s4);
+    padding: 2px var(--s4);
+    scrollbar-width: none;
+  }
+  .filters::-webkit-scrollbar {
+    display: none;
+  }
+  .filters .chip {
+    flex: none;
+  }
+  .weekline {
+    gap: var(--s2);
+    margin-bottom: var(--s4);
+  }
+  .weekline dl {
+    grid-template-columns: repeat(4, minmax(0, auto));
+    width: 100%;
+    justify-content: space-between;
+    gap: var(--s2);
+  }
+  .weekline dt {
+    font-size: 12px;
+    letter-spacing: 0;
+  }
+  .weekline dd {
+    font-size: 17px;
+  }
+  .weekline dd small {
+    display: none;
+  }
+  .weekline .btn {
+    width: auto;
+  }
+}
+.btn.small {
+  min-height: 36px;
+  padding: 6px 14px;
+  font-size: 14px;
+}
+.invite-card .btn {
+  margin-top: var(--s3);
+}

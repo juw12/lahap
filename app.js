@@ -243,10 +243,32 @@
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius * 0.82, 0, Math.PI * 2);
-    ctx.strokeStyle = "#ece3d3";
-    ctx.stroke();
+    // each dish gets its own plate: rim style and portion rotation come from the dish name
+    const style = seeded("rim:" + (seedText || "plate"));
+    const rim = Math.floor(style() * 3);
+    if (rim === 0) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius * 0.82, 0, Math.PI * 2);
+      ctx.strokeStyle = "#ece3d3";
+      ctx.stroke();
+    } else if (rim === 1) {
+      const beads = 28;
+      ctx.fillStyle = "#e6dac4";
+      for (let i = 0; i < beads; i++) {
+        const a = (i / beads) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.arc(cx + Math.cos(a) * radius * 0.9, cy + Math.sin(a) * radius * 0.9, Math.max(0.6, radius * 0.022), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else {
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius * 0.89, 0, Math.PI * 2);
+      ctx.lineWidth = Math.max(1, radius * 0.06);
+      ctx.strokeStyle = "#f0e2c8";
+      ctx.stroke();
+      ctx.lineWidth = Math.max(1, radius * 0.03);
+    }
+    const turn = style() * Math.PI * 2;
 
     const portions = [
       { key: "veg", size: p.veg },
@@ -265,7 +287,7 @@
       ctx.restore();
       return;
     }
-    let angle = -Math.PI / 2;
+    let angle = -Math.PI / 2 + turn;
     for (const portion of portions) {
       const sweep = (portion.size / total) * Math.PI * 2;
       ctx.beginPath();
@@ -525,7 +547,7 @@
           <div><dt>Health</dt><dd>${avg} <small>${esc(L.healthLabel(avg))}</small></dd></div>
           <div><dt>Spent</dt><dd>${esc(money(spend.total))}</dd></div>
         </dl>
-        <button type="button" class="btn primary" data-share-week>Share my week</button>
+        <button type="button" class="btn small" data-share-week>Share my week</button>
       </div>`;
   }
 
@@ -550,12 +572,11 @@
         ${TASTES.map((taste) => `<button type="button" class="chip" data-taste="${taste}" aria-pressed="${state.tasteFilter.includes(taste)}">${taste}</button>`).join("")}
       </div>`;
     const head = `
-      <div class="view-head">
+      <div class="view-head diary-head">
         <div>
           <h1>What did I eat?</h1>
           <p>Search every meal by dish, place, taste or friend, and see how often, how much and how balanced.</p>
         </div>
-        <button type="button" class="btn primary phone-only" data-action="log">Log a meal</button>
       </div>`;
     if (!state.entries.length) {
       root.innerHTML = head + emptyHtml();
@@ -599,9 +620,8 @@
           </form>
           ${filters}
           ${weekLineHtml()}
-          ${state.query ? "" : budNudgeHtml()}
           ${answerHtml(state.query, list)}
-          ${days || '<p class="muted">No meals match these filters.</p>'}
+          ${days ? days.replace("</section>", () => `</section>${state.query ? "" : budNudgeHtml()}`) : '<p class="muted">No meals match these filters.</p>'}
         </div>
         ${weekAsideHtml()}
       </div>`;
@@ -747,6 +767,25 @@
     return `<span class="avatar" style="background:${person.color}" aria-hidden="true">${esc(person.name[0])}</span>`;
   }
 
+  // a taste profile needs a few meals; before that a match % would be noise
+  const MIN_MEALS_FOR_MATCH = 3;
+  function hasTasteProfile() {
+    return state.entries.length >= MIN_MEALS_FOR_MATCH;
+  }
+
+  function matchLabel(match) {
+    return hasTasteProfile() ? `${match}% match` : "match after 3 meals";
+  }
+
+  function inviteHtml() {
+    return `
+      <section class="panel invite-card">
+        <h2>Bring a real friend</h2>
+        <p class="muted">Send Lahap to someone you eat with. Once they log a few meals too, you can compare tastes and plan where to makan next.</p>
+        <button type="button" class="btn primary" data-invite>Invite a friend</button>
+      </section>`;
+  }
+
   function renderBuds() {
     const root = $("#view-buds");
     const friends = PEOPLE.filter((person) => state.friends.includes(person.id));
@@ -768,14 +807,16 @@
             ${friends.length ? friends.map((person) => {
               const points = state.points[person.id] || 0;
               const level = L.levelFor(points);
-              return `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchFor(person)}% match</span></div><div class="why">${esc(level.name)} · ${points} pts</div>${level.next ? `<div class="next-step">${esc(nextStep(level))}</div>` : ""}<div class="level"><div class="track"><div class="fill" style="width:${Math.round(level.progress * 100)}%"></div></div></div></div><button type="button" class="btn" data-hangout="${person.id}">Hang out</button></div>`;
-            }).join("") : '<p class="muted">No buds yet. Add someone from the list.</p>'}
+              return `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(matchFor(person))}</span></div><div class="why">${esc(level.name)} · ${points} pts</div>${level.next ? `<div class="next-step">${esc(nextStep(level))}</div>` : ""}<div class="level"><div class="track"><div class="fill" style="width:${Math.round(level.progress * 100)}%"></div></div></div></div><button type="button" class="btn" data-hangout="${person.id}">Hang out</button></div>`;
+            }).join("") : '<p class="muted">No buds yet. Invite a friend, or add an example profile below to try tagging and hangouts.</p>'}
           </section>
+          ${friends.length ? "" : inviteHtml()}
           <section class="panel">
-            <h2>Suggested by taste</h2>
-            ${others.length ? others.map(({ person, match }) => `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${match}% match</span></div><div class="why">${esc(reasonsFor(person))} · ${esc(person.area)}</div></div><button type="button" class="btn" data-add="${person.id}">Add</button></div>`).join("") : '<p class="muted">You added everyone. Nice.</p>'}
-            <p class="notice">These are sample profiles. Lahap has no server yet, so friends live on this device; invites go out through WhatsApp or your phone's share sheet.</p>
+            <h2>${hasTasteProfile() ? "Suggested by taste" : "Example buds to try"}</h2>
+            ${others.length ? others.map(({ person, match }) => `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(match)}</span></div><div class="why">${esc(hasTasteProfile() ? reasonsFor(person) : "Log a few meals to see what you share")} · ${esc(person.area)}</div></div><button type="button" class="btn" data-add="${person.id}">Add</button></div>`).join("") : '<p class="muted">You added everyone. Nice.</p>'}
+            <p class="notice">These are example profiles so you can try matching, tagging and hangouts. Lahap has no server yet: buds and points stay on this device, and invites go out through WhatsApp or your phone's share sheet.</p>
           </section>
+          ${friends.length ? inviteHtml() : ""}
         </div>
         <aside>
           <section class="panel">
@@ -1341,10 +1382,33 @@
     const who = state.settings.name ? state.settings.name : "";
 
     function brand(y) {
-      ctx.font = mono(30, 700);
+      // the app icon as a mark: a plate split into three portions
+      const r = 24;
+      const cx = pad + r;
+      const cy = y - 13;
+      ctx.save();
+      ctx.shadowColor = "transparent";
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = light ? "#1d1813" : "#ffffff";
+      ctx.stroke();
+      const wedges = [["#b4380f", -Math.PI / 2, 0], ["#4f8a3c", 0, (2 * Math.PI) / 3], ["#e0b25a", (2 * Math.PI) / 3, 1.5 * Math.PI]];
+      for (const [color, from, to] of wedges) {
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, r * 0.78, from, to);
+        ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.fill();
+      }
+      ctx.restore();
+      ctx.font = serif(46);
       ctx.fillStyle = ink;
       ctx.textAlign = "left";
-      ctx.fillText("LAHAP", pad, y);
+      ctx.fillText("Lahap", pad + r * 2 + 16, y);
       ctx.textAlign = "right";
       ctx.fillStyle = sub;
       ctx.font = mono(28, 500);
@@ -1751,6 +1815,20 @@
     if (shareButton) {
       $("#dlg-detail").close();
       openShare(state.entries.find((item) => item.id === shareButton.dataset.share));
+      return;
+    }
+    if (target.closest("[data-invite]")) {
+      const url = "https://juw12.github.io/lahap/";
+      const text = "I'm keeping a food diary on Lahap (free, no account). Try it and we can compare tastes:";
+      if (navigator.share) {
+        try {
+          await navigator.share({ title: "Lahap", text, url });
+        } catch (error) {
+          /* user closed the share sheet */
+        }
+      } else {
+        window.open(`https://wa.me/?text=${encodeURIComponent(`${text} ${url}`)}`, "_blank", "noopener");
+      }
       return;
     }
     if (target.closest("[data-share-week]")) {

@@ -23,7 +23,8 @@ What it does
 
 Limits (honest)
 - Plate score is a rule of thumb from the portions you tick, not nutrition analysis or medical advice.
-- Buds are sample profiles: there is no server yet, so friends, matching and points live on this device only.
+- Suggested buds are example profiles: there is no server yet, so buds, matching and points live on this device only.
+  Invite real friends with the share sheet or WhatsApp; matches appear after you log 3 meals.
 
 Tests: `python tests/test_app.py` (Playwright). Design rules: `design.md`.
 
