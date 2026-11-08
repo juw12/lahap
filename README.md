@@ -35,8 +35,9 @@ What it does
 Limits (honest)
 - Nutrition numbers are estimates from typical portions and recipes, not measurements and not medical advice.
   Lahap does not recognise the dish from the photo: you pick or type it.
-- Food cut-out: about 1.5 to 3.5 s on a laptop; slower on older phones. White food on a white plate (krupuk,
-  cucumber, rice edges) can be removed with the plate, and thin bowl rims can stay. Tap "Original" if it looks wrong.
+- Food cut-out: about 1.5 to 3.5 s on a laptop; slower on older phones. The plate trim learns the plate's own
+  tint from its rim, so warm or greenish white sides (krupuk, cucumber) stay; food the exact tint of the plate
+  can still go with it, and thin bowl rims can stay. Tap "Original" if it looks wrong.
 - Scan a list reads printed or neatly written lists and receipts (English model), not photos of food.
 - Voice needs a browser with speech recognition (Chrome, Edge, Android, Safari); Firefox users can type.
 - The models (about 36 MB: onnxruntime-web, U-2-Net small, Tesseract) load only the first time you use a photo or

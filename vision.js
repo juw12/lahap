@@ -189,6 +189,9 @@
 
   // Plates and bowls are smooth, bright and colourless. Flood in from the cutout edge through
   // such pixels and drop them, so only the food stays. Rice is white too, but grainy, so it stops the fill.
+  // White sides (krupuk, cucumber, tofu) are smooth too, but never quite the plate's tint: learn the
+  // plate colour from the rim and only flood through pixels of that colour.
+  const PLATE_TINT = 0.03;
   function trimPlate(mask, pixels) {
     const n = SIZE * SIZE;
     const luma = new Float32Array(n);
@@ -228,10 +231,28 @@
       }
       ring = next;
     }
+    // plate tint = median chromaticity (r, g, b over their sum) of the plate-like rim pixels
+    const tint = (p) => {
+      const sum = pixels[p * 4] + pixels[p * 4 + 1] + pixels[p * 4 + 2] || 1;
+      return [pixels[p * 4] / sum, pixels[p * 4 + 1] / sum, pixels[p * 4 + 2] / sum];
+    };
+    const rim = [[], [], []];
+    for (let p = 0; p < n; p++) {
+      if (depth[p] <= 6 && plateLike[p]) {
+        const c = tint(p);
+        for (let k = 0; k < 3; k++) rim[k].push(c[k]);
+      }
+    }
+    const median = (values) => values.sort((a, b) => a - b)[values.length >> 1];
+    const plateTint = rim[0].length ? rim.map(median) : null;
+    const plateColoured = (p) => {
+      const c = tint(p);
+      return Math.abs(c[0] - plateTint[0]) + Math.abs(c[1] - plateTint[1]) + Math.abs(c[2] - plateTint[2]) < PLATE_TINT;
+    };
     const plate = new Uint8Array(n);
     const queue = [];
     for (let p = 0; p < n; p++) {
-      if (depth[p] <= 6 && plateLike[p]) {
+      if (depth[p] <= 6 && plateLike[p] && plateColoured(p)) {
         plate[p] = 1;
         queue.push(p);
       }
@@ -239,7 +260,7 @@
     while (queue.length) {
       const p = queue.pop();
       for (const q of [p - 1, p + 1, p - SIZE, p + SIZE]) {
-        if (q < 0 || q >= n || plate[q] || !fg(q) || !plateLike[q]) continue;
+        if (q < 0 || q >= n || plate[q] || !fg(q) || !plateLike[q] || !plateColoured(q)) continue;
         plate[q] = 1;
         queue.push(q);
       }
