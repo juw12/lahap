@@ -1,0 +1,13 @@
+{
+  "name": "Lahap food diary",
+  "short_name": "Lahap",
+  "description": "Private food diary: search every meal, see variety, plate score and spend, share story cards, find taste buds.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5efe3",
+  "theme_color": "#f5efe3",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
