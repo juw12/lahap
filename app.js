@@ -2070,18 +2070,25 @@
     ctx.drawImage(image, (image.width - sw) / 2, (image.height - sh) / 2, sw, sh, x, y, w, h);
   }
 
-  async function drawShare(canvas) {
+  async function drawShare(canvas, opts) {
     const W = 1080;
-    const H = share.size === "story" ? 1920 : 1080;
-    drawShare.boxes = [];
-    drawShare.stamp = null;
-    canvas.width = W;
-    canvas.height = H;
+    // opts lets the share sheet render small per-template previews (and other
+    // background/size combos) without mutating the live `share` state
+    const template = (opts && opts.template) || share.template;
+    const size = (opts && opts.size) || share.size;
+    const bg = (opts && opts.background) || share.background;
+    const scale = (opts && opts.scale) || 1;
+    const preview = !!(opts && opts.preview);
+    const H = size === "story" ? 1920 : 1080;
+    if (!preview) drawShare.boxes = [];
+    if (!preview) drawShare.stamp = null;
+    canvas.width = Math.round(W * scale);
+    canvas.height = Math.round(H * scale);
     const ctx = canvas.getContext("2d");
+    if (scale !== 1) ctx.scale(scale, scale);
     ctx.clearRect(0, 0, W, H);
     const isWeek = share.subject === "week";
     const entry = isWeek ? null : share.subject;
-    const bg = share.background;
     const stage = canvas.closest(".canvas-stage");
     if (stage) stage.classList.toggle("checker", bg === "clear");
     const photo = entry && entry.photo ? await loadImage(entry.photo) : null;
@@ -2126,7 +2133,7 @@
       ctx.fillRect(0, 0, W, H * 0.14);
     }
     // paper card: a printed menu-card frame (double rule) so it reads as a keepsake, not a blank page
-    if (bg === "paper" && share.template !== "receipt" && share.template !== "stats") {
+    if (bg === "paper" && template !== "receipt" && template !== "stats") {
       ctx.save();
       ctx.strokeStyle = "#d3c5ac";
       ctx.lineWidth = 3;
@@ -2197,17 +2204,17 @@
       ctx.fillText(value, x, y + (size || 84) + 8);
       const valueWidth = ctx.measureText(value).width;
       ctx.font = mono(28, 600);
-      drawShare.boxes.push({ x, y, width: Math.max(valueWidth, ctx.measureText(label.toUpperCase()).width) });
+      if (!preview) drawShare.boxes.push({ x, y, width: Math.max(valueWidth, ctx.measureText(label.toUpperCase()).width) });
     }
 
-    if (share.template === "receipt") {
-      drawReceipt(ctx, W, H, entry, isWeek, mono, serif);
+    if (template === "receipt") {
+      drawReceipt(ctx, W, H, entry, isWeek, mono, serif, size);
       return;
     }
 
-    if (share.template === "stats") {
+    if (template === "stats") {
       // Strava-style scoreboard: the plate inside a score ring is the hero, then the dish, then a ruled stat grid
-      const story = share.size === "story";
+      const story = size === "story";
       const data = isWeek ? weekData() : null;
       const score = isWeek ? data.avg : L.healthScore(entry.plate);
       const title = isWeek ? "My week on a plate" : entry.name;
@@ -2289,7 +2296,7 @@
         const key = L.dayKey(date);
         days.push({ date, meals: data.entries.filter((item) => L.dayKey(item.ts) === key) });
       }
-      const top = share.size === "story" ? 520 : 400;
+      const top = size === "story" ? 520 : 400;
       const cell = (W - pad * 2) / 7;
       days.forEach((day, column) => {
         const cx = pad + cell * column + cell / 2;
@@ -2297,17 +2304,17 @@
         ctx.fillStyle = sub;
         ctx.font = mono(26, 600);
         ctx.fillText(day.date.toLocaleDateString(undefined, { weekday: "short" }).toUpperCase(), cx, top);
-        const rows = share.size === "story" ? 3 : 2;
+        const rows = size === "story" ? 3 : 2;
         day.meals.slice(0, rows).forEach((meal, row) => {
           drawPlate(ctx, cx, top + 70 + row * (cell + 18), cell * 0.42, meal.plate, meal.name);
         });
       });
       ctx.textAlign = "left";
-      const statsTop = share.size === "story" ? 1300 : 790;
+      const statsTop = size === "story" ? 1300 : 790;
       const colW = (W - pad * 2) / 2;
       statBlock(pad, statsTop, "Meals", String(data.entries.length), 84, colW - 32);
       statBlock(pad + colW, statsTop, "Spent", money(data.spend.total), 64, colW - 32);
-      if (share.size === "story") {
+      if (size === "story") {
         statBlock(pad, statsTop + 220, "Plate score", String(data.avg), 84, colW - 32);
         statBlock(pad + colW, statsTop + 220, "Variety", String(data.variety), 84, colW - 32);
       }
@@ -2316,7 +2323,7 @@
 
     // single meal card: text block anchored to the bottom, the plate fills what is left above it
     brand(pad + 20);
-    const square = share.size === "square";
+    const square = size === "square";
     const titleSize = square ? 76 : 104;
     const titleStep = square ? 90 : 120;
     ctx.font = serif(titleSize);
@@ -2358,7 +2365,7 @@
     const plateR = box * 0.46;
     const stampX = bg === "photo" ? W - pad - stampR : W / 2 + plateR * Math.SQRT1_2;
     const stampY = bg === "photo" ? baseY - stampR - 40 : boxY + box / 2 - plateR * Math.SQRT1_2;
-    drawShare.stamp = { x: stampX, y: stampY, r: stampR };
+    if (!preview) drawShare.stamp = { x: stampX, y: stampY, r: stampR };
     drawScoreStamp(ctx, stampX, stampY, stampR, score, L.healthLabel(score), serif, mono);
 
     ctx.fillStyle = sub;
@@ -2452,14 +2459,14 @@
     ctx.restore();
   }
 
-  function drawReceipt(ctx, W, H, entry, isWeek, mono, serif) {
+  function drawReceipt(ctx, W, H, entry, isWeek, mono, serif, size) {
     ctx.shadowColor = "transparent";
     ctx.shadowBlur = 0;
     ctx.shadowOffsetY = 0;
     const paperW = 760;
     const x = (W - paperW) / 2;
     const items = isWeek ? weekData().entries.slice().sort((a, b) => new Date(a.ts) - new Date(b.ts)) : [entry];
-    const maxItems = share.size === "story" ? 16 : 7;
+    const maxItems = size === "story" ? 16 : 7;
     const shown = items.slice(-maxItems);
     const lineH = 52;
     const extraRows = isWeek ? 0 : 3;
@@ -2575,12 +2582,17 @@
     const dialog = $("#dlg-share");
     const backgrounds = [["paper", "Paper"], ["ink", "Dark"], ["photo", "Photo"], ["clear", "Transparent"]].filter(([key]) => key !== "photo" || (!isWeek && subject.photo));
     if (share.background === "photo" && (isWeek || !subject.photo)) share.background = "paper";
+    const templates = [["card", isWeek ? "Plates" : "Card"], ["receipt", "Receipt"], ["stats", "Stats"]];
     dialog.innerHTML = `
       <div class="sheet-head"><h2 id="share-title">${isWeek ? "Share my week" : "Share " + esc(subject.name)}</h2><button type="button" class="icon-btn" data-close aria-label="Close">${ICON_CLOSE}</button></div>
       <div class="sheet-body share-grid">
         <div class="canvas-stage"><canvas id="share-canvas" role="img" aria-label="Share card preview"></canvas></div>
         <div>
-          <div class="control"><span>Template</span>${segHtml("template", [["card", isWeek ? "Plates" : "Card"], ["receipt", "Receipt"], ["stats", "Stats"]], share.template)}</div>
+          <div class="control"><span>Template</span>
+            <div class="template-prev" role="group" aria-label="Template preview">
+              ${templates.map(([value, label]) => `<button type="button" class="tp-btn" data-seg="template" data-value="${value}" aria-pressed="${String(share.template === value)}"><canvas class="tp-canvas" data-tpl="${value}" width="108" height="192" role="img" aria-label="${esc(label)} template preview"></canvas><span>${esc(label)}</span></button>`).join("")}
+            </div>
+          </div>
           <div class="control"><span>Background</span>${segHtml("background", backgrounds, share.background)}</div>
           <div class="control"><span>Size</span>${segHtml("size", [["story", "Story 9:16"], ["square", "Post 1:1"]], share.size)}</div>
           <p class="notice">Transparent saves a PNG with no background: drop it on your own photo in Instagram or WhatsApp stories, like a Strava sticker.${!isWeek && !subject.photo ? " Add a photo to this meal to use it as the background." : ""}</p>
@@ -2601,6 +2613,11 @@
       const token = ++drawToken;
       prepared = null;
       sendButton.disabled = true;
+      for (const [value] of templates) {
+        const mini = dialog.querySelector(`.tp-canvas[data-tpl="${value}"]`);
+        if (mini) await drawShare(mini, { template: value, background: share.background, size: share.size, scale: 0.2, preview: true });
+        if (token !== drawToken) return;
+      }
       await drawShare(canvas);
       if (token !== drawToken) return;
       canvas.toBlob((blob) => {

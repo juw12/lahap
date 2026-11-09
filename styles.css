@@ -1218,6 +1218,51 @@ dialog.sheet::backdrop {
   margin-bottom: 6px;
 }
 
+.template-prev {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s2);
+}
+
+.tp-btn {
+  display: grid;
+  gap: 6px;
+  padding: 6px;
+  border: 2px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+  text-align: center;
+}
+
+.tp-btn canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 5px;
+  box-shadow: 0 4px 12px -6px rgba(0, 0, 0, 0.5);
+}
+
+.tp-btn span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.tp-btn[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.tp-btn[aria-pressed="true"] span {
+  color: var(--accent);
+}
+
+.tp-btn:focus-visible {
+  outline: 3px solid var(--accent-soft);
+  outline-offset: 1px;
+}
+
 /* ---------- toast ---------- */
 .toast {
   position: fixed;

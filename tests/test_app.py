@@ -231,6 +231,41 @@ def main():
         check("share: square size 1080x1080", alpha["size"] == [1080, 1080], alpha["size"])
         check("share: week card renders", alpha["weekOk"])
 
+        # ---- r11: the share sheet previews every template on the current (photo) background ----
+        preview = page.evaluate(
+            """async () => {
+              const entry = window.Lahap.state.entries.find(e => e.name === 'Mie goreng test');
+              entry.photo = 'tests/fixtures/plate.jpg';
+              window.Lahap.openShare(entry);
+              document.querySelector('[data-seg=size][data-value=story]').click();
+              document.querySelector('[data-seg=background][data-value=photo]').click();
+              await new Promise(r => setTimeout(r, 350));
+              const minis = [...document.querySelectorAll('#dlg-share .tp-canvas')];
+              const pressed = [...document.querySelectorAll('#dlg-share .tp-btn')].map((b) => b.getAttribute('aria-pressed'));
+              const out = {
+                count: minis.length,
+                dims: minis.map((c) => [c.width, c.height]),
+                pressed,
+                variance: minis.map((c) => {
+                  const d = c.getContext('2d').getImageData(0, 0, c.width, Math.floor(c.height * 0.15)).data;
+                  const seen = new Set();
+                  for (let i = 0; i < d.length; i += 4 * 137) seen.add((d[i] << 16) | (d[i + 1] << 8) | d[i + 2]);
+                  return seen.size;
+                }),
+              };
+              document.querySelector('[data-seg=background][data-value=paper]').click();
+              await new Promise(r => setTimeout(r, 350));
+              out.paperCorner = Array.from(minis[0].getContext('2d').getImageData(6, 6, 1, 1).data);
+              entry.photo = null;
+              document.getElementById('dlg-share').close();
+              return out;
+            }"""
+        )
+        check("share: one live preview per template", preview["count"] == 3, preview["count"])
+        check("share: previews render the story canvas at a glance", preview["dims"] == [[216, 384], [216, 384], [216, 384]], preview["dims"])
+        check("share: exactly one template preview is selected", preview["pressed"].count("true") == 1, preview["pressed"])
+        check("share: the photo shows behind every template", all(v > 40 for v in preview["variance"]), preview["variance"])
+        check("share: switching the background repaints the previews", preview["paperCorner"] == [245, 239, 227, 255], preview["paperCorner"])
 
         # ---- G4: share card stats never overlap (judge finding turned into a gate) ----
         overlaps = page.evaluate(
