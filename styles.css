@@ -2171,3 +2171,15 @@ label.chip input {
   border-color: var(--accent);
   outline: none;
 }
+
+/* r8: on phones a bud row with actions puts Plan makan + remove on their own line,
+   so the name, match and level hint keep the full width instead of a 4-line column. */
+@media (max-width: 520px) {
+  .person:has(> .person-actions) {
+    grid-template-columns: 48px minmax(0, 1fr);
+    row-gap: var(--s2);
+  }
+  .person > .person-actions {
+    grid-column: 2 / -1;
+  }
+}

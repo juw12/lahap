@@ -54,7 +54,7 @@ Limits (honest)
 - Suggested buds are example profiles. Invited buds are real but one-way snapshots: there is no server, so buds,
   matching and points live on each device and do not sync after the invite.
 
-Tests: `python tests/test_app.py` (Playwright, 170 checks, including a real cut-out and OCR run). Design rules: `design.md`.
+Tests: `python tests/test_app.py` (Playwright, 171 checks, including a real cut-out and OCR run). Design rules: `design.md`.
 
 Why another food diary: PlateDiary is a private restaurant photo journal and Mynu is a home-cooking journal.
 Lahap logs both (ate out, home-cooked, delivery), answers "have I eaten this before?", estimates what is on the

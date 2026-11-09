@@ -950,7 +950,7 @@
       <section class="panel next-level-card">
         <span class="eyebrow">Next level</span>
         <h2>${level.toNext} pts to ${esc(level.next)}</h2>
-        <p class="muted">Tag ${esc(person.name)} in a meal to get there. The level hint already shows this on your buds list.</p>
+        <p class="muted">Tag ${esc(person.name)} in your next meal to get there.</p>
         <div class="btn-row"><button type="button" class="btn primary" data-tag-meal="${esc(person.id)}">Tag a meal with ${esc(person.name)}</button><button type="button" class="btn" data-hangout="${esc(person.id)}">Plan makan</button></div>
       </section>`;
   }

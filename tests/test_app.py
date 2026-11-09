@@ -262,6 +262,15 @@ def main():
         page.wait_for_timeout(200)
         friends = page.evaluate("() => window.Lahap.state.friends.length")
         check("add a bud", friends == 3, friends)
+        size_before = page.viewport_size
+        page.set_viewport_size({"width": 390, "height": 844})
+        page.wait_for_timeout(150)
+        bud_name_width = page.evaluate(
+            "() => { const row = document.querySelector('.person .person-actions'); return row ? row.closest('.person').querySelector('.name').getBoundingClientRect().width : 0; }"
+        )
+        page.set_viewport_size(size_before)
+        page.wait_for_timeout(150)
+        check("buds: at 390px a bud row keeps a wide name column (actions wrap below)", bud_name_width >= 250, round(bud_name_width))
         buds_text = page.locator("main").inner_text()
         check(
             "buds: one verb for a plan (Plan makan, no Hang out / Plan it)",
