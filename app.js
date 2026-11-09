@@ -724,6 +724,20 @@
       input.focus();
       input.setSelectionRange(caret, caret);
     }
+
+    // scroll-aware edge fade: only hint "more" on sides that actually overflow
+    const filterRow = $(".filters");
+    if (filterRow) {
+      const syncFilterFade = () => {
+        const over = filterRow.scrollWidth > filterRow.clientWidth + 4;
+        const canL = filterRow.scrollLeft > 8;
+        const canR = filterRow.scrollLeft < filterRow.scrollWidth - filterRow.clientWidth - 8;
+        filterRow.style.setProperty("--fade-l", over && canL ? "48px" : "0px");
+        filterRow.style.setProperty("--fade-r", over && canR ? "48px" : "0px");
+      };
+      filterRow.addEventListener("scroll", syncFilterFade, { passive: true });
+      syncFilterFade();
+    }
   }
 
   /* ---------------- insights ---------------- */
@@ -939,6 +953,17 @@
       </section>`;
   }
 
+  // early state: no buds yet, so point at the one action that starts the loop
+  function earlyBudsCardHtml() {
+    return `
+      <section class="panel next-level-card">
+        <span class="eyebrow">Next step</span>
+        <h2>Add your first bud</h2>
+        <p class="muted">Send your invite link to a friend. When they open it you two are buds, and a tagged meal earns +${L.POINTS.tag} connection pts.</p>
+        <div class="btn-row"><button type="button" class="btn primary" data-invite>Invite a friend</button></div>
+      </section>`;
+  }
+
   // a one-tap next step: pick the bud closest to their next level and surface it
   function nextLevelCardHtml(friends) {
     if (!friends.length) return "";
@@ -989,7 +1014,7 @@
       <div class="split">
         <div>
           ${incomingInviteHtml()}
-          ${nextLevelCardHtml(friends)}
+          ${friends.length ? nextLevelCardHtml(friends) : earlyBudsCardHtml()}
           <section class="panel">
             <div class="panel-head"><h2>Your buds</h2>${totalPoints ? `<span class="pts mono">${totalPoints} connection pts</span>` : ""}</div>
             ${friends.length ? friends.map((person) => {
@@ -2022,6 +2047,7 @@
     const W = 1080;
     const H = share.size === "story" ? 1920 : 1080;
     drawShare.boxes = [];
+    drawShare.stamp = null;
     canvas.width = W;
     canvas.height = H;
     const ctx = canvas.getContext("2d");
@@ -2063,6 +2089,12 @@
       shade.addColorStop(1, "rgba(20,14,10,0.88)");
       ctx.fillStyle = shade;
       ctx.fillRect(0, 0, W, H);
+      // top scrim so the brand row reads over bright photos too
+      const topShade = ctx.createLinearGradient(0, 0, 0, H * 0.14);
+      topShade.addColorStop(0, "rgba(20,14,10,0.5)");
+      topShade.addColorStop(1, "rgba(20,14,10,0)");
+      ctx.fillStyle = topShade;
+      ctx.fillRect(0, 0, W, H * 0.14);
     }
     // paper card: a printed menu-card frame (double rule) so it reads as a keepsake, not a blank page
     if (bg === "paper" && share.template !== "receipt" && share.template !== "stats") {
@@ -2291,11 +2323,13 @@
         drawPlate(ctx, W / 2, boxY + box / 2, box * 0.46, entry.plate, entry.name);
       }
     }
-    // plate score as a tilted stamp on the rim, the one sticker-like flourish
+    // plate score as a tilted stamp on the top-right rim, the one sticker-like flourish
     const score = L.healthScore(entry.plate);
-    const stampR = square ? 78 : 112;
-    const stampX = bg === "photo" ? W - pad - stampR : Math.min(W - pad - stampR * 0.6, W / 2 + box * 0.36);
-    const stampY = bg === "photo" ? baseY - stampR - 40 : boxY + box * 0.84;
+    const stampR = square ? 92 : 124;
+    const plateR = box * 0.46;
+    const stampX = bg === "photo" ? W - pad - stampR : W / 2 + plateR * Math.SQRT1_2;
+    const stampY = bg === "photo" ? baseY - stampR - 40 : boxY + box / 2 - plateR * Math.SQRT1_2;
+    drawShare.stamp = { x: stampX, y: stampY, r: stampR };
     drawScoreStamp(ctx, stampX, stampY, stampR, score, L.healthLabel(score), serif, mono);
 
     ctx.fillStyle = sub;

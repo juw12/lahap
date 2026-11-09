@@ -1983,11 +1983,15 @@ label.chip input {
   white-space: nowrap;
 }
 
-/* phone filter row scrolls sideways: fade the edge so the cut-off chip reads as "more" */
+/* phone filter row scrolls sideways: scroll-aware edge fade. --fade-l/--fade-r
+   are set from scroll position (app.js) so the edge only reads as "more to
+   scroll" when there actually is more on that side */
 @media (max-width: 760px) {
   .filters {
-    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent);
-    mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent);
+    --fade-l: 0px;
+    --fade-r: 48px;
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--fade-l), #000 calc(100% - var(--fade-r)), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 var(--fade-l), #000 calc(100% - var(--fade-r)), transparent);
     padding-right: 48px;
   }
 }

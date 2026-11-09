@@ -272,6 +272,64 @@ def main():
         nav_labels = page.evaluate("() => [...document.querySelectorAll('a[data-tab=lab] span')].map((s) => s.textContent)")
         check("nav: phone tab says Recipes, not Lab", "Recipes" in nav_labels and "Lab" not in nav_labels, nav_labels)
 
+        # ---- r8b: the plate score stamp sits on the plate's top-right rim, fully inside the card ----
+        stamp = page.evaluate(
+            """async () => {
+              const entry = window.Lahap.state.entries.find(e => e.name === 'Tom yum seafood');
+              window.Lahap.openShare(entry);
+              document.querySelector('[data-seg=template][data-value=card]').click();
+              document.querySelector('[data-seg=size][data-value=story]').click();
+              document.querySelector('[data-seg=background][data-value=paper]').click();
+              await new Promise(r => setTimeout(r, 300));
+              const s = window.Lahap.drawShare.stamp;
+              const canvas = document.getElementById('share-canvas');
+              const px = s ? Array.from(canvas.getContext('2d').getImageData(Math.round(s.x), Math.round(s.y), 1, 1).data) : null;
+              document.getElementById('dlg-share').close();
+              return { stamp: s, px };
+            }"""
+        )
+        s = stamp["stamp"]
+        stamp_in = s and 0 <= s["x"] - s["r"] and s["x"] + s["r"] <= 1080 and 0 <= s["y"] - s["r"] and s["y"] + s["r"] <= 1920
+        check("r8b stamp: plate badge fully inside the story frame", stamp_in, s)
+        check("r8b stamp: badge centre is the red plate score", stamp["px"] and stamp["px"][0] >= 0xB4 - 12 and stamp["px"][1] < 0x50, stamp["px"])
+
+        # ---- r8b: filter row edge fade only hints where there is more to scroll ----
+        page.goto(base + "#diary")
+        page.wait_for_selector("html[data-ready='1']")
+        page.wait_for_timeout(300)
+        fade_start = page.evaluate(
+            """() => {
+              const row = document.querySelector(".filters");
+              return { over: row.scrollWidth > row.clientWidth + 4, l: row.style.getPropertyValue("--fade-l"), r: row.style.getPropertyValue("--fade-r") };
+            }"""
+        )
+        check("r8b filters: chip row overflows at 390px", fade_start["over"], fade_start)
+        check("r8b filters: at rest only the right edge fades", fade_start["l"] == "0px" and fade_start["r"] == "48px", fade_start)
+        page.evaluate("() => { const row = document.querySelector('.filters'); row.scrollLeft = 200; row.dispatchEvent(new Event('scroll')); }")
+        page.wait_for_timeout(150)
+        fade_mid = page.evaluate("() => { const row = document.querySelector('.filters'); return { l: row.style.getPropertyValue('--fade-l'), r: row.style.getPropertyValue('--fade-r') }; }")
+        check("r8b filters: mid-scroll both edges fade", fade_mid == {"l": "48px", "r": "48px"}, fade_mid)
+        page.evaluate("() => { const row = document.querySelector('.filters'); row.scrollLeft = row.scrollWidth; row.dispatchEvent(new Event('scroll')); }")
+        page.wait_for_timeout(150)
+        fade_end = page.evaluate("() => { const row = document.querySelector('.filters'); return { l: row.style.getPropertyValue('--fade-l'), r: row.style.getPropertyValue('--fade-r') }; }")
+        check("r8b filters: at the end only the left edge fades", fade_end == {"l": "48px", "r": "0px"}, fade_end)
+
+        # ---- r8b: early-state buds card is the next step when there are no buds yet ----
+        fresh = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=1)
+        fresh_page = fresh.new_page()
+        fresh_page.goto(base + "?nosw=1&noquiz=1#buds")
+        fresh_page.wait_for_selector("html[data-ready='1']")
+        fresh_page.wait_for_timeout(200)
+        early = fresh_page.locator(".next-level-card")
+        check("r8b buds: early-state card shown when there are no buds", early.count() == 1, early.count())
+        check("r8b buds: early card points at inviting a friend", "invite" in early.first.inner_text().lower(), early.first.inner_text()[:80])
+        check("r8b buds: early card has the invite action", fresh_page.locator(".next-level-card [data-invite]").count() == 1)
+        fresh_page.locator("[data-add]").first.click()
+        fresh_page.wait_for_timeout(200)
+        fresh_buds_text = fresh_page.locator("#view-buds").inner_text()
+        check("r8b buds: early card goes away once a bud exists", "Add your first bud" not in fresh_buds_text)
+        fresh.close()
+
         # ---- taste buds ----
         page.goto(base + "?nosw=1#buds")
         page.wait_for_selector("html[data-ready='1']")
