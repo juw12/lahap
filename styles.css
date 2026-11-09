@@ -824,7 +824,7 @@ textarea {
 
 .bar-row .fill {
   height: 100%;
-  background: var(--ink);
+  background: var(--accent);
   border-radius: 999px;
 }
 
@@ -870,9 +870,19 @@ textarea {
   color: var(--muted);
 }
 
+.taste-lead {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.taste-lead b {
+  color: var(--ink);
+}
+
 .radar {
   width: 100%;
-  max-width: 280px;
+  max-width: 320px;
   display: block;
   margin: 0 auto;
 }
@@ -957,7 +967,7 @@ textarea {
 
 .level .fill {
   height: 100%;
-  background: var(--accent);
+  background: var(--leaf);
 }
 
 .invite {
@@ -1381,9 +1391,9 @@ dialog.sheet::backdrop {
 }
 
 .next-step {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--leaf);
   margin-top: 2px;
 }
 

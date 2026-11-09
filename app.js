@@ -769,7 +769,7 @@
 
   /* ---------------- insights ---------------- */
   function radarSvg(vector) {
-    const size = 260;
+    const size = 300;
     const center = size / 2;
     const radius = 92;
     const points = (values) => values.map((value, index) => {
@@ -777,9 +777,21 @@
       return [center + Math.cos(angle) * radius * value, center + Math.sin(angle) * radius * value];
     });
     const rings = [0.33, 0.66, 1].map((level) => `<polygon points="${points(vector.map(() => level)).map((p) => p.join(",")).join(" ")}" fill="none" stroke="#e0d5c2"/>`).join("");
-    const labels = points(vector.map(() => 1.22)).map((p, index) => `<text x="${p[0]}" y="${p[1]}" text-anchor="middle" dominant-baseline="middle" font-size="13" font-weight="600" fill="#1d1813">${TASTES[index]}</text>`).join("");
-    const shape = points(vector.map((value) => Math.max(0.06, value))).map((p) => p.join(",")).join(" ");
-    return `<svg class="radar" viewBox="0 0 ${size} ${size}" role="img" aria-label="Taste profile: ${TASTES.map((taste, index) => `${taste} ${Math.round(vector[index] * 100)}%`).join(", ")}">${rings}<polygon points="${shape}" fill="rgba(180,56,15,0.22)" stroke="#b4380f" stroke-width="2.5"/>${labels}</svg>`;
+    const labels = points(vector.map(() => 1.3)).map((p, index) => `<text x="${p[0]}" y="${p[1] - 7}" text-anchor="middle" dominant-baseline="middle" font-size="13" font-weight="600" fill="#1d1813">${TASTES[index]}<tspan class="radar-pct" x="${p[0]}" dy="16" font-size="11" font-weight="700" fill="#4e463c">${Math.round(vector[index] * 100)}%</tspan></text>`).join("");
+    const shapePoints = points(vector.map((value) => Math.max(0.06, value)));
+    const shape = shapePoints.map((p) => p.join(",")).join(" ");
+    const dots = shapePoints.map((p) => `<circle cx="${p[0]}" cy="${p[1]}" r="3.5" fill="#b4380f"/>`).join("");
+    return `<svg class="radar" viewBox="0 0 ${size} ${size}" role="img" aria-label="Taste profile: ${TASTES.map((taste, index) => `${taste} ${Math.round(vector[index] * 100)}%`).join(", ")}">${rings}<polygon points="${shape}" fill="rgba(180,56,15,0.22)" stroke="#b4380f" stroke-width="2.5" stroke-linejoin="round"/>${dots}${labels}</svg>`;
+  }
+
+  function tasteLeadHtml(vector) {
+    const ranked = vector
+      .map((value, index) => ({ name: TASTES[index], value }))
+      .filter((item) => item.value > 0)
+      .sort((a, b) => b.value - a.value);
+    if (!ranked.length) return "";
+    const lead = ranked.slice(0, 2).map((item) => item.name.toLowerCase()).join(" and ");
+    return `<p class="taste-lead">Your plates lean <b>${esc(lead)}</b>.</p>`;
   }
 
   function barsHtml(items, max) {
@@ -864,6 +876,7 @@
         </section>
         <section class="panel">
           <h2>Taste profile</h2>
+          ${tasteLeadHtml(L.tasteVector(entries))}
           ${radarSvg(L.tasteVector(entries))}
         </section>
         <section class="panel">
@@ -1031,7 +1044,8 @@
     const others = PEOPLE.filter((person) => !state.friends.includes(person.id))
       .map((person) => ({ person, match: matchFor(person) }))
       .sort((a, b) => b.match - a.match);
-    const totalPoints = Object.values(state.points).reduce((sum, value) => sum + value, 0);
+    // header total must equal the rows shown below it: only current buds count
+    const totalPoints = friends.reduce((sum, person) => sum + (state.points[person.id] || 0), 0);
     const invites = state.invites.slice().sort((a, b) => new Date(a.when) - new Date(b.when));
 
     root.innerHTML = `

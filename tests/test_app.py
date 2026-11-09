@@ -370,8 +370,16 @@ def main():
               window.Lahap.openShare(entry);
               document.querySelector('[data-seg=template][data-value=card]').click();
               document.querySelector('[data-seg=background][data-value=photo]').click();
-              await new Promise(r => setTimeout(r, 300));
-              const photo = window.Lahap.drawShare.stamp;
+              // the photo background loads async: wait for the redraw instead of a fixed 300 ms
+              let photo = null;
+              for (let i = 0; i < 30; i++) {
+                await new Promise(r => setTimeout(r, 100));
+                const current = window.Lahap.drawShare.stamp;
+                if (current && current !== square) {
+                  photo = current;
+                  break;
+                }
+              }
               document.getElementById('dlg-share').close();
               return { stamp: s, square, photo, px };
             }"""
@@ -586,6 +594,47 @@ def main():
         check("suggest: egg + rice ranks an egg recipe first", logic2["topHasEgg"], logic2["top"])
         check("suggest: lose uses less rice than gain", 0 < logic2["riceLose"] < logic2["riceGain"], (logic2["riceLose"], logic2["riceGain"]))
         check("suggest: vegetarian filter drops meat and fish", logic2["vegCount"] > 3 and not logic2["meaty"], logic2["meaty"])
+
+        page.evaluate("() => location.hash = 'insights'")
+        page.wait_for_timeout(200)
+        radar_info = page.evaluate(
+            """() => {
+              const svg = document.querySelector('[data-view=insights] svg.radar');
+              const lead = document.querySelector('[data-view=insights] .taste-lead');
+              return {
+                pcts: svg ? [...svg.querySelectorAll('.radar-pct')].map((t) => t.textContent) : [],
+                dots: svg ? svg.querySelectorAll('circle').length : 0,
+                lead: lead ? lead.textContent : '',
+              };
+            }"""
+        )
+        check(
+            "insights: taste radar prints a % under every taste and names the lead tastes",
+            len(radar_info["pcts"]) == 6
+            and all(p.endswith("%") for p in radar_info["pcts"])
+            and radar_info["dots"] == 6
+            and "lean" in radar_info["lead"],
+            radar_info,
+        )
+
+        page.evaluate("() => location.hash = 'buds'")
+        page.wait_for_timeout(200)
+        points_info = page.evaluate(
+            """() => {
+              const view = document.querySelector('[data-view=buds]');
+              const head = view.querySelector('.panel-head .pts');
+              const rows = [...view.querySelectorAll('.panel .person .why')]
+                .map((el) => (el.textContent.match(/(\\d+) pts/) || [])[1])
+                .filter(Boolean)
+                .map(Number);
+              return { head: head ? parseInt(head.textContent, 10) : 0, rows };
+            }"""
+        )
+        check(
+            "buds: header connection pts equals the sum of the buds listed",
+            points_info["rows"] and points_info["head"] == sum(points_info["rows"]),
+            points_info,
+        )
 
         # ---- first run: quiz, lab, cutout, OCR in a clean browser profile ----
         fresh = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=1, permissions=["clipboard-read", "clipboard-write"])
