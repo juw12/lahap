@@ -507,21 +507,44 @@ def main():
         short = page2.evaluate(
             """() => {
               const bad = [];
-              for (const el of document.querySelectorAll('[data-view=lab] .chip, [data-view=lab] .seg button')) {
+              for (const el of document.querySelectorAll('[data-view=lab] .chip, [data-view=lab] .seg button, [data-view=lab] .btn.small')) {
                 if (!el.getBoundingClientRect().width) continue;
                 el.scrollIntoView({ block: 'center' });
                 const r = el.getBoundingClientRect();
                 const x = r.left + r.width / 2;
                 const hit = (y) => {
                   const node = document.elementFromPoint(x, y);
-                  return node && (node === el || el.contains(node) || node.closest('.chip, .seg button') === el);
+                  return node && (node === el || el.contains(node) || node.closest('.chip, .seg button, .btn.small') === el);
                 };
                 if (!hit(r.top + r.height / 2 - 22 + 1) || !hit(r.top + r.height / 2 + 22 - 1)) bad.push((el.innerText || '').trim() + ' ' + Math.round(r.height));
               }
               return bad;
             }"""
         )
-        check("phone: Lab chips and toggles have a 44px tap area", not short, short)
+        check("phone: Lab chips, toggles and recipe buttons have a 44px tap area", not short, short)
+
+        hidden = {}
+        for view in ("diary", "insights", "lab", "buds", "me"):
+            page2.evaluate(f"() => location.hash = '{view}'")
+            page2.wait_for_timeout(150)
+            gap = page2.evaluate(
+                """() => {
+                  window.scrollTo(0, document.documentElement.scrollHeight);
+                  const view = document.querySelector('[data-view=' + location.hash.slice(1) + ']');
+                  const bar = document.querySelector('.bottombar');
+                  if (!view || !bar) return null;
+                  let bottom = 0;
+                  for (const el of view.querySelectorAll('*')) {
+                    const r = el.getBoundingClientRect();
+                    // closed <details> content still reports boxes in Chrome; checkVisibility skips it
+                    if (r.width && r.height && el.checkVisibility()) bottom = Math.max(bottom, r.bottom);
+                  }
+                  return Math.round(bar.getBoundingClientRect().top - bottom);
+                }"""
+            )
+            if gap is not None and gap < 8:
+                hidden[view] = gap
+        check("phone: page end clears the bottom bar in every view", not hidden, hidden)
 
         page2.set_viewport_size({"width": 1280, "height": 900})
         page2.evaluate("() => location.hash = 'lab'")

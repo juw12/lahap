@@ -1906,11 +1906,13 @@ dialog.working .photo-status::before {
    The layer is placed from inside the 1px chip border, so 5px reaches 4px past the edge: rows wrap with an
    8px gap, so neighbours meet without overlapping. Segments have no border and sit in 3px of padding. */
 .chip,
-.seg button {
+.seg button,
+.btn.small {
   position: relative;
 }
 .chip::after,
-.seg button::after {
+.seg button::after,
+.btn.small::after {
   content: "";
   position: absolute;
   left: 0;
@@ -1922,6 +1924,7 @@ dialog.working .photo-status::before {
   top: -3px;
   bottom: -3px;
 }
+/* small buttons are 36px with a 1px border: 5px from the padding edge = 4px past the border = 44px */
 /* label chips already cover themselves with their checkbox; stretch that instead of adding a layer above it */
 label.chip::after {
   content: none;
@@ -1934,4 +1937,12 @@ label.chip input {
   min-height: 44px;
   display: flex;
   align-items: center;
+}
+
+/* The phone rule for main's bottom padding sits above the base main shorthand, which overrode it (48px under a
+   68px fixed bar), so the last card's buttons ended under the bottom bar. Restate it after the base rule. */
+@media (max-width: 760px) {
+  main {
+    padding-bottom: calc(var(--bottombar-h) + env(safe-area-inset-bottom) + var(--s6));
+  }
 }
