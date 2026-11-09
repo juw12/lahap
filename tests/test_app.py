@@ -284,13 +284,19 @@ def main():
               const s = window.Lahap.drawShare.stamp;
               const canvas = document.getElementById('share-canvas');
               const px = s ? Array.from(canvas.getContext('2d').getImageData(Math.round(s.x), Math.round(s.y), 1, 1).data) : null;
+              document.querySelector('[data-seg=size][data-value=square]').click();
+              await new Promise(r => setTimeout(r, 300));
+              const square = window.Lahap.drawShare.stamp;
               document.getElementById('dlg-share').close();
-              return { stamp: s, px };
+              return { stamp: s, square, px };
             }"""
         )
         s = stamp["stamp"]
         stamp_in = s and 0 <= s["x"] - s["r"] and s["x"] + s["r"] <= 1080 and 0 <= s["y"] - s["r"] and s["y"] + s["r"] <= 1920
         check("r8b stamp: plate badge fully inside the story frame", stamp_in, s)
+        q = stamp["square"]
+        square_in = q and 0 <= q["x"] - q["r"] and q["x"] + q["r"] <= 1080 and 0 <= q["y"] - q["r"] and q["y"] + q["r"] <= 1080
+        check("r8b stamp: plate badge fully inside the square frame", square_in, q)
         check("r8b stamp: badge centre is the red plate score", stamp["px"] and stamp["px"][0] >= 0xB4 - 12 and stamp["px"][1] < 0x50, stamp["px"])
 
         # ---- r8b: filter row edge fade only hints where there is more to scroll ----
