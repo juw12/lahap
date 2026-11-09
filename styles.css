@@ -2091,6 +2091,44 @@ label.chip input {
   }
 }
 
+/* r8: Insights day row breathes on phone; labels big enough to read at 390px */
+.plate-week {
+  gap: 8px;
+  row-gap: 10px;
+  margin: var(--s3) 0 var(--s4);
+}
+.pday {
+  gap: 4px;
+}
+.pday span {
+  font-size: 13px;
+  color: var(--ink);
+}
+@media (max-width: 420px) {
+  .plate-week {
+    gap: 4px;
+  }
+  .pday b {
+    font-size: 12px;
+    padding: 1px 5px;
+  }
+}
+
+/* r8: the On repeat card is one compact row of stats on desktop so Today stays above the fold */
+@media (min-width: 761px) {
+  .answer.featured {
+    padding: var(--s3) var(--s4);
+  }
+  .answer.featured dl {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: var(--s2);
+    margin-top: var(--s2);
+  }
+  .answer.featured .btn-row {
+    margin-top: var(--s2) !important;
+  }
+}
+
 /* r8: next-level card sits between the incoming invite and the Your buds list,
    so the closest path to the next tier is the first thing the eye lands on. */
 .next-level-card {

@@ -134,6 +134,19 @@ def main():
         check("featured answer reads the go-to dish", "On repeat" in feat_text and "Yes," in feat_text, feat_text)
         check("featured answer offers to log it again", feat.locator("button[data-again]").count() == 1, feat.locator("button[data-again]").count())
         check("featured answer shows the dish", feat.locator("img.answer-thumb").count() == 1, feat.locator("img.answer-thumb").count())
+        original_viewport = page.viewport_size
+        page.set_viewport_size({"width": 1440, "height": 900})
+        page.wait_for_timeout(150)
+        stat_rows = page.evaluate(
+            """() => {
+              if (innerWidth <= 760) return -1;
+              const tops = [...document.querySelectorAll('.answer.featured dt')].map((dt) => Math.round(dt.getBoundingClientRect().top));
+              return new Set(tops).size;
+            }"""
+        )
+        page.set_viewport_size(original_viewport)
+        page.wait_for_timeout(150)
+        check("featured answer: one compact row of stats on desktop", stat_rows == 1, stat_rows)
         # one-tap share on every diary ticket (judge r6b: sharing a past meal should be as fast as logging it)
         share_chips = page.locator(".ticket-share").count()
         check("diary: every ticket has a share chip", share_chips == tickets, f"{share_chips} of {tickets}")
@@ -292,7 +305,6 @@ def main():
         target_label = first_remove.get_attribute("aria-label") or ""
         before_count = page.locator("#view-buds [data-remove]").count()
         # intercept the confirm() and accept
-        page.once("dialog", lambda d: d.accept())
         first_remove.click()
         page.wait_for_timeout(300)
         after_count = page.locator("#view-buds [data-remove]").count()

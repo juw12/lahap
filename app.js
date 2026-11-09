@@ -547,7 +547,7 @@
     const last = summary.last;
     const range = summary.minPrice === summary.maxPrice ? money(summary.minPrice) : `${money(summary.minPrice)} – ${money(summary.maxPrice)}`;
     return `
-      <div class="answer" role="status">
+      <div class="answer${eyebrow === "On repeat" ? " featured" : ""}" role="status">
         <div class="answer-head">
           <img class="answer-thumb${last.cutout ? " cut" : ""}" src="${imageFor(last)}" alt="${last.photo ? "Photo of " + esc(last.name) : "Plate drawing of " + esc(last.name)}" width="64" height="64">
           <div>
@@ -2032,11 +2032,25 @@
         ctx.fillRect(0, 0, W, H);
         drawPlate(ctx, W / 2, H / 2, W * 0.42, entry ? entry.plate : { veg: 1, protein: 1, carbs: 1 }, entry ? entry.name : "week");
       }
-      const shade = ctx.createLinearGradient(0, H * 0.35, 0, H);
-      shade.addColorStop(0, "rgba(0,0,0,0)");
-      shade.addColorStop(1, "rgba(0,0,0,0.72)");
+      // scrim: clear over the food, then a solid dark band behind the title and stats so
+      // white text stays readable over pale plates and busy photos
+      const shade = ctx.createLinearGradient(0, H * 0.22, 0, H);
+      shade.addColorStop(0, "rgba(20,14,10,0)");
+      shade.addColorStop(0.36, "rgba(20,14,10,0.62)");
+      shade.addColorStop(0.55, "rgba(20,14,10,0.8)");
+      shade.addColorStop(1, "rgba(20,14,10,0.88)");
       ctx.fillStyle = shade;
       ctx.fillRect(0, 0, W, H);
+    }
+    // paper card: a printed menu-card frame (double rule) so it reads as a keepsake, not a blank page
+    if (bg === "paper" && share.template !== "receipt" && share.template !== "stats") {
+      ctx.save();
+      ctx.strokeStyle = "#d3c5ac";
+      ctx.lineWidth = 3;
+      ctx.strokeRect(26, 26, W - 52, H - 52);
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(38, 38, W - 76, H - 76);
+      ctx.restore();
     }
     // "clear" leaves a transparent background, like a sticker over your own photo
     ctx.textBaseline = "alphabetic";
@@ -2806,7 +2820,7 @@
   }
 
   // test hook
-  window.Lahap = { state, inviteLink, openLog, openShare, openHangout, openQuiz, drawShare, loadSample, sampleEntries, renderLab, nutritionFor, readListPhoto, removeFriend };
+  window.Lahap = { state, render, inviteLink, openLog, openShare, openHangout, openQuiz, drawShare, loadSample, sampleEntries, renderLab, nutritionFor, readListPhoto, removeFriend };
 
   init();
 })();
