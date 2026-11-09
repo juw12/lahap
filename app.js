@@ -563,7 +563,7 @@
           <div><dt>Where</dt><dd>${esc(summary.places.join(", ") || "–")}</dd></div>
           <div><dt>First logged</dt><dd>${esc(new Date(summary.first.ts).toLocaleDateString(undefined, { day: "numeric", month: "short" }))}</dd></div>
         </dl>
-        <div class="btn-row" style="margin-top:12px"><button type="button" class="btn" data-again="${esc(last.id)}">Log “${esc(last.name)}” again</button></div>
+        <div class="btn-row" style="margin-top:12px"><button type="button" class="btn" data-again="${esc(last.id)}">Log “${esc(last.name)}” again</button><button type="button" class="btn" data-share="${esc(last.id)}">Share card</button></div>
       </div>`;
   }
 
@@ -602,7 +602,7 @@
           <div><dt>Where</dt><dd>${esc(summary.places.join(", ") || "–")}</dd></div>
           <div><dt>First logged</dt><dd>${esc(new Date(summary.first.ts).toLocaleDateString(undefined, { day: "numeric", month: "short" }))}</dd></div>
         </dl>
-        <div class="btn-row" style="margin-top:12px"><button type="button" class="btn" data-again="${esc(last.id)}">Log “${esc(last.name)}” again</button></div>
+        <div class="btn-row" style="margin-top:12px"><button type="button" class="btn" data-again="${esc(last.id)}">Log “${esc(last.name)}” again</button><button type="button" class="btn" data-share="${esc(last.id)}">Share card</button></div>
       </div>`;
   }
 

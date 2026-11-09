@@ -30,7 +30,8 @@ What it does
   taste radar, cuisines, top places.
 - Share cards like Strava: Card / Receipt / Stats templates, Paper / Dark / Photo / Transparent backgrounds,
   Story 9:16 or Post 1:1, the food cut-out drawn as a sticker, saved as PNG or sent through the share sheet.
-  Every diary ticket has a one-tap share chip, so a past meal is as quick to share as a new one.
+  Every meal surface has one-tap share — the chip on each diary ticket, plus "Share card" on the
+  On-repeat hero and the search answer card — so a past meal is as quick to share as a new one.
 - Taste buds: match % from your taste profile, tag buds in meals (+10 points), plan a hangout by WhatsApp,
   mark "We went" (+25), levels New bud, Makan buddy, Regular, Family table.
 - Invite links: "Invite a bud" shares a link that carries only your taste profile (no meals); your friend
