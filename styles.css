@@ -1233,6 +1233,11 @@ dialog.sheet::backdrop {
   background: transparent;
   cursor: pointer;
   text-align: center;
+  transition: transform 0.12s ease, border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.tp-btn:active {
+  transform: scale(0.97);
 }
 
 .tp-btn canvas {
@@ -1252,6 +1257,7 @@ dialog.sheet::backdrop {
 .tp-btn[aria-pressed="true"] {
   border-color: var(--accent);
   background: var(--accent-soft);
+  box-shadow: 0 0 0 2px var(--accent), 0 6px 16px -6px rgba(180, 56, 15, 0.55);
 }
 
 .tp-btn[aria-pressed="true"] span {

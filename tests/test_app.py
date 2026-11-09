@@ -267,6 +267,27 @@ def main():
         check("share: the photo shows behind every template", all(v > 40 for v in preview["variance"]), preview["variance"])
         check("share: switching the background repaints the previews", preview["paperCorner"] == [245, 239, 227, 255], preview["paperCorner"])
 
+        # ---- r12: selected template preview pops with an accent ring, and taps animate ----
+        r12 = page.evaluate(
+            """async () => {
+              const entry = window.Lahap.state.entries.find(e => e.name === 'Mie goreng test');
+              window.Lahap.openShare(entry);
+              document.querySelector('[data-seg=template][data-value=card]').click();
+              await new Promise(r => setTimeout(r, 300));
+              const btns = [...document.querySelectorAll('#dlg-share .tp-btn')];
+              const sel = btns.find((b) => b.getAttribute('aria-pressed') === 'true');
+              const out = {
+                selRing: getComputedStyle(sel).boxShadow,
+                transitionProp: getComputedStyle(btns[0]).transitionProperty,
+                transitionDur: getComputedStyle(btns[0]).transitionDuration,
+              };
+              document.getElementById('dlg-share').close();
+              return out;
+            }"""
+        )
+        check("share: selected preview pops with an accent ring", r12["selRing"] and str(r12["selRing"]).lower() != "none", str(r12["selRing"])[:70])
+        check("share: template thumbnails animate on tap", "transform" in (r12["transitionProp"] or "") and r12["transitionDur"] != "0s", str(r12["transitionProp"]))
+
         # ---- G4: share card stats never overlap (judge finding turned into a gate) ----
         overlaps = page.evaluate(
             """async () => {
