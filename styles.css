@@ -1783,6 +1783,7 @@ dialog.working .photo-status::before {
 
 .goal-pick .seg {
   flex-wrap: wrap;
+  row-gap: 6px;
   border-radius: 22px;
 }
 
@@ -1899,4 +1900,38 @@ dialog.working .photo-status::before {
   .bottombar .fab-label {
     font-size: 12px;
   }
+}
+
+/* Phone tap targets: chips and segment buttons keep their look but get a 44px tall hit area.
+   The layer is placed from inside the 1px chip border, so 5px reaches 4px past the edge: rows wrap with an
+   8px gap, so neighbours meet without overlapping. Segments have no border and sit in 3px of padding. */
+.chip,
+.seg button {
+  position: relative;
+}
+.chip::after,
+.seg button::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -5px;
+  bottom: -5px;
+}
+.seg button::after {
+  top: -3px;
+  bottom: -3px;
+}
+/* label chips already cover themselves with their checkbox; stretch that instead of adding a layer above it */
+label.chip::after {
+  content: none;
+}
+label.chip input {
+  top: -5px;
+  bottom: -5px;
+}
+.recipe summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
 }

@@ -487,6 +487,42 @@ def main():
             (ind_requests[:1], ocr_id["text"][:90], ocr_id["expected"], ocr_id["got"]),
         )
 
+        # phone: Add to Home Screen icons and 44px tap targets in the Lab
+        icons = page2.evaluate(
+            """async () => {
+              const manifest = await (await fetch('manifest.webmanifest')).json();
+              const apple = document.querySelector('link[rel=apple-touch-icon]');
+              const appleOk = apple ? (await fetch(apple.href)).ok : false;
+              return { sizes: manifest.icons.map((i) => i.sizes + ':' + (i.purpose || 'any') + ':' + i.type), appleOk };
+            }"""
+        )
+        check(
+            "phone: PNG, maskable and apple-touch icons",
+            icons["appleOk"] and "192x192:any:image/png" in icons["sizes"] and "512x512:maskable:image/png" in icons["sizes"],
+            icons,
+        )
+        page2.set_viewport_size({"width": 412, "height": 915})
+        page2.evaluate("() => location.hash = 'lab'")
+        page2.wait_for_timeout(200)
+        short = page2.evaluate(
+            """() => {
+              const bad = [];
+              for (const el of document.querySelectorAll('[data-view=lab] .chip, [data-view=lab] .seg button')) {
+                if (!el.getBoundingClientRect().width) continue;
+                el.scrollIntoView({ block: 'center' });
+                const r = el.getBoundingClientRect();
+                const x = r.left + r.width / 2;
+                const hit = (y) => {
+                  const node = document.elementFromPoint(x, y);
+                  return node && (node === el || el.contains(node) || node.closest('.chip, .seg button') === el);
+                };
+                if (!hit(r.top + r.height / 2 - 22 + 1) || !hit(r.top + r.height / 2 + 22 - 1)) bad.push((el.innerText || '').trim() + ' ' + Math.round(r.height));
+              }
+              return bad;
+            }"""
+        )
+        check("phone: Lab chips and toggles have a 44px tap area", not short, short)
+
         page2.set_viewport_size({"width": 1280, "height": 900})
         page2.evaluate("() => location.hash = 'lab'")
         page2.wait_for_timeout(150)

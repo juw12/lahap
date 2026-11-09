@@ -37,16 +37,19 @@ What it does
 Limits (honest)
 - Nutrition numbers are estimates from typical portions and recipes, not measurements and not medical advice.
   Lahap does not recognise the dish from the photo: you pick or type it.
-- Food cut-out: about 1.5 to 3.5 s on a laptop; slower on older phones. The plate trim learns the plate's own
+- Food cut-out: about 1.5 to 3.5 s on a laptop, about 3 to 4 s per photo on a phone-speed CPU (emulated 4x
+  slowdown; almost all of it is the model itself). The first one also downloads about 18 MB. The plate trim learns the plate's own
   tint from its rim, so warm or greenish white sides (krupuk, cucumber) stay; food the exact tint of the plate
   can still go with it, and thin bowl rims can stay. Tap "Original" if it looks wrong.
-- Scan a list reads printed or neatly written lists and receipts (English model), not photos of food.
+- Scan a list reads printed or neatly written lists and receipts (English, or English + Indonesian when List language is Bahasa), not photos of food.
 - Voice needs a browser with speech recognition (Chrome, Edge, Android, Safari); Firefox users can type.
 - The models (about 37 MB: onnxruntime-web, U-2-Net small, Tesseract English + Indonesian) load only the first time you use a photo or
   scan, then stay cached for offline use.
+- Install: Chrome / Android shows "Install app" or "Add to Home Screen"; on iPhone use Safari, Share, Add to
+  Home Screen. It opens full screen with its own icon. Checked in phone emulation, not yet on a real handset.
 - Suggested buds are example profiles: there is no server yet, so buds, matching and points live on this device only.
 
-Tests: `python tests/test_app.py` (Playwright, 138 checks, including a real cut-out and OCR run). Design rules: `design.md`.
+Tests: `python tests/test_app.py` (Playwright, 140 checks, including a real cut-out and OCR run). Design rules: `design.md`.
 
 Why another food diary: PlateDiary is a private restaurant photo journal and Mynu is a home-cooking journal.
 Lahap logs both (ate out, home-cooked, delivery), answers "have I eaten this before?", estimates what is on the
