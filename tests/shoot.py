@@ -44,7 +44,7 @@ with sync_playwright() as playwright:
         context.set_default_timeout(180000)
         page = context.new_page()
         for name, hash_, action in STATES:
-            query = "?nosw=1" if action == "empty" else "?demo=1&nosw=1"
+            query = "?nosw=1&noquiz=1" if action == "empty" else "?demo=1&nosw=1"
             if action == "empty":
                 fresh = browser.new_context(viewport={"width": width, "height": height})
                 fresh.set_default_timeout(180000)

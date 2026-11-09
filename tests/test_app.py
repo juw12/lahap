@@ -203,15 +203,15 @@ def main():
               const entry = window.Lahap.state.entries.reduce((a, b) => (String(a.price).length >= String(b.price).length ? a : b));
               entry.price = 1234567;
               for (const subject of [entry, 'week']) {
-                for (const size of ['story', 'square']) {
+                for (const [size, template] of [['story', 'card'], ['square', 'card'], ['story', 'stats'], ['square', 'stats']]) {
                   window.Lahap.openShare(subject);
                   document.querySelector(`[data-seg=size][data-value=${size}]`).click();
-                  document.querySelector('[data-seg=template][data-value=card]').click();
+                  document.querySelector(`[data-seg=template][data-value=${template}]`).click();
                   await new Promise(r => setTimeout(r, 150));
                   const boxes = window.Lahap.drawShare.boxes.slice();
                   for (const a of boxes) {
                     for (const b of boxes) {
-                      if (a !== b && a.y === b.y && a.x < b.x && a.x + a.width + 16 > b.x) found.push(`${size}:${a.x}->${b.x}`);
+                      if (a !== b && a.y === b.y && a.x < b.x && a.x + a.width + 16 > b.x) found.push(`${template}/${size}:${a.x}->${b.x}`);
                     }
                   }
                   document.getElementById('dlg-share').close();
@@ -220,7 +220,7 @@ def main():
               return found;
             }"""
         )
-        check("G4 share stats never overlap (story + square, meal + week)", not overlaps, overlaps)
+        check("G4 share stats never overlap (card + stats, story + square, meal + week)", not overlaps, overlaps)
 
         # ---- taste buds ----
         page.goto(base + "?nosw=1#buds")

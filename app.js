@@ -571,7 +571,7 @@
         <div class="stat-grid">
           <div class="stat"><div class="label">Meals</div><div class="value">${week.length}</div></div>
           <div class="stat"><div class="label">Variety</div><div class="value">${L.varietyScore(week)}</div></div>
-          <div class="stat"><div class="label">Health (plate score)</div><div class="value">${avg}</div><div class="note">${esc(L.healthLabel(avg))}</div></div>
+          <div class="stat"><div class="label">Plate score</div><div class="value">${avg}</div><div class="note">${esc(L.healthLabel(avg))}</div></div>
           <div class="stat"><div class="label">Spent</div><div class="value money">${esc(money(spend.total))}</div></div>
         </div>
         ${onRepeat.length ? `<p class="notice">On repeat: ${onRepeat.map((item) => `${esc(item.name)} ×${item.count}`).join(", ")}.</p>` : ""}
@@ -604,7 +604,7 @@
         <dl>
           <div><dt>7-day meals</dt><dd>${week.length}</dd></div>
           <div><dt>Variety</dt><dd>${L.varietyScore(week)}</dd></div>
-          <div><dt>Health</dt><dd>${avg} <small>${esc(L.healthLabel(avg))}</small></dd></div>
+          <div><dt>Plate</dt><dd>${avg} <small>${esc(L.healthLabel(avg))}</small></dd></div>
           <div><dt>Spent</dt><dd>${esc(money(spend.total))}</dd></div>
         </dl>
         <button type="button" class="btn small" data-share-week>Share my week</button>
@@ -629,6 +629,7 @@
     const filters = `
       <div class="chips filters" role="group" aria-label="Filter meals">
         ${["all", "out", "home", "delivery"].map((key) => `<button type="button" class="chip" data-source="${key}" aria-pressed="${state.sourceFilter === key}">${key === "all" ? "All" : esc(SOURCES[key])}</button>`).join("")}
+        <span class="filter-break" aria-hidden="true"></span>
         ${TASTES.map((taste) => `<button type="button" class="chip" data-taste="${taste}" aria-pressed="${state.tasteFilter.includes(taste)}">${taste}</button>`).join("")}
       </div>`;
     const head = `
@@ -655,18 +656,30 @@
       }
       group.entries.push(entry);
     }
-    const days = groups.map((group) => {
+    const dayBlocks = groups.map((group) => {
       const spend = group.entries.reduce((sum, entry) => sum + (Number(entry.price) || 0), 0);
       const avg = Math.round(group.entries.reduce((sum, entry) => sum + L.healthScore(entry.plate), 0) / group.entries.length);
       return `
         <section class="day" aria-label="${esc(dayLabel(group.entries[0].ts))}">
           <div class="day-head">
             <h2>${esc(dayLabel(group.entries[0].ts))}</h2>
-            <span class="mono">${plural(group.entries.length, "meal")} · ${esc(money(spend))} · health ${avg}</span>
+            <span class="mono">${plural(group.entries.length, "meal")} · ${esc(money(spend))} · plate ${avg}</span>
           </div>
           ${group.entries.map(ticketHtml).join("")}
         </section>`;
-    }).join("");
+    });
+    // meals lead; today's targets and the week line follow the first day, the bud nudge the second
+    let listHtml = '<p class="muted">No meals match these filters.</p>';
+    if (dayBlocks.length && state.query) {
+      listHtml = dayBlocks.join("");
+    } else if (dayBlocks.length) {
+      listHtml = dayBlocks.map((block, index) => {
+        if (index === 0) return block + todayHtml() + weekLineHtml();
+        if (index === 1) return block + budNudgeHtml();
+        return block;
+      }).join("");
+      if (dayBlocks.length === 1) listHtml += budNudgeHtml();
+    }
     const keepFocus = document.activeElement && document.activeElement.id === "q";
     const caret = keepFocus ? document.activeElement.selectionStart : null;
     root.innerHTML = `
@@ -679,10 +692,8 @@
             <input id="q" type="search" placeholder="Have I eaten this? Try “bakso”" value="${esc(state.query)}" autocomplete="off">
           </form>
           ${filters}
-          ${state.query ? "" : todayHtml()}
-          ${weekLineHtml()}
           ${answerHtml(state.query, list)}
-          ${days ? days.replace("</section>", () => `</section>${state.query ? "" : budNudgeHtml()}`) : '<p class="muted">No meals match these filters.</p>'}
+          ${listHtml}
         </div>
         ${weekAsideHtml()}
       </div>`;
@@ -859,12 +870,11 @@
     root.innerHTML = `
       <div class="view-head">
         <div><h1>Taste buds</h1><p>Friends ranked by how close their taste is to yours. Tag them in meals and eat together to grow the connection.</p></div>
-        <div class="stat" style="min-width:160px"><div class="label">Connection points</div><div class="value">${totalPoints}</div></div>
       </div>
       <div class="split">
         <div>
           <section class="panel">
-            <h2>Your buds</h2>
+            <div class="panel-head"><h2>Your buds</h2>${totalPoints ? `<span class="pts mono">${totalPoints} connection pts</span>` : ""}</div>
             ${friends.length ? friends.map((person) => {
               const points = state.points[person.id] || 0;
               const level = L.levelFor(points);
@@ -1334,7 +1344,7 @@
     const quick = QUICK_ADD.filter((id) => R.INGREDIENTS[id] && !have.includes(id)).slice(0, 12);
     const defaultStatus = speech ? "Type, speak (English or Bahasa Indonesia) or scan a written list or receipt." : "Type or scan a written list or receipt. Voice input is not available in this browser.";
     root.innerHTML = `
-      <div class="view-head"><div><h1>Lab</h1><p>Tell Lahap what is in your kitchen and get home recipes sized for your goal, with the calories and protein worked out.</p></div></div>
+      <div class="view-head"><div><h1>Recipe lab</h1><p>Tell Lahap what is in your kitchen and get home recipes sized for your goal, with the calories and protein worked out.</p></div></div>
       <div class="lab-grid">
         <section class="panel lab-input">
           <h2>What do you have?</h2>
@@ -1515,7 +1525,7 @@
           <datalist id="place-list">${places.map((place) => `<option value="${esc(place)}">`).join("")}</datalist>
           <datalist id="cuisine-list">${CUISINES.map((cuisine) => `<option value="${esc(cuisine)}">`).join("")}</datalist>
           <div class="row">
-            <label class="field"><span>Price (${esc(state.settings.currency)})</span><input type="number" name="price" inputmode="decimal" min="0" step="any" value="${esc(draft.price)}" placeholder="0"></label>
+            <label class="field"><span>Price (${esc(state.settings.currency)})</span><input type="number" name="price" inputmode="decimal" min="0" step="any" value="${esc(draft.price)}"></label>
             <label class="field"><span>When</span><input type="datetime-local" name="ts" value="${localInputValue(new Date(draft.ts))}"></label>
           </div>
           <fieldset class="field"><legend>Taste</legend><div class="chips">${TASTES.map((taste) => `<label class="chip"><input type="checkbox" name="taste" value="${taste}" ${draft.tastes.includes(taste) ? "checked" : ""}><span>${taste}</span></label>`).join("")}</div></fieldset>
@@ -1985,42 +1995,72 @@
     }
 
     if (share.template === "stats") {
-      // Strava-style: big numbers only, meant for clear background over your own photo
-      const lines = isWeek
-        ? (function () {
-          const data = weekData();
-          return [["Meals this week", String(data.entries.length)], ["Spent", money(data.spend.total)], ["Plate score", String(data.avg)], ["Variety", String(data.variety)]];
-        })()
-        : [["Dish", entry.name], ["Price", money(entry.price)], ["Plate score", `${L.healthScore(entry.plate)} ${L.healthLabel(L.healthScore(entry.plate))}`], ["Taste", (entry.tastes || []).join(" · ") || entry.cuisine || "–"]];
+      // Strava-style scoreboard: the plate inside a score ring is the hero, then the dish, then a ruled stat grid
       const story = share.size === "story";
-      if (!isWeek && story && entry.place) lines.push(["Where", entry.place]);
-      const block = story ? 250 : 180;
-      const glyph = story ? 170 : 80;
-      const stackHeight = glyph * 2 + 60 + lines.length * block;
-      const stackTop = Math.max(40, (H - stackHeight) / 2 - 30);
-      drawPlate(ctx, W / 2, stackTop + glyph, glyph, isWeek ? averagePlate(weekData().entries) : entry.plate, isWeek ? "week" : entry.name);
-      let y = stackTop + glyph * 2 + 60 + 32;
+      const data = isWeek ? weekData() : null;
+      const score = isWeek ? data.avg : L.healthScore(entry.plate);
+      const title = isWeek ? "My week on a plate" : entry.name;
+      const cells = isWeek
+        ? [["Meals", String(data.entries.length)], ["Spent", money(data.spend.total)], ["Variety", String(data.variety)], ["Days logged", String(new Set(data.entries.map((item) => L.dayKey(item.ts))).size)]]
+        : [["Price", money(entry.price)], ["Taste", (entry.tastes || []).join(" · ") || entry.cuisine || "–"], ["Where", entry.place || SOURCES[entry.source] || "–"], ["Eaten", `${timesEaten(entry)}×`]];
+      const rows = story ? 2 : 1;
+      brand(pad + 20);
+
+      // score ring around the plate: the arc length is the score out of 100
+      const ringR = story ? 250 : 168;
+      const ringY = story ? 230 + ringR : 150 + ringR;
+      const ringColor = score >= 70 ? "#4f8a3c" : score >= 45 ? "#e0b25a" : "#b4380f";
+      ctx.save();
+      ctx.lineCap = "round";
+      ctx.lineWidth = story ? 22 : 16;
+      ctx.strokeStyle = light ? "rgba(29,24,19,0.12)" : "rgba(255,255,255,0.18)";
+      ctx.beginPath();
+      ctx.arc(W / 2, ringY, ringR, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = ringColor;
+      ctx.beginPath();
+      ctx.arc(W / 2, ringY, ringR, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * Math.max(score, 2)) / 100);
+      ctx.stroke();
+      ctx.restore();
+      drawPlate(ctx, W / 2, ringY, ringR - (story ? 44 : 32), isWeek ? averagePlate(data.entries) : entry.plate, isWeek ? "week" : entry.name);
+
+      // the score itself, big, under the ring
       ctx.textAlign = "center";
-      for (const [label, value] of lines) {
-        ctx.fillStyle = sub;
-        ctx.font = mono(story ? 34 : 28, 600);
-        ctx.fillText(label.toUpperCase(), W / 2, y);
-        ctx.fillStyle = ink;
-        // shrink long values until they fit; only truncate below a readable floor
-        let fontSize = story ? 116 : 88;
-        ctx.font = serif(fontSize);
-        while (ctx.measureText(value).width > W - pad * 2 && fontSize > 56) {
-          fontSize -= 4;
-          ctx.font = serif(fontSize);
-        }
-        const fitted = wrapText(ctx, value, W - pad * 2, 1)[0];
-        ctx.fillText(fitted, W / 2, y + (story ? 118 : 92));
-        y += block;
-      }
-      ctx.font = mono(30, 700);
       ctx.fillStyle = ink;
-      ctx.fillText("LAHAP", W / 2, H - 90);
+      ctx.font = serif(story ? 168 : 104);
+      const scoreY = ringY + ringR + (story ? 190 : 118);
+      ctx.fillText(String(score), W / 2, scoreY);
+      ctx.fillStyle = sub;
+      ctx.font = mono(story ? 32 : 26, 600);
+      ctx.fillText(`PLATE SCORE · ${L.healthLabel(score).toUpperCase()}`, W / 2, scoreY + (story ? 58 : 44));
+
+      // stat grid anchored to the bottom, dish title fills the gap above it
+      const rowStep = story ? 210 : 0;
+      const gridTop = H - (story ? 150 : 70) - (story ? 96 : 76) - rowStep * (rows - 1);
+      const ruleY = gridTop - (story ? 70 : 52);
+      ctx.font = serif(story ? 92 : 60);
+      const titleLines = wrapText(ctx, title, W - pad * 2, story ? 2 : 1);
+      const titleStep = story ? 104 : 0;
+      const titleSpace = ruleY - (scoreY + (story ? 58 : 44));
+      let titleY = scoreY + (story ? 58 : 44) + titleSpace / 2 - (titleStep * (titleLines.length - 1)) / 2 + (story ? 32 : 22);
+      ctx.fillStyle = ink;
+      for (const line of titleLines) {
+        ctx.fillText(line, W / 2, titleY);
+        titleY += titleStep;
+      }
       ctx.textAlign = "left";
+      ctx.save();
+      ctx.shadowColor = "transparent";
+      ctx.fillStyle = light ? "#1d1813" : "#ffffff";
+      ctx.fillRect(pad, ruleY, W - pad * 2, 3);
+      ctx.restore();
+      const colW = (W - pad * 2) / 2;
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < 2; col++) {
+          const [label, value] = cells[row * 2 + col];
+          statBlock(pad + col * colW, gridTop + row * rowStep, label, value, story ? 76 : 60, colW - 40);
+        }
+      }
       return;
     }
 
@@ -2063,13 +2103,22 @@
       return;
     }
 
-    // single meal card
+    // single meal card: text block anchored to the bottom, the plate fills what is left above it
     brand(pad + 20);
     const square = share.size === "square";
+    const titleSize = square ? 76 : 104;
+    const titleStep = square ? 90 : 120;
+    ctx.font = serif(titleSize);
+    const titleLines = wrapText(ctx, entry.name, W - pad * 2, 2);
+    const rowGap = square ? 0 : 200;
+    const blockHeight = titleStep * titleLines.length + (square ? 36 : 56) + (square ? 62 : 84) + rowGap + (square ? 76 : 84);
+    const baseY = H - (square ? 70 : 150) - blockHeight;
+    const top = square ? 100 : 150;
+    const room = baseY - 60 - top;
+    const box = Math.min(square ? 440 : 860, room);
+    const boxX = (W - box) / 2;
+    const boxY = top + (room - box) / 2;
     if (bg !== "photo") {
-      const box = square ? 420 : 760;
-      const x = (W - box) / 2;
-      const y = square ? 130 : 200;
       if (cutout) {
         // food-only cutout sits on the card like a sticker, no box around it
         const fit = Math.min(box / cutout.width, box / cutout.height);
@@ -2079,52 +2128,87 @@
         ctx.shadowColor = "rgba(29,24,19,0.28)";
         ctx.shadowBlur = 40;
         ctx.shadowOffsetY = 18;
-        ctx.drawImage(cutout, x + (box - cw) / 2, y + (box - ch) / 2, cw, ch);
+        ctx.drawImage(cutout, boxX + (box - cw) / 2, boxY + (box - ch) / 2, cw, ch);
         ctx.restore();
       } else if (photo) {
         ctx.save();
         ctx.beginPath();
-        ctx.roundRect ? ctx.roundRect(x, y, box, box, 36) : ctx.rect(x, y, box, box);
+        ctx.roundRect ? ctx.roundRect(boxX, boxY, box, box, 36) : ctx.rect(boxX, boxY, box, box);
         ctx.clip();
-        cover(ctx, photo, x, y, box, box);
+        cover(ctx, photo, boxX, boxY, box, box);
         ctx.restore();
       } else {
-        drawPlate(ctx, W / 2, y + box / 2, box * 0.46, entry.plate, entry.name);
+        drawPlate(ctx, W / 2, boxY + box / 2, box * 0.46, entry.plate, entry.name);
       }
     }
-    const baseY = square ? 640 : 1100;
+    // plate score as a tilted stamp on the rim, the one sticker-like flourish
+    const score = L.healthScore(entry.plate);
+    const stampR = square ? 78 : 112;
+    const stampX = bg === "photo" ? W - pad - stampR : Math.min(W - pad - stampR * 0.6, W / 2 + box * 0.36);
+    const stampY = bg === "photo" ? baseY - stampR - 40 : boxY + box * 0.84;
+    drawScoreStamp(ctx, stampX, stampY, stampR, score, L.healthLabel(score), serif, mono);
+
     ctx.fillStyle = sub;
     ctx.font = mono(30, 600);
-    const metaLine = [new Date(entry.ts).toLocaleDateString(undefined, { day: "numeric", month: "short" }).toUpperCase(), entry.place ? entry.place.toUpperCase() : null].filter(Boolean).join(" · ");
+    const metaLine = [new Date(entry.ts).toLocaleDateString(undefined, { day: "numeric", month: "short" }).toUpperCase(), entry.place ? entry.place.toUpperCase() : null, SOURCES[entry.source] ? SOURCES[entry.source].toUpperCase() : null].filter(Boolean).join(" · ");
     ctx.fillText(wrapText(ctx, metaLine, W - pad * 2, 1)[0], pad, baseY);
     ctx.fillStyle = ink;
-    ctx.font = serif(square ? 76 : 104);
-    const titleLines = wrapText(ctx, entry.name, W - pad * 2, 2);
-    titleLines.forEach((line, index) => ctx.fillText(line, pad, baseY + (square ? 90 : 120) * (index + 1)));
-    const tearY = baseY + (square ? 90 : 120) * titleLines.length + (square ? 36 : 56);
+    ctx.font = serif(titleSize);
+    titleLines.forEach((line, index) => ctx.fillText(line, pad, baseY + titleStep * (index + 1)));
+    const tearY = baseY + titleStep * titleLines.length + (square ? 36 : 56);
     drawTearLine(ctx, W, tearY, light ? "#c9bba3" : "rgba(255,255,255,0.55)", bg === "paper" ? "#f5efe3" : bg === "ink" ? "#1d1813" : null);
     const statsY = tearY + (square ? 62 : 84);
-    // price gets the wide column; plate score and rating share the rest
+    const gutter = 32;
+    const times = timesEaten(entry);
+    const eaten = times === 1 ? "1st time" : `${times}×`;
+    // price gets the wide column; rating and how often share the rest
     const priceW = (W - pad * 2) * 0.46;
     const smallW = (W - pad * 2 - priceW) / 2;
-    const gutter = 32;
     statBlock(pad, statsY, "Price", money(entry.price), square ? 56 : 68, priceW - gutter);
-    statBlock(pad + priceW, statsY, "Plate score", String(L.healthScore(entry.plate)), square ? 56 : 68, smallW - gutter);
-    statBlock(pad + priceW + smallW, statsY, "Rating", entry.rating ? `${entry.rating}/5` : "–", square ? 56 : 68, smallW - gutter);
+    statBlock(pad + priceW, statsY, "Rating", entry.rating ? `${entry.rating}/5` : "–", square ? 56 : 68, smallW - gutter);
+    statBlock(pad + priceW + smallW, statsY, "Eaten", eaten, square ? 56 : 68, smallW - gutter);
     if (!square) {
-      // second row: what makes this meal yours (cuisine, how often, who with)
-      const rowY = statsY + 200;
-      const thirdW = (W - pad * 2) / 3;
-      const times = timesEaten(entry);
+      // second row: what makes this meal yours (taste, cuisine, who with)
+      const rowY = statsY + rowGap;
       const withWho = (entry.friends || []).map((id) => (personById(id) || {}).name).filter(Boolean);
-      statBlock(pad, rowY, "Cuisine", entry.cuisine || "–", 56, thirdW - gutter);
-      statBlock(pad + thirdW, rowY, "Eaten", times === 1 ? "1st time" : `${times}×`, 56, thirdW - gutter);
-      statBlock(pad + thirdW * 2, rowY, "With", withWho.length ? withWho.join(", ") : "Solo", 56, thirdW - gutter);
-      ctx.fillStyle = sub;
-      ctx.font = mono(30, 600);
-      const footer = [(entry.tastes || []).join(" · "), SOURCES[entry.source]].filter(Boolean).join("  ·  ").toUpperCase();
-      ctx.fillText(wrapText(ctx, footer, W - pad * 2, 1)[0], pad, H - 110);
+      statBlock(pad, rowY, "Taste", (entry.tastes || []).join(" · ") || "–", 56, priceW - gutter);
+      statBlock(pad + priceW, rowY, "Cuisine", entry.cuisine || "–", 56, smallW - gutter);
+      statBlock(pad + priceW + smallW, rowY, "With", withWho.length ? withWho.join(", ") : "Solo", 56, smallW - gutter);
     }
+  }
+
+  // round rubber-stamp badge: score in the middle, label underneath, slightly rotated
+  function drawScoreStamp(ctx, x, y, r, score, label, serif, mono) {
+    ctx.save();
+    ctx.shadowColor = "rgba(29,24,19,0.25)";
+    ctx.shadowBlur = 18;
+    ctx.shadowOffsetY = 6;
+    ctx.translate(x, y);
+    ctx.rotate(-0.21);
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fillStyle = "#b4380f";
+    ctx.fill();
+    ctx.shadowColor = "transparent";
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.86, 0, Math.PI * 2);
+    ctx.lineWidth = Math.max(3, r * 0.035);
+    ctx.setLineDash([r * 0.09, r * 0.06]);
+    ctx.strokeStyle = "rgba(255,255,255,0.85)";
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "center";
+    ctx.font = mono(Math.round(r * 0.2), 700);
+    ctx.fillText("PLATE", 0, -r * 0.36);
+    ctx.font = serif(Math.round(r * 0.78));
+    ctx.fillText(String(score), 0, r * 0.26);
+    ctx.font = mono(Math.round(r * 0.19), 700);
+    let fitted = label.toUpperCase();
+    while (ctx.measureText(fitted).width > r * 1.4 && fitted.length > 3) fitted = fitted.slice(0, -1);
+    ctx.fillText(fitted, 0, r * 0.58);
+    ctx.restore();
+    ctx.textAlign = "left";
   }
 
   function timesEaten(entry) {
