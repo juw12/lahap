@@ -46,10 +46,11 @@ Limits (honest)
 - The models (about 37 MB: onnxruntime-web, U-2-Net small, Tesseract English + Indonesian) load only the first time you use a photo or
   scan, then stay cached for offline use.
 - Install: Chrome / Android shows "Install app" or "Add to Home Screen"; on iPhone use Safari, Share, Add to
-  Home Screen. It opens full screen with its own icon. Checked in phone emulation, not yet on a real handset.
+  Home Screen. It opens full screen with its own icon. `python tests/device_check.py` runs the camera photo,
+  cut-out, Bahasa voice and share sheet in iPhone (WebKit) and Android (Chromium) profiles; not yet on a real handset.
 - Suggested buds are example profiles: there is no server yet, so buds, matching and points live on this device only.
 
-Tests: `python tests/test_app.py` (Playwright, 141 checks, including a real cut-out and OCR run). Design rules: `design.md`.
+Tests: `python tests/test_app.py` (Playwright, 142 checks, including a real cut-out and OCR run). Design rules: `design.md`.
 
 Why another food diary: PlateDiary is a private restaurant photo journal and Mynu is a home-cooking journal.
 Lahap logs both (ate out, home-cooked, delivery), answers "have I eaten this before?", estimates what is on the

@@ -1946,3 +1946,9 @@ label.chip input {
     padding-bottom: calc(var(--bottombar-h) + env(safe-area-inset-bottom) + var(--s6));
   }
 }
+
+/* Share waits a moment while the card PNG is prepared */
+.btn:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}

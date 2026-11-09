@@ -410,9 +410,37 @@ def main():
         detail_text = page2.inner_text("#dlg-detail")
         check("detail: nutrition and tips shown", "Estimated nutrition" in detail_text and "kcal" in detail_text)
         check("detail: food-only photo with original toggle", page2.locator("#detail-swap").count() == 1)
+        # Safari only opens the share sheet while the tap is still active (about 5 s). Make PNG encoding slower
+        # than that and record whether share() is called with the activation intact.
+        page2.evaluate(
+            """() => {
+              window.__shareCalls = [];
+              window.__realToBlob = HTMLCanvasElement.prototype.toBlob;
+              HTMLCanvasElement.prototype.toBlob = function (callback, ...rest) {
+                return window.__realToBlob.call(this, (blob) => setTimeout(() => callback(blob), 6000), ...rest);
+              };
+              Object.defineProperty(navigator, 'canShare', { value: () => true, configurable: true });
+              Object.defineProperty(navigator, 'share', {
+                configurable: true,
+                value: async (data) => {
+                  const file = data.files[0];
+                  window.__shareCalls.push({ active: navigator.userActivation.isActive, type: file.type, size: file.size });
+                },
+              });
+            }"""
+        )
         page2.locator("#dlg-detail [data-share]").click()
         page2.wait_for_timeout(500)
         check("share: card draws the cutout", page2.evaluate("() => document.querySelector('#dlg-share canvas') !== null"))
+        page2.locator("#share-send").click(timeout=20000)
+        page2.wait_for_timeout(300)
+        share_calls = page2.evaluate("() => window.__shareCalls")
+        check(
+            "share: sheet opens from the tap even when the PNG is slow (Safari 5 s rule)",
+            len(share_calls) == 1 and share_calls[0]["active"] and share_calls[0]["type"] == "image/png" and share_calls[0]["size"] > 10000,
+            share_calls,
+        )
+        page2.evaluate("() => { HTMLCanvasElement.prototype.toBlob = window.__realToBlob; }")
         page2.evaluate("() => document.getElementById('dlg-share').close()")
 
         # OCR: a written list read on the device with Tesseract

@@ -2293,7 +2293,24 @@
         </div>
       </div>`;
     const canvas = $("#share-canvas");
-    const redraw = () => drawShare(canvas);
+    const sendButton = $("#share-send");
+    const filename = () => `lahap-${isWeek ? "week" : L.normalize(subject.name).replace(/[^a-z0-9]+/g, "-")}-${share.template}-${share.background}.png`;
+    // The PNG is encoded after every redraw, not after the tap: Safari only opens the share sheet while the
+    // tap is still "active" (about 5 s), and encoding a 1-2 MB card on a phone can use that up.
+    let prepared = null;
+    let drawToken = 0;
+    const redraw = async () => {
+      const token = ++drawToken;
+      prepared = null;
+      sendButton.disabled = true;
+      await drawShare(canvas);
+      if (token !== drawToken) return;
+      canvas.toBlob((blob) => {
+        if (token !== drawToken || !blob) return;
+        prepared = new File([blob], filename(), { type: "image/png" });
+        sendButton.disabled = false;
+      }, "image/png");
+    };
     dialog.onclick = (event) => {
       const button = event.target.closest("[data-seg]");
       if (!button) return;
@@ -2301,22 +2318,23 @@
       for (const sibling of $$(`[data-seg="${button.dataset.seg}"]`, dialog)) sibling.setAttribute("aria-pressed", String(sibling === button));
       redraw();
     };
-    const filename = () => `lahap-${isWeek ? "week" : L.normalize(subject.name).replace(/[^a-z0-9]+/g, "-")}-${share.template}-${share.background}.png`;
-    $("#share-save").addEventListener("click", () => canvas.toBlob((blob) => download(blob, filename()), "image/png"));
-    $("#share-send").addEventListener("click", () => {
-      canvas.toBlob(async (blob) => {
-        const file = new File([blob], filename(), { type: "image/png" });
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({ files: [file], title: "Lahap" });
-          } catch (error) {
-            /* user closed the share sheet */
-          }
-        } else {
-          download(blob, filename());
-          toast("Sharing isn't available here, so the PNG was saved instead");
-        }
-      }, "image/png");
+    $("#share-save").addEventListener("click", () => {
+      if (prepared) download(prepared, prepared.name);
+      else canvas.toBlob((blob) => download(blob, filename()), "image/png");
+    });
+    sendButton.addEventListener("click", () => {
+      const file = prepared;
+      if (!file) return;
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        navigator.share({ files: [file], title: "Lahap" }).catch((error) => {
+          if (error && error.name === "AbortError") return; // closed the share sheet
+          download(file, file.name);
+          toast("The share sheet did not open, so the PNG was saved instead");
+        });
+      } else {
+        download(file, file.name);
+        toast("Sharing isn't available here, so the PNG was saved instead");
+      }
     });
     redraw();
     dialog.showModal();
