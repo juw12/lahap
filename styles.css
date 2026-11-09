@@ -2090,3 +2090,46 @@ label.chip input {
     height: 48px;
   }
 }
+
+/* r8: next-level card sits between the incoming invite and the Your buds list,
+   so the closest path to the next tier is the first thing the eye lands on. */
+.next-level-card {
+  border-left: 4px solid var(--accent);
+  padding-left: var(--s4);
+}
+.next-level-card .eyebrow {
+  color: var(--accent);
+}
+.next-level-card h2 {
+  margin-bottom: var(--s2);
+}
+
+/* r8: friend row actions sit next to each other; the remove button is a small
+   ghost that only lights up on hover/focus so it does not steal attention. */
+.person-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+.person-remove {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.person-remove:hover,
+.person-remove:focus-visible {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+  outline: none;
+}

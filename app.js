@@ -937,6 +937,40 @@
       </section>`;
   }
 
+  // a one-tap next step: pick the bud closest to their next level and surface it
+  function nextLevelCardHtml(friends) {
+    if (!friends.length) return "";
+    const closest = friends
+      .map((person) => ({ person, level: L.levelFor(state.points[person.id] || 0) }))
+      .filter((item) => item.level.next)
+      .sort((a, b) => b.level.progress - a.level.progress)[0];
+    if (!closest) return "";
+    const { person, level } = closest;
+    return `
+      <section class="panel next-level-card">
+        <span class="eyebrow">Next level</span>
+        <h2>${level.toNext} pts to ${esc(level.next)}</h2>
+        <p class="muted">Tag ${esc(person.name)} in a meal to get there. The level hint already shows this on your buds list.</p>
+        <div class="btn-row"><button type="button" class="btn primary" data-tag-meal="${esc(person.id)}">Tag a meal with ${esc(person.name)}</button><button type="button" class="btn" data-hangout="${esc(person.id)}">Plan makan</button></div>
+      </section>`;
+  }
+
+  async function removeFriend(id) {
+    const person = PEOPLE.find((p) => p.id === id);
+    const name = person ? person.name : "this bud";
+    if (!confirm(`Remove ${name} from your buds? Your past meals stay tagged, but they won't count for points anymore.`)) return;
+    state.friends = state.friends.filter((x) => x !== id);
+    delete state.points[id];
+    // invited buds live in the people store; drop them so they don't reappear after reload
+    const people = PEOPLE.filter((p) => p.id !== id);
+    PEOPLE.length = 0;
+    PEOPLE.push(...people);
+    await store.set("people", PEOPLE.filter((item) => item.invited));
+    await saveMeta();
+    toast(`${name} removed`);
+    render();
+  }
+
   function renderBuds() {
     const root = $("#view-buds");
     const friends = PEOPLE.filter((person) => state.friends.includes(person.id));
@@ -953,12 +987,13 @@
       <div class="split">
         <div>
           ${incomingInviteHtml()}
+          ${nextLevelCardHtml(friends)}
           <section class="panel">
             <div class="panel-head"><h2>Your buds</h2>${totalPoints ? `<span class="pts mono">${totalPoints} connection pts</span>` : ""}</div>
             ${friends.length ? friends.map((person) => {
               const points = state.points[person.id] || 0;
               const level = L.levelFor(points);
-              return `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(matchFor(person))}</span></div><div class="why">${esc(level.name)} · ${points} pts</div>${level.next ? `<div class="next-step">${esc(nextStep(level))}</div>` : ""}<div class="level"><div class="track"><div class="fill" style="width:${Math.round(level.progress * 100)}%"></div></div></div></div><button type="button" class="btn" data-hangout="${person.id}">Plan makan</button></div>`;
+              return `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(matchFor(person))}</span></div><div class="why">${esc(level.name)} · ${points} pts</div>${level.next ? `<div class="next-step">${esc(nextStep(level))}</div>` : ""}<div class="level"><div class="track"><div class="fill" style="width:${Math.round(level.progress * 100)}%"></div></div></div></div><div class="person-actions"><button type="button" class="btn" data-hangout="${person.id}">Plan makan</button><button type="button" class="person-remove" data-remove="${person.id}" aria-label="Remove ${esc(person.name)}" title="Remove ${esc(person.name)}">✕</button></div></div>`;
             }).join("") : '<p class="muted">No buds yet. Invite a friend, or add an example profile below to try tagging and hangouts.</p>'}
           </section>
           ${inviteHtml()}
@@ -2696,6 +2731,17 @@
       state.invites = state.invites.filter((invite) => invite.id !== cancel.dataset.cancel);
       await saveMeta();
       render();
+      return;
+    }
+    const tagMeal = target.closest("[data-tag-meal]");
+    if (tagMeal) {
+      openLog({ friends: [tagMeal.dataset.tagMeal] });
+      return;
+    }
+    const removeBud = target.closest("[data-remove]");
+    if (removeBud) {
+      removeFriend(removeBud.dataset.remove);
+      return;
     }
   });
 
@@ -2760,7 +2806,7 @@
   }
 
   // test hook
-  window.Lahap = { state, inviteLink, openLog, openShare, openHangout, openQuiz, drawShare, loadSample, sampleEntries, renderLab, nutritionFor, readListPhoto };
+  window.Lahap = { state, inviteLink, openLog, openShare, openHangout, openQuiz, drawShare, loadSample, sampleEntries, renderLab, nutritionFor, readListPhoto, removeFriend };
 
   init();
 })();

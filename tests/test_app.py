@@ -269,6 +269,42 @@ def main():
         check("hangout done opens log with bud tagged", page.locator("#log-form input[value=rina]:checked").count() == 1)
         page.locator("#dlg-log [data-close]").first.click()
 
+        # ---- next-level card: appears when a bud is close to the next tier ----
+        nl_card = page.locator(".next-level-card")
+        check("buds: next-level card shown when a bud is close to next level", nl_card.count() == 1, nl_card.count())
+        if nl_card.count():
+            nl_text = nl_card.first.inner_text()
+            check("buds: next-level card shows 'to' next level name", " to " in nl_text, nl_text[:80])
+            check("buds: next-level card has Tag a meal action", page.locator(".next-level-card [data-tag-meal]").count() == 1, page.locator(".next-level-card [data-tag-meal]").count())
+            # Tag a meal opens log with the bud preselected
+            bud_id = page.locator(".next-level-card [data-tag-meal]").first.get_attribute("data-tag-meal")
+            page.locator(".next-level-card [data-tag-meal]").first.click()
+            page.wait_for_selector("#log-form")
+            check("next-level: Tag a meal opens log with bud preselected", page.locator(f"#log-form input[value={bud_id}]:checked").count() == 1, bud_id)
+            page.locator("#dlg-log [data-close]").first.click()
+
+        # ---- remove friend: ✕ button on every friend row ----
+        remove_btns = page.locator("#view-buds [data-remove]")
+        check("buds: every friend has a remove button", remove_btns.count() >= 1, remove_btns.count())
+        first_remove = remove_btns.first
+        check("buds: remove button has aria-label", first_remove.get_attribute("aria-label") is not None, first_remove.get_attribute("aria-label"))
+        target_id = first_remove.get_attribute("data-remove")
+        target_label = first_remove.get_attribute("aria-label") or ""
+        before_count = page.locator("#view-buds [data-remove]").count()
+        # intercept the confirm() and accept
+        page.once("dialog", lambda d: d.accept())
+        first_remove.click()
+        page.wait_for_timeout(300)
+        after_count = page.locator("#view-buds [data-remove]").count()
+        check("remove: button count decreases by one", after_count == before_count - 1, (before_count, after_count))
+        check("remove: target removed from state.friends", target_id not in page.evaluate("() => window.Lahap.state.friends"), target_id)
+        check("remove: target removed from state.points", target_id not in page.evaluate("() => window.Lahap.state.points"), target_id)
+        # the removed bud should no longer be in the buds list text
+        buds_text = page.locator("#view-buds").inner_text()
+        # aria-label is "Remove <name>" — pull the name out
+        removed_name = target_label.replace("Remove ", "").strip()
+        check("remove: bud name no longer in buds list text", removed_name not in buds_text, removed_name)
+
         # ---- real invite: the link carries a taste profile, a fresh browser adds the sender as a bud ----
         link = page.evaluate("() => { window.Lahap.state.settings.name = 'Juwen'; return window.Lahap.inviteLink(); }")
         code = link.split("bud=")[1].split("#")[0] if "bud=" in link else ""
