@@ -2620,6 +2620,12 @@
       }
       await drawShare(canvas);
       if (token !== drawToken) return;
+      const tplChanged = share.template !== drawShare.lastTpl;
+      drawShare.lastTpl = share.template;
+      if (tplChanged && !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches)) {
+        drawShare.previewAnimCount = (drawShare.previewAnimCount || 0) + 1;
+        try { canvas.animate([{ opacity: 0.5, transform: "scale(0.985)" }, { opacity: 1, transform: "scale(1)" }], { duration: 220, easing: "cubic-bezier(.2,.7,.3,1)" }); } catch (error) {}
+      }
       canvas.toBlob((blob) => {
         if (token !== drawToken || !blob) return;
         prepared = new File([blob], filename(), { type: "image/png" });

@@ -288,6 +288,26 @@ def main():
         check("share: selected preview pops with an accent ring", r12["selRing"] and str(r12["selRing"]).lower() != "none", str(r12["selRing"])[:70])
         check("share: template thumbnails animate on tap", "transform" in (r12["transitionProp"] or "") and r12["transitionDur"] != "0s", str(r12["transitionProp"]))
 
+        # ---- r13: the active preview animates on a template switch ----
+        r13 = page.evaluate(
+            """async () => {
+              const entry = window.Lahap.state.entries.find(e => e.name === 'Mie goreng test');
+              entry.photo = null;
+              window.Lahap.openShare(entry);
+              await new Promise(r => setTimeout(r, 320));
+              const base = window.Lahap.drawShare.previewAnimCount || 0;
+              const sel = document.querySelector('#dlg-share .tp-btn[aria-pressed="true"]');
+              const next = ['card', 'receipt', 'stats'].find((v) => v !== sel.getAttribute('data-value'));
+              document.querySelector('#dlg-share [data-seg=template][data-value=' + next + ']').click();
+              await new Promise(r => setTimeout(r, 320));
+              const after = window.Lahap.drawShare.previewAnimCount || 0;
+              entry.photo = null;
+              document.getElementById('dlg-share').close();
+              return { base, after, next };
+            }"""
+        )
+        check("share: active preview animates on a template switch", r13["after"] > r13["base"], f"count {r13['base']}->{r13['after']} (switched to {r13['next']})")
+
         # ---- G4: share card stats never overlap (judge finding turned into a gate) ----
         overlaps = page.evaluate(
             """async () => {
