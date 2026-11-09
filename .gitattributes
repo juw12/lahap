@@ -1,0 +1,5 @@
+# Force LF in the working tree on every platform. The app is a static web app and
+# the test suite checks that every text file is LF-only (tests/test_app.py), so a
+# Windows checkout with core.autocrlf=true used to turn the whole tree CRLF and
+# fail ~21 checks. eol=lf overrides autocrlf; binaries are auto-detected and left alone.
+* text=auto eol=lf
