@@ -2306,6 +2306,18 @@ label.chip input {
   margin-bottom: var(--s2);
 }
 
+/* one concrete shared thing per bud: your usual spot together, or a place of yours they'd like */
+.person .spot {
+  margin-top: 3px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink, #1d1813);
+}
+.person .spot::before {
+  content: "\2022  ";
+  color: var(--accent);
+}
+
 /* next-level card: a thicker bar so the goal reads at a glance */
 .next-level-card .next-level-progress {
   margin: var(--s2) 0 var(--s3);

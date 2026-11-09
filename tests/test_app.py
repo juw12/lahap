@@ -774,6 +774,38 @@ def main():
         page.locator("#dlg-log [data-close]").first.click()
         page.wait_for_timeout(150)
 
+        # ---- r14: '1 visit' singular; every bud names one concrete shared spot ----
+        page.evaluate("() => location.hash = 'insights'")
+        page.wait_for_timeout(200)
+        visit_lines = page.evaluate("() => [...document.querySelectorAll('[data-view=insights] .person .why')].map((el) => el.textContent)")
+        check(
+            "r14 insights: a place visited once says '1 visit', never '1 visits'",
+            visit_lines and not any(line.startswith("1 visits") for line in visit_lines)
+            and all(re.match(r"^\d+ visits? ", line) for line in visit_lines),
+            visit_lines,
+        )
+        page.evaluate("() => location.hash = 'buds'")
+        page.wait_for_timeout(200)
+        spots = page.evaluate(
+            """() => {
+              const panels = [...document.querySelectorAll('[data-view=buds] .panel')];
+              const mine = panels.find((p) => /Your buds/.test((p.querySelector('h2') || {}).textContent || ''));
+              const suggested = panels.find((p) => /Suggested by taste/.test((p.querySelector('h2') || {}).textContent || ''));
+              const rows = (panel) => panel ? [...panel.querySelectorAll('.person')].map((row) => (row.querySelector('.spot') || {}).textContent || '') : [];
+              return { buds: rows(mine), suggested: rows(suggested) };
+            }"""
+        )
+        check(
+            "r14 buds: each bud you've eaten with shows your usual spot and dish together",
+            spots["buds"] and all(s.startswith("Your spot: ") for s in spots["buds"]),
+            spots["buds"],
+        )
+        check(
+            "r14 buds: suggestions name a real place of yours in a cuisine they like",
+            any(s.startswith("Try ") and " together · they like " in s for s in spots["suggested"]),
+            spots["suggested"],
+        )
+
         # ---- first run: quiz, lab, cutout, OCR in a clean browser profile ----
         fresh = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=1, permissions=["clipboard-read", "clipboard-write"])
         page2 = fresh.new_page()

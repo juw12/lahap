@@ -894,7 +894,7 @@
         </section>
         <section class="panel">
           <h2>Top places</h2>
-          ${places.length ? places.map((place) => `<div class="person" style="grid-template-columns:minmax(0,1fr) auto"><div><div class="name">${esc(place.name)}</div><div class="why">${place.count} visits · ${esc(place.cuisines.join(", "))}</div></div><span class="mono">${esc(money(place.spend))}</span></div>`).join("") : '<p class="muted">No places yet.</p>'}
+          ${places.length ? places.map((place) => `<div class="person" style="grid-template-columns:minmax(0,1fr) auto"><div><div class="name">${esc(place.name)}</div><div class="why">${place.count} ${place.count === 1 ? "visit" : "visits"} · ${esc(place.cuisines.join(", "))}</div></div><span class="mono">${esc(money(place.spend))}</span></div>`).join("") : '<p class="muted">No places yet.</p>'}
         </section>
         <section class="panel">
           <h2>Where the money went</h2>
@@ -917,6 +917,26 @@
     const cuisines = person.cuisines.filter((cuisine) => mine.includes(cuisine)).slice(0, 2);
     const both = tastes.concat(cuisines);
     return both.length ? `You both like ${both.join(", ")}` : "Different tastes: good for trying new food";
+  }
+
+  // one concrete, shared thing per bud: where you two actually eat (and what), else a place of yours in a cuisine they like
+  function spotFor(person) {
+    const together = state.entries.filter((entry) => (entry.friends || []).includes(person.id) && entry.place);
+    if (together.length) {
+      const place = L.topPlaces(together, 1)[0];
+      const dishes = {};
+      for (const entry of together.filter((item) => L.normalize(item.place) === L.normalize(place.name))) {
+        const key = L.normalize(entry.name);
+        dishes[key] = dishes[key] || { name: entry.name, count: 0 };
+        dishes[key].count += 1;
+      }
+      const dish = Object.values(dishes).sort((a, b) => b.count - a.count)[0];
+      return `Your spot: ${place.name} · ${dish.name}${dish.count > 1 ? ` ×${dish.count}` : ""}`;
+    }
+    const place = L.topPlaces(state.entries, 20).find((item) => !/^home$/i.test(item.name) && item.cuisines.some((cuisine) => person.cuisines.includes(cuisine)));
+    if (!place) return "";
+    const cuisine = place.cuisines.find((item) => person.cuisines.includes(item));
+    return `Try ${place.name} together · they like ${cuisine}`;
   }
 
   function avatar(person) {
@@ -1073,13 +1093,13 @@
             ${friends.length ? friends.map((person) => {
               const points = state.points[person.id] || 0;
               const level = L.levelFor(points);
-              return `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(matchFor(person))}</span></div><div class="why">${esc(level.name)} · ${points} pts · ${esc(lastTogether(person.id))}</div>${pendingPlanHtml(person.id)}${level.next ? `<div class="next-step">${esc(nextStep(level))}</div>` : ""}<div class="level"><div class="track"><div class="fill" style="width:${Math.round(level.progress * 100)}%"></div></div></div></div><div class="person-actions"><button type="button" class="btn" data-hangout="${person.id}">Plan makan</button><button type="button" class="person-remove" data-remove="${person.id}" aria-label="Remove ${esc(person.name)}" title="Remove ${esc(person.name)}">Remove</button></div></div>`;
+              return `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(matchFor(person))}</span></div><div class="why">${esc(level.name)} · ${points} pts · ${esc(lastTogether(person.id))}</div>${spotFor(person) ? `<div class="spot">${esc(spotFor(person))}</div>` : ""}${pendingPlanHtml(person.id)}${level.next ? `<div class="next-step">${esc(nextStep(level))}</div>` : ""}<div class="level"><div class="track"><div class="fill" style="width:${Math.round(level.progress * 100)}%"></div></div></div></div><div class="person-actions"><button type="button" class="btn" data-hangout="${person.id}">Plan makan</button><button type="button" class="person-remove" data-remove="${person.id}" aria-label="Remove ${esc(person.name)}" title="Remove ${esc(person.name)}">Remove</button></div></div>`;
             }).join("") : '<p class="muted">No buds yet. Invite a friend, or add an example profile below to try tagging and hangouts.</p>'}
           </section>
           ${inviteHtml()}
           <section class="panel">
             <h2>${hasTasteProfile() ? "Suggested by taste" : "Example buds to try"}</h2>
-            ${others.length ? others.map(({ person, match }) => `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(match)}</span></div><div class="why">${esc(hasTasteProfile() ? reasonsFor(person) : "Log a few meals to see what you share")} · ${esc(person.area)}</div></div><button type="button" class="btn" data-add="${person.id}">Add</button></div>`).join("") : '<p class="muted">You added everyone. Nice.</p>'}
+            ${others.length ? others.map(({ person, match }) => `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(match)}</span></div><div class="why">${esc(hasTasteProfile() ? reasonsFor(person) : "Log a few meals to see what you share")} · ${esc(person.area)}</div>${hasTasteProfile() && spotFor(person) ? `<div class="spot">${esc(spotFor(person))}</div>` : ""}</div><button type="button" class="btn" data-add="${person.id}">Add</button></div>`).join("") : '<p class="muted">You added everyone. Nice.</p>'}
             <p class="notice">These are example profiles so you can try matching, tagging and hangouts. Lahap has no server yet: buds and points stay on this device, and invites go out through WhatsApp or your phone's share sheet.</p>
           </section>
         </div>
@@ -2282,7 +2302,9 @@
       ctx.fillText(String(score), W / 2, scoreY);
       ctx.fillStyle = sub;
       ctx.font = mono(story ? 32 : 26, 600);
-      ctx.fillText(`PLATE SCORE · ${L.healthLabel(score).toUpperCase()}`, W / 2, scoreY + (story ? 58 : 44));
+      // the date says which meal (or which week) this score belongs to, so a posted card is never ambiguous
+      const when = isWeek ? "LAST 7 DAYS" : new Date(entry.ts).toLocaleDateString(undefined, { day: "numeric", month: "short" }).toUpperCase();
+      ctx.fillText(`PLATE SCORE · ${L.healthLabel(score).toUpperCase()} · ${when}`, W / 2, scoreY + (story ? 58 : 44));
 
       // stat grid anchored to the bottom, dish title fills the gap above it
       const rowStep = story ? 210 : 0;
