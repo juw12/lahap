@@ -288,7 +288,14 @@ def main():
               await new Promise(r => setTimeout(r, 300));
               const square = window.Lahap.drawShare.stamp;
               document.getElementById('dlg-share').close();
-              return { stamp: s, square, px };
+              entry.photo = 'tests/fixtures/plate.jpg';
+              window.Lahap.openShare(entry);
+              document.querySelector('[data-seg=template][data-value=card]').click();
+              document.querySelector('[data-seg=background][data-value=photo]').click();
+              await new Promise(r => setTimeout(r, 300));
+              const photo = window.Lahap.drawShare.stamp;
+              document.getElementById('dlg-share').close();
+              return { stamp: s, square, photo, px };
             }"""
         )
         s = stamp["stamp"]
@@ -297,6 +304,9 @@ def main():
         q = stamp["square"]
         square_in = q and 0 <= q["x"] - q["r"] and q["x"] + q["r"] <= 1080 and 0 <= q["y"] - q["r"] and q["y"] + q["r"] <= 1080
         check("r8b stamp: plate badge fully inside the square frame", square_in, q)
+        p = stamp["photo"]
+        photo_in = p and 0 <= p["x"] - p["r"] and p["x"] + p["r"] <= 1080 and 0 <= p["y"] - p["r"] and p["y"] + p["r"] <= 1920
+        check("r8b stamp: plate badge fully inside the photo frame", photo_in, p)
         check("r8b stamp: badge centre is the red plate score", stamp["px"] and stamp["px"][0] >= 0xB4 - 12 and stamp["px"][1] < 0x50, stamp["px"])
 
         # ---- r8b: filter row edge fade only hints where there is more to scroll ----
