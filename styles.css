@@ -3,7 +3,7 @@
   --paper: #f5efe3;
   --card: #fffdf8;
   --ink: #1d1813;
-  --muted: #5e554a;
+  --muted: #4e463c;
   --line: #e0d5c2;
   --line-strong: #c9bba3;
   --accent: #b4380f;
@@ -299,10 +299,12 @@ main:focus {
   grid-template-columns: minmax(0, 1fr);
   gap: var(--s4);
 }
+.grid-2 > .panel + .panel { margin-top: 0; }
 
 @media (min-width: 720px) {
   .grid-2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
   }
 }
 
