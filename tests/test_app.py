@@ -133,6 +133,19 @@ def main():
         feat_text = feat.text_content()
         check("featured answer reads the go-to dish", "On repeat" in feat_text and "Yes," in feat_text, feat_text)
         check("featured answer offers to log it again", feat.locator("button[data-again]").count() == 1, feat.locator("button[data-again]").count())
+        check("featured answer shows the dish", feat.locator("img.answer-thumb").count() == 1, feat.locator("img.answer-thumb").count())
+        # one-tap share on every diary ticket (judge r6b: sharing a past meal should be as fast as logging it)
+        share_chips = page.locator(".ticket-share").count()
+        check("diary: every ticket has a share chip", share_chips == tickets, f"{share_chips} of {tickets}")
+        first_id = page.locator(".ticket").first.get_attribute("data-open")
+        page.locator(".ticket-share").first.click()
+        page.wait_for_selector("#dlg-share[open]", timeout=5000)
+        shared_name = page.evaluate("() => document.querySelector('#dlg-share').textContent")
+        first_name = page.evaluate(f"() => window.Lahap.state.entries.find(e => e.id === '{first_id}').name")
+        detail_open = page.evaluate("() => document.querySelector('#dlg-detail').open")
+        check("diary: share chip opens that meal's card, not the detail", first_name in shared_name and not detail_open, first_name)
+        page.keyboard.press("Escape")
+        page.wait_for_timeout(200)
         page.fill("#q", "nasi lemak")
         page.wait_for_timeout(150)
         expected = page.evaluate("() => window.Lahap.state.entries.filter(e => e.name.toLowerCase().includes('nasi lemak')).length")
@@ -236,6 +249,12 @@ def main():
         page.wait_for_timeout(200)
         friends = page.evaluate("() => window.Lahap.state.friends.length")
         check("add a bud", friends == 3, friends)
+        buds_text = page.locator("main").inner_text()
+        check(
+            "buds: one verb for a plan (Plan makan, no Hang out / Plan it)",
+            "Plan makan" in buds_text and "Hang out" not in buds_text and "Plan it" not in buds_text,
+            [verb for verb in ("Plan makan", "Hang out", "Plan it") if verb in buds_text],
+        )
         page.locator("[data-hangout=rina]").click()
         page.wait_for_selector("#hangout-form")
         wa = page.get_attribute("#hangout-wa", "href")

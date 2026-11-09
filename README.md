@@ -30,6 +30,7 @@ What it does
   taste radar, cuisines, top places.
 - Share cards like Strava: Card / Receipt / Stats templates, Paper / Dark / Photo / Transparent backgrounds,
   Story 9:16 or Post 1:1, the food cut-out drawn as a sticker, saved as PNG or sent through the share sheet.
+  Every diary ticket has a one-tap share chip, so a past meal is as quick to share as a new one.
 - Taste buds: match % from your taste profile, tag buds in meals (+10 points), plan a hangout by WhatsApp,
   mark "We went" (+25), levels New bud, Makan buddy, Regular, Family table.
 - Invite links: "Invite a bud" shares a link that carries only your taste profile (no meals); your friend
@@ -53,7 +54,7 @@ Limits (honest)
 - Suggested buds are example profiles. Invited buds are real but one-way snapshots: there is no server, so buds,
   matching and points live on each device and do not sync after the invite.
 
-Tests: `python tests/test_app.py` (Playwright, 155 checks, including a real cut-out and OCR run). Design rules: `design.md`.
+Tests: `python tests/test_app.py` (Playwright, 159 checks, including a real cut-out and OCR run). Design rules: `design.md`.
 
 Why another food diary: PlateDiary is a private restaurant photo journal and Mynu is a home-cooking journal.
 Lahap logs both (ate out, home-cooked, delivery), answers "have I eaten this before?", estimates what is on the

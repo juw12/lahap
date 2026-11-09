@@ -2009,3 +2009,84 @@ label.chip input {
 .invite-in .btn-row {
   margin-top: var(--s3);
 }
+
+/* r7: one-tap share on every diary ticket. A sibling of the ticket button (no nested buttons),
+   pinned to the thumbnail's bottom-right corner like a sticker. */
+.ticket-wrap {
+  position: relative;
+  margin-bottom: var(--s3);
+}
+.ticket-wrap > .ticket {
+  margin-bottom: 0;
+}
+.ticket-share {
+  position: absolute;
+  left: 63px;
+  top: calc(50% + 14px);
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--card);
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 1px 2px rgba(29, 24, 19, 0.18);
+  cursor: pointer;
+}
+.ticket-share::after {
+  content: "";
+  position: absolute;
+  inset: -7px;
+}
+.ticket-share svg {
+  width: 16px;
+  height: 16px;
+}
+.ticket-share:hover,
+.ticket-share:focus-visible {
+  border-color: var(--ink);
+}
+@media (max-width: 420px) {
+  .ticket-share {
+    left: 45px;
+    top: calc(50% + 8px);
+  }
+}
+
+/* r7: the answer card leads with the dish itself */
+.answer-head {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: var(--s3);
+  align-items: center;
+}
+.answer-thumb {
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--paper);
+  display: block;
+}
+.answer-thumb.cut {
+  object-fit: contain;
+  background: radial-gradient(circle at 50% 55%, #fffaf0 0 55%, var(--paper) 100%);
+}
+.answer-head h2 {
+  margin-bottom: 0;
+}
+.answer dd .score {
+  font-size: 13px;
+}
+@media (max-width: 420px) {
+  .answer-head {
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: var(--s2);
+  }
+  .answer-thumb {
+    width: 48px;
+    height: 48px;
+  }
+}

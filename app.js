@@ -520,6 +520,7 @@
     const tags = (entry.tastes || []).map((taste) => `<span class="tag">${esc(taste)}</span>`).join("");
     const withWho = who.length ? `<span class="tag">with ${esc(who.join(", "))}</span>` : "";
     return `
+      <div class="ticket-wrap">
       <button type="button" class="ticket" data-open="${esc(entry.id)}">
         <img class="thumb${entry.cutout ? " cut" : ""}" src="${imageFor(entry)}" alt="${entry.photo ? "Photo of " + esc(entry.name) : "Plate drawing of " + esc(entry.name)}" width="72" height="72" loading="lazy">
         <span>
@@ -532,7 +533,9 @@
           <span class="kcal mono">${nutritionFor(entry).kcal} kcal</span>
           ${scoreBadge(score)}
         </span>
-      </button>`;
+      </button>
+      <button type="button" class="ticket-share" data-share="${esc(entry.id)}" aria-label="Share a card of ${esc(entry.name)}" title="Share card"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4m0 0L8 8m4-4 4 4M6 12v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>`;
   }
 
   function answerHtml(query, matches, eyebrow = "Have I eaten this?") {
@@ -545,12 +548,17 @@
     const range = summary.minPrice === summary.maxPrice ? money(summary.minPrice) : `${money(summary.minPrice)} – ${money(summary.maxPrice)}`;
     return `
       <div class="answer" role="status">
-        <p class="eyebrow">${eyebrow}</p>
-        <h2>Yes, ${summary.count} ${summary.count === 1 ? "time" : "times"}. Last ${esc(relative(last.ts))}${last.place ? " at " + esc(last.place) : ""}.</h2>
+        <div class="answer-head">
+          <img class="answer-thumb${last.cutout ? " cut" : ""}" src="${imageFor(last)}" alt="${last.photo ? "Photo of " + esc(last.name) : "Plate drawing of " + esc(last.name)}" width="64" height="64">
+          <div>
+            <p class="eyebrow">${eyebrow}</p>
+            <h2>Yes, ${summary.count} ${summary.count === 1 ? "time" : "times"}. Last ${esc(relative(last.ts))}${last.place ? " at " + esc(last.place) : ""}.</h2>
+          </div>
+        </div>
         <dl>
           <div><dt>Avg price</dt><dd>${esc(money(summary.avgPrice))}</dd></div>
           <div><dt>Price range</dt><dd>${esc(range)}</dd></div>
-          <div><dt>Avg plate score</dt><dd>${summary.avgHealth}</dd></div>
+          <div><dt>Avg plate score</dt><dd>${scoreBadge(summary.avgHealth)}</dd></div>
           <div><dt>Avg rating</dt><dd>${summary.avgRating ? summary.avgRating.toFixed(1) + " / 5" : "–"}</dd></div>
           <div><dt>Where</dt><dd>${esc(summary.places.join(", ") || "–")}</dd></div>
           <div><dt>First logged</dt><dd>${esc(new Date(summary.first.ts).toLocaleDateString(undefined, { day: "numeric", month: "short" }))}</dd></div>
@@ -602,7 +610,7 @@
     if (!best || state.entries.length < 3) return "";
     const isBud = buds.includes(best.person);
     const action = isBud
-      ? `<button type="button" class="btn" data-hangout="${best.person.id}">Hang out</button>`
+      ? `<button type="button" class="btn" data-hangout="${best.person.id}">Plan makan</button>`
       : `<button type="button" class="btn" data-add="${best.person.id}">Add bud</button>`;
     return `<div class="bud-nudge"><span class="avatar" style="background:${best.person.color || "var(--accent)"}">${esc(best.person.name[0])}</span><span><strong>${esc(best.person.name)} · ${best.match}% match</strong><span class="muted small">${esc(reasonsFor(best.person))}</span></span>${action}</div>`;
   }
@@ -950,7 +958,7 @@
             ${friends.length ? friends.map((person) => {
               const points = state.points[person.id] || 0;
               const level = L.levelFor(points);
-              return `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(matchFor(person))}</span></div><div class="why">${esc(level.name)} · ${points} pts</div>${level.next ? `<div class="next-step">${esc(nextStep(level))}</div>` : ""}<div class="level"><div class="track"><div class="fill" style="width:${Math.round(level.progress * 100)}%"></div></div></div></div><button type="button" class="btn" data-hangout="${person.id}">Hang out</button></div>`;
+              return `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(matchFor(person))}</span></div><div class="why">${esc(level.name)} · ${points} pts</div>${level.next ? `<div class="next-step">${esc(nextStep(level))}</div>` : ""}<div class="level"><div class="track"><div class="fill" style="width:${Math.round(level.progress * 100)}%"></div></div></div></div><button type="button" class="btn" data-hangout="${person.id}">Plan makan</button></div>`;
             }).join("") : '<p class="muted">No buds yet. Invite a friend, or add an example profile below to try tagging and hangouts.</p>'}
           </section>
           ${inviteHtml()}
@@ -973,7 +981,7 @@
             <h2>How points work</h2>
             <table class="breakdown">
               <tr><td>Tag a bud in a meal</td><td>+${L.POINTS.tag}</td></tr>
-              <tr><td>Hang out and mark “We went”</td><td>+${L.POINTS.hangout}</td></tr>
+              <tr><td>Plan makan and mark “We went”</td><td>+${L.POINTS.hangout}</td></tr>
               ${L.LEVELS.slice(1).map((level) => `<tr><td>${esc(level.name)}</td><td>${level.min} pts</td></tr>`).join("")}
             </table>
           </section>
@@ -986,7 +994,7 @@
     const hangouts = Math.floor(level.toNext / L.POINTS.hangout);
     const tags = Math.ceil((level.toNext - hangouts * L.POINTS.hangout) / L.POINTS.tag);
     const parts = [];
-    if (hangouts) parts.push(`${hangouts} hangout${hangouts > 1 ? "s" : ""}`);
+    if (hangouts) parts.push(`${hangouts} makan together`);
     if (tags) parts.push(`${tags} tagged meal${tags > 1 ? "s" : ""}`);
     return `${level.toNext} pts to ${level.next}: ${parts.join(" + ")}`;
   }
@@ -995,7 +1003,7 @@
     const best = friends.map((person) => ({ person, match: matchFor(person) })).sort((a, b) => b.match - a.match)[0];
     if (!best) return '<p class="muted">No plans yet. Add a bud first.</p>';
     const place = L.topPlaces(state.entries, 20).find((item) => item.name !== "Home" && item.cuisines.some((cuisine) => best.person.cuisines.includes(cuisine)));
-    return `<div class="invite suggested"><span class="eyebrow">Suggested</span><strong>Makan with ${esc(best.person.name)}${place ? " at " + esc(place.name) : ""}</strong><span class="muted small">${best.match}% match. ${esc(reasonsFor(best.person))}.</span><div class="btn-row"><button type="button" class="btn primary" data-hangout="${best.person.id}">Plan it</button></div></div>`;
+    return `<div class="invite suggested"><span class="eyebrow">Suggested</span><strong>Makan with ${esc(best.person.name)}${place ? " at " + esc(place.name) : ""}</strong><span class="muted small">${best.match}% match. ${esc(reasonsFor(best.person))}.</span><div class="btn-row"><button type="button" class="btn primary" data-hangout="${best.person.id}">Plan makan</button></div></div>`;
   }
 
   // the bud closest to their next level, for the log form nudge
