@@ -647,7 +647,7 @@
     const head = `
       <div class="view-head diary-head">
         <div>
-          <h1>What did I eat?</h1>
+          <h1>Your food diary</h1>
           <p>Search every meal by dish, place, taste or friend, and see how often, how much and how balanced.</p>
         </div>
       </div>`;
@@ -865,8 +865,67 @@
     return `
       <section class="panel invite-card">
         <h2>Bring a real friend</h2>
-        <p class="muted">Send Lahap to someone you eat with. Once they log a few meals too, you can compare tastes and plan where to makan next.</p>
+        <p class="muted">Send a link with your taste profile: six taste weights and your top cuisines, never your meals. When your friend opens it, Lahap adds you as their bud and shows how close your tastes are.</p>
         <button type="button" class="btn primary" data-invite>Invite a friend</button>
+      </section>`;
+  }
+
+  // invite links carry a taste profile only (name, 6 taste weights, top cuisines) as base64url JSON
+  const INVITE_COLORS = ["#7a3e1d", "#2f5d50", "#5b3f6b", "#3d5a80", "#6b5a2e"];
+
+  function encodeBud(profile) {
+    const bytes = new TextEncoder().encode(JSON.stringify(profile));
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+
+  function decodeBud(code) {
+    try {
+      const binary = atob(String(code).replace(/-/g, "+").replace(/_/g, "/"));
+      const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+      const data = JSON.parse(new TextDecoder().decode(bytes));
+      if (!Array.isArray(data.t) || data.t.length !== TASTES.length) return null;
+      const tastes = data.t.map((value) => Math.max(0, Math.min(1, Number(value) || 0)));
+      const name = String(data.n || "").trim().slice(0, 24) || "Your friend";
+      const cuisines = Array.isArray(data.c) ? data.c.map((item) => String(item).slice(0, 30)).slice(0, 4) : [];
+      return { name, tastes, cuisines };
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function inviteLink() {
+    const vector = L.tasteVector(state.entries).map((value) => Math.round(value * 10) / 10);
+    const code = encodeBud({ n: state.settings.name || "", t: vector, c: myCuisines().slice(0, 3) });
+    return `https://juw12.github.io/lahap/?bud=${code}#buds`;
+  }
+
+  function budFromInvite(profile) {
+    let hash = 0;
+    for (const char of profile.name + profile.tastes.join(",") + profile.cuisines.join(",")) hash = (hash * 31 + char.charCodeAt(0)) | 0;
+    hash = Math.abs(hash);
+    return { id: "inv" + hash.toString(36), name: profile.name, area: "invited you", color: INVITE_COLORS[hash % INVITE_COLORS.length], tastes: profile.tastes, cuisines: profile.cuisines, invited: true };
+  }
+
+  function tasteSummary(person) {
+    const liked = TASTES.filter((taste, index) => person.tastes[index] >= 0.5).slice(0, 3);
+    const parts = [];
+    if (liked.length) parts.push(`likes ${liked.join(", ")}`);
+    if (person.cuisines.length) parts.push(person.cuisines.slice(0, 3).join(", "));
+    return parts.join(" · ") || "no meals logged yet";
+  }
+
+  function incomingInviteHtml() {
+    const profile = state.pendingBud;
+    if (!profile) return "";
+    const person = budFromInvite(profile);
+    return `
+      <section class="panel invite-in">
+        <span class="eyebrow">Invite</span>
+        <h2>${esc(person.name)} wants to compare tastes</h2>
+        <p class="muted">${esc(person.name)} ${esc(tasteSummary(person))}. ${hasTasteProfile() ? `You are a ${matchFor(person)}% match.` : "Log 3 meals to see your match."}</p>
+        <div class="btn-row"><button type="button" class="btn primary" data-accept-bud>Add ${esc(person.name)} as a bud</button><button type="button" class="btn ghost" data-dismiss-bud>Not now</button></div>
       </section>`;
   }
 
@@ -885,6 +944,7 @@
       </div>
       <div class="split">
         <div>
+          ${incomingInviteHtml()}
           <section class="panel">
             <div class="panel-head"><h2>Your buds</h2>${totalPoints ? `<span class="pts mono">${totalPoints} connection pts</span>` : ""}</div>
             ${friends.length ? friends.map((person) => {
@@ -893,13 +953,12 @@
               return `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(matchFor(person))}</span></div><div class="why">${esc(level.name)} · ${points} pts</div>${level.next ? `<div class="next-step">${esc(nextStep(level))}</div>` : ""}<div class="level"><div class="track"><div class="fill" style="width:${Math.round(level.progress * 100)}%"></div></div></div></div><button type="button" class="btn" data-hangout="${person.id}">Hang out</button></div>`;
             }).join("") : '<p class="muted">No buds yet. Invite a friend, or add an example profile below to try tagging and hangouts.</p>'}
           </section>
-          ${friends.length ? "" : inviteHtml()}
+          ${inviteHtml()}
           <section class="panel">
             <h2>${hasTasteProfile() ? "Suggested by taste" : "Example buds to try"}</h2>
             ${others.length ? others.map(({ person, match }) => `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(match)}</span></div><div class="why">${esc(hasTasteProfile() ? reasonsFor(person) : "Log a few meals to see what you share")} · ${esc(person.area)}</div></div><button type="button" class="btn" data-add="${person.id}">Add</button></div>`).join("") : '<p class="muted">You added everyone. Nice.</p>'}
             <p class="notice">These are example profiles so you can try matching, tagging and hangouts. Lahap has no server yet: buds and points stay on this device, and invites go out through WhatsApp or your phone's share sheet.</p>
           </section>
-          ${friends.length ? inviteHtml() : ""}
         </div>
         <aside>
           <section class="panel">
@@ -929,7 +988,7 @@
     const parts = [];
     if (hangouts) parts.push(`${hangouts} hangout${hangouts > 1 ? "s" : ""}`);
     if (tags) parts.push(`${tags} tagged meal${tags > 1 ? "s" : ""}`);
-    return `${level.next} in ${level.toNext} pts: ${parts.join(" + ")}`;
+    return `${level.toNext} pts to ${level.next}: ${parts.join(" + ")}`;
   }
 
   function suggestedPlanHtml(friends) {
@@ -2372,7 +2431,8 @@
     if (isWeek && share.background === "photo") share.background = "paper";
     if (!["card", "receipt", "stats"].includes(share.template)) share.template = "card";
     const dialog = $("#dlg-share");
-    const backgrounds = [["paper", "Paper"], ["ink", "Dark"], ["photo", "Photo"], ["clear", "Transparent"]].filter(([key]) => !(isWeek && key === "photo"));
+    const backgrounds = [["paper", "Paper"], ["ink", "Dark"], ["photo", "Photo"], ["clear", "Transparent"]].filter(([key]) => key !== "photo" || (!isWeek && subject.photo));
+    if (share.background === "photo" && (isWeek || !subject.photo)) share.background = "paper";
     dialog.innerHTML = `
       <div class="sheet-head"><h2 id="share-title">${isWeek ? "Share my week" : "Share " + esc(subject.name)}</h2><button type="button" class="icon-btn" data-close aria-label="Close">${ICON_CLOSE}</button></div>
       <div class="sheet-body share-grid">
@@ -2381,7 +2441,7 @@
           <div class="control"><span>Template</span>${segHtml("template", [["card", isWeek ? "Plates" : "Card"], ["receipt", "Receipt"], ["stats", "Stats"]], share.template)}</div>
           <div class="control"><span>Background</span>${segHtml("background", backgrounds, share.background)}</div>
           <div class="control"><span>Size</span>${segHtml("size", [["story", "Story 9:16"], ["square", "Post 1:1"]], share.size)}</div>
-          <p class="notice">Transparent saves a PNG with no background: drop it on your own photo in Instagram or WhatsApp stories, like a Strava sticker.</p>
+          <p class="notice">Transparent saves a PNG with no background: drop it on your own photo in Instagram or WhatsApp stories, like a Strava sticker.${!isWeek && !subject.photo ? " Add a photo to this meal to use it as the background." : ""}</p>
           <div class="btn-row" style="margin-top:16px">
             <button type="button" class="btn primary" id="share-save">Save PNG</button>
             <button type="button" class="btn" id="share-send">Share…</button>
@@ -2553,8 +2613,8 @@
       return;
     }
     if (target.closest("[data-invite]")) {
-      const url = "https://juw12.github.io/lahap/";
-      const text = "I'm keeping a food diary on Lahap (free, no account). Try it and we can compare tastes:";
+      const url = inviteLink();
+      const text = "Let's compare food tastes on Lahap (free, no account). Open this and I show up as your taste bud - the link only has my taste profile, no meals:";
       if (navigator.share) {
         try {
           await navigator.share({ title: "Lahap", text, url });
@@ -2564,6 +2624,19 @@
       } else {
         window.open(`https://wa.me/?text=${encodeURIComponent(`${text} ${url}`)}`, "_blank", "noopener");
       }
+      return;
+    }
+    if (target.closest("[data-accept-bud]") && state.pendingBud) {
+      const person = budFromInvite(state.pendingBud);
+      if (!personById(person.id)) PEOPLE.push(person);
+      await store.set("people", PEOPLE.filter((item) => item.invited));
+      state.pendingBud = null;
+      await addFriend(person.id);
+      return;
+    }
+    if (target.closest("[data-dismiss-bud]")) {
+      state.pendingBud = null;
+      render();
       return;
     }
     if (target.closest("[data-share-week]")) {
@@ -2655,7 +2728,18 @@
     state.friends = await store.get("friends", []);
     state.points = await store.get("points", {});
     state.invites = await store.get("invites", []);
+    for (const person of await store.get("people", [])) {
+      if (!personById(person.id)) PEOPLE.push(person);
+    }
     const params = new URLSearchParams(location.search);
+    if (params.has("bud")) {
+      const profile = decodeBud(params.get("bud"));
+      const known = profile && state.friends.includes(budFromInvite(profile).id);
+      state.pendingBud = profile && !known ? profile : null;
+      const rest = new URLSearchParams(location.search);
+      rest.delete("bud");
+      history.replaceState(null, "", location.pathname + (rest.toString() ? "?" + rest : "") + location.hash);
+    }
     if (params.has("demo") && !state.entries.length) await loadSample();
     if (params.has("demo") && !state.settings.profile) state.settings.profile = Object.assign({}, SAMPLE_PROFILE);
     route();
@@ -2668,7 +2752,7 @@
   }
 
   // test hook
-  window.Lahap = { state, openLog, openShare, openHangout, openQuiz, drawShare, loadSample, sampleEntries, renderLab, nutritionFor, readListPhoto };
+  window.Lahap = { state, inviteLink, openLog, openShare, openHangout, openQuiz, drawShare, loadSample, sampleEntries, renderLab, nutritionFor, readListPhoto };
 
   init();
 })();

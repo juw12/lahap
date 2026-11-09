@@ -2000,3 +2000,12 @@ label.chip input {
     display: none;
   }
 }
+
+/* someone opened an invite link: their card sits first on Taste buds */
+.invite-in {
+  border-color: var(--accent);
+  background: var(--accent-soft, var(--card));
+}
+.invite-in .btn-row {
+  margin-top: var(--s3);
+}

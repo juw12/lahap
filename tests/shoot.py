@@ -86,6 +86,21 @@ with sync_playwright() as playwright:
                 import base64
                 (OUT / f"card-{template}-{background}.png").write_bytes(base64.b64decode(data.split(",")[1]))
                 print("card", template, background, flush=True)
+            # a meal with a photo: the Photo background only appears then
+            data = page.evaluate(
+                """async () => {
+                    document.getElementById('dlg-share').close();
+                    const entry = window.Lahap.state.entries.find(e => e.name === 'Tom yum seafood');
+                    entry.photo = 'tests/fixtures/plate.jpg';
+                    window.Lahap.openShare(entry);
+                    document.querySelector('[data-seg=template][data-value=card]').click();
+                    document.querySelector('[data-seg=background][data-value=photo]').click();
+                    await new Promise(r => setTimeout(r, 1500));
+                    return document.getElementById('share-canvas').toDataURL('image/png');
+                }"""
+            )
+            (OUT / "card-card-photo.png").write_bytes(base64.b64decode(data.split(",")[1]))
+            print("card card photo", flush=True)
 print("saved", OUT)
 sys.stdout.flush()
 os._exit(0)

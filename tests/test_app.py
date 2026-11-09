@@ -250,6 +250,45 @@ def main():
         check("hangout done opens log with bud tagged", page.locator("#log-form input[value=rina]:checked").count() == 1)
         page.locator("#dlg-log [data-close]").first.click()
 
+        # ---- real invite: the link carries a taste profile, a fresh browser adds the sender as a bud ----
+        link = page.evaluate("() => { window.Lahap.state.settings.name = 'Juwen'; return window.Lahap.inviteLink(); }")
+        code = link.split("bud=")[1].split("#")[0] if "bud=" in link else ""
+        check("invite: link carries a taste code", link.startswith("https://juw12.github.io/lahap/?bud=") and len(code) > 20, link[:70])
+        guest = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=1)
+        guest_page = guest.new_page()
+        guest_page.goto(base + "?nosw=1&noquiz=1&bud=" + code + "#buds")
+        guest_page.wait_for_selector("html[data-ready='1']")
+        guest_page.wait_for_timeout(200)
+        card = guest_page.inner_text(".invite-in") if guest_page.query_selector(".invite-in") else ""
+        check("invite: friend sees who invited them", "Juwen wants to compare tastes" in card, card[:80])
+        check("invite: code removed from the address bar", "bud=" not in guest_page.evaluate("() => location.href"))
+        guest_page.locator("[data-accept-bud]").click()
+        guest_page.wait_for_timeout(300)
+        added = guest_page.evaluate("() => window.Lahap.state.friends.filter((id) => id.startsWith('inv')).length")
+        check("invite: accepting adds the sender as a bud", added == 1, added)
+        guest_page.reload()
+        guest_page.wait_for_selector("html[data-ready='1']")
+        guest_page.wait_for_timeout(200)
+        buds_text = guest_page.inner_text("#view-buds")
+        check("invite: bud survives a reload", "Juwen" in buds_text and not guest_page.query_selector(".invite-in"), buds_text[:120])
+        bad = guest.new_page()
+        bad.goto(base + "?nosw=1&noquiz=1&bud=not-a-real-code#buds")
+        bad.wait_for_selector("html[data-ready='1']")
+        check("invite: a broken code is ignored", not bad.query_selector(".invite-in"))
+        guest.close()
+
+        # ---- share: Photo background only offered when the meal has a photo ----
+        photo_options = page.evaluate(
+            """() => {
+              const plain = window.Lahap.state.entries.find((e) => !e.photo);
+              window.Lahap.openShare(plain);
+              const count = document.querySelectorAll('[data-seg=background][data-value=photo]').length;
+              document.getElementById('dlg-share').close();
+              return count;
+            }"""
+        )
+        check("share: no Photo background for a meal without a photo", photo_options == 0, photo_options)
+
 
         # ---- nutrition, targets, recipes (pure logic) ----
         logic2 = page.evaluate(
