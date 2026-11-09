@@ -2125,18 +2125,101 @@ label.chip input {
   }
 }
 
-/* r8: the On repeat card is one compact row of stats on desktop so Today stays above the fold */
+/* r6b: the On repeat card is the first-screen hero — a big plate, the dish name and a
+   ×N repeat badge. Base sizing for phones; the desktop block below makes it a wide hero. */
+.answer.featured {
+  padding: var(--s4);
+}
+.answer-hero {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: var(--s3);
+  align-items: center;
+}
+.answer-hero .answer-thumb {
+  width: 64px;
+  height: 64px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: var(--paper);
+  display: block;
+}
+.answer-hero .answer-thumb.cut {
+  object-fit: contain;
+  background: radial-gradient(circle at 50% 55%, #fffaf0 0 55%, var(--paper) 100%);
+}
+.answer-hero-body {
+  min-width: 0;
+}
+.answer-dish {
+  display: block;
+  font-size: 20px;
+  line-height: 1.1;
+  color: var(--ink);
+}
+.answer-repeat {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+.repeat-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  margin-right: 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+}
+
+/* r6b (desktop): the hero opens the page — a large plate on the left, the dish name and
+   repeat count on the right, then the six stats as one full-width strip so "Today" stays near. */
 @media (min-width: 761px) {
   .answer.featured {
-    padding: var(--s3) var(--s4);
+    padding: var(--s5);
+    border-left: 4px solid var(--accent);
+  }
+  .answer.featured .answer-hero {
+    grid-template-columns: 148px minmax(0, 1fr);
+    gap: var(--s5);
+  }
+  .answer.featured .answer-hero .answer-thumb {
+    width: 148px;
+    height: 148px;
+    border-radius: 16px;
+  }
+  .answer.featured .answer-dish {
+    font-size: 32px;
+    line-height: 1.05;
+  }
+  .answer.featured .answer-repeat {
+    font-size: 15px;
+    margin-top: 2px;
+  }
+  .answer.featured .repeat-badge {
+    min-width: 46px;
+    height: 46px;
+    font-size: 24px;
+    margin-right: 10px;
   }
   .answer.featured dl {
     grid-template-columns: repeat(6, minmax(0, 1fr));
-    gap: var(--s2);
-    margin-top: var(--s2);
+    gap: var(--s3);
+    margin-top: var(--s4);
+    padding-top: var(--s3);
+    border-top: 1px solid var(--line);
   }
   .answer.featured .btn-row {
-    margin-top: var(--s2) !important;
+    margin-top: var(--s3) !important;
   }
 }
 
@@ -2219,13 +2302,6 @@ label.chip input {
   font-size: 13px;
 }
 
-/* r10: the featured answer names the dish first, so the card reads without the button */
-.answer-dish {
-  display: block;
-  font-size: 0.82em;
-  color: var(--accent);
-  margin-bottom: 2px;
-}
 /* r10: Remove sits apart from Plan makan so the two are never mis-tapped */
 .person-actions .person-remove {
   margin-left: var(--s3);

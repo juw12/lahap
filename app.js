@@ -570,13 +570,40 @@
   // Fresh first screen (no search, no filters): answer the signature question for the
   // dish you eat most, so log / search / answer are all visible in ~3s without typing.
   // Typing into the search box replaces it with the live search answer.
+  // r6b: on desktop this is the page's hero — a big plate, the dish name, and a ×N repeat badge.
   function featuredAnswerHtml() {
     if (state.query.trim()) return "";
     if (state.sourceFilter !== "all" || state.tasteFilter.length) return "";
     const top = L.repeats(state.entries, 2)[0];
     if (!top) return "";
     const matches = state.entries.filter((entry) => L.normalize(entry.name) === L.normalize(top.name));
-    return answerHtml(top.name, matches, "On repeat");
+    const summary = L.summarize(matches);
+    if (!summary) return "";
+    const last = summary.last;
+    const where = last.place ? " at " + esc(last.place) : "";
+    const range = summary.minPrice === summary.maxPrice
+      ? money(summary.minPrice)
+      : `${money(summary.minPrice)} – ${money(summary.maxPrice)}`;
+    return `
+      <div class="answer featured" role="status">
+        <div class="answer-hero">
+          <img class="answer-thumb${last.cutout ? " cut" : ""}" src="${imageFor(last)}" alt="${last.photo ? "Photo of " + esc(last.name) : "Plate drawing of " + esc(last.name)}" width="144" height="144">
+          <div class="answer-hero-body">
+            <p class="eyebrow">On repeat · your most-eaten</p>
+            <h2 class="answer-hero-name"><span class="answer-dish">${esc(last.name)}</span></h2>
+            <p class="answer-repeat"><span class="repeat-badge" title="Eaten ${summary.count} times">×${summary.count}</span>Yes, ${summary.count} ${summary.count === 1 ? "time" : "times"}. Last ${esc(relative(last.ts))}${where}.</p>
+          </div>
+        </div>
+        <dl>
+          <div><dt>Avg price</dt><dd>${esc(money(summary.avgPrice))}</dd></div>
+          <div><dt>Price range</dt><dd>${esc(range)}</dd></div>
+          <div><dt>Avg plate score</dt><dd>${scoreBadge(summary.avgHealth)}</dd></div>
+          <div><dt>Avg rating</dt><dd>${summary.avgRating ? summary.avgRating.toFixed(1) + " / 5" : "–"}</dd></div>
+          <div><dt>Where</dt><dd>${esc(summary.places.join(", ") || "–")}</dd></div>
+          <div><dt>First logged</dt><dd>${esc(new Date(summary.first.ts).toLocaleDateString(undefined, { day: "numeric", month: "short" }))}</dd></div>
+        </dl>
+        <div class="btn-row" style="margin-top:12px"><button type="button" class="btn" data-again="${esc(last.id)}">Log “${esc(last.name)}” again</button></div>
+      </div>`;
   }
 
   function weekAsideHtml() {
