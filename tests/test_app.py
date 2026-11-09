@@ -126,6 +126,13 @@ def main():
         sample_count = page.evaluate("() => window.Lahap.state.entries.length")
         check("demo loads sample fortnight", sample_count >= 35, sample_count)
         check("diary shows every meal", tickets == sample_count, f"{tickets} of {sample_count}")
+        # featured answer on the fresh first screen (no typing yet): the app answers its
+        # signature question for the dish you eat most, so search->answer is visible in ~3s
+        feat = page.locator(".answer")
+        check("first screen shows a featured answer", feat.count() == 1, feat.count())
+        feat_text = feat.text_content()
+        check("featured answer reads the go-to dish", "On repeat" in feat_text and "Yes," in feat_text, feat_text)
+        check("featured answer offers to log it again", feat.locator("button[data-again]").count() == 1, feat.locator("button[data-again]").count())
         page.fill("#q", "nasi lemak")
         page.wait_for_timeout(150)
         expected = page.evaluate("() => window.Lahap.state.entries.filter(e => e.name.toLowerCase().includes('nasi lemak')).length")
@@ -148,7 +155,7 @@ def main():
         page.locator("#log-form [data-seg=veg][data-value='2']").click()
         page.locator("#log-form label.chip:has(input[value=rina])").click()
         page.locator("#log-form button[type=submit]").click()
-        page.wait_for_timeout(300)
+        page.wait_for_function("() => window.Lahap.state.entries.some(e => e.name === 'Mie goreng test')", timeout=5000)
         saved = page.evaluate("() => window.Lahap.state.entries.find(e => e.name === 'Mie goreng test')")
         check("log: meal saved", saved is not None)
         check("log: fields kept", saved and saved["price"] == 15000 and saved["tastes"] == ["Spicy"] and saved["plate"]["veg"] == 2, saved and {k: saved[k] for k in ("price", "tastes", "plate")})

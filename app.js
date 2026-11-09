@@ -535,7 +535,7 @@
       </button>`;
   }
 
-  function answerHtml(query, matches) {
+  function answerHtml(query, matches, eyebrow = "Have I eaten this?") {
     if (!query.trim()) return "";
     const summary = L.summarize(matches);
     if (!summary) {
@@ -545,7 +545,7 @@
     const range = summary.minPrice === summary.maxPrice ? money(summary.minPrice) : `${money(summary.minPrice)} – ${money(summary.maxPrice)}`;
     return `
       <div class="answer" role="status">
-        <p class="eyebrow">Have I eaten this?</p>
+        <p class="eyebrow">${eyebrow}</p>
         <h2>Yes, ${summary.count} ${summary.count === 1 ? "time" : "times"}. Last ${esc(relative(last.ts))}${last.place ? " at " + esc(last.place) : ""}.</h2>
         <dl>
           <div><dt>Avg price</dt><dd>${esc(money(summary.avgPrice))}</dd></div>
@@ -557,6 +557,18 @@
         </dl>
         <div class="btn-row" style="margin-top:12px"><button type="button" class="btn" data-again="${esc(last.id)}">Log “${esc(last.name)}” again</button></div>
       </div>`;
+  }
+
+  // Fresh first screen (no search, no filters): answer the signature question for the
+  // dish you eat most, so log / search / answer are all visible in ~3s without typing.
+  // Typing into the search box replaces it with the live search answer.
+  function featuredAnswerHtml() {
+    if (state.query.trim()) return "";
+    if (state.sourceFilter !== "all" || state.tasteFilter.length) return "";
+    const top = L.repeats(state.entries, 2)[0];
+    if (!top) return "";
+    const matches = state.entries.filter((entry) => L.normalize(entry.name) === L.normalize(top.name));
+    return answerHtml(top.name, matches, "On repeat");
   }
 
   function weekAsideHtml() {
@@ -692,7 +704,7 @@
             <input id="q" type="search" placeholder="Have I eaten this? Try “bakso”" value="${esc(state.query)}" autocomplete="off">
           </form>
           ${filters}
-          ${answerHtml(state.query, list)}
+          ${answerHtml(state.query, list) || featuredAnswerHtml()}
           ${listHtml}
         </div>
         ${weekAsideHtml()}
