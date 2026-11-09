@@ -538,6 +538,21 @@
       </div>`;
   }
 
+  // r12: four answer cells in a 2x2 (phone) / 4-up (desktop) grid; the price range and first-logged date
+  // ride as small notes under their parent value instead of taking cells of their own
+  function answerStatsHtml(summary) {
+    const ranged = summary.minPrice !== summary.maxPrice;
+    const rangeNote = ranged ? `<small class="dd-note">${esc(money(summary.minPrice))} – ${esc(money(summary.maxPrice))}</small>` : "";
+    const firstNote = `<small class="dd-note">since ${esc(new Date(summary.first.ts).toLocaleDateString(undefined, { day: "numeric", month: "short" }))}</small>`;
+    return `
+        <dl class="answer-stats">
+          <div><dt>Avg price</dt><dd>${esc(money(summary.avgPrice))}${rangeNote}</dd></div>
+          <div><dt>Plate score</dt><dd>${scoreBadge(summary.avgHealth)}</dd></div>
+          <div><dt>Rating</dt><dd>${summary.avgRating ? summary.avgRating.toFixed(1) + " / 5" : "–"}</dd></div>
+          <div><dt>Where</dt><dd>${esc(summary.places.join(", ") || "–")}${firstNote}</dd></div>
+        </dl>`;
+  }
+
   function answerHtml(query, matches, eyebrow = "Have I eaten this?") {
     if (!query.trim()) return "";
     const summary = L.summarize(matches);
@@ -545,7 +560,6 @@
       return `<div class="answer" role="status"><h2>Not in your diary yet</h2><p class="muted">No meal matches “${esc(query)}”. Try a place, a taste like “spicy”, or a friend's name.</p></div>`;
     }
     const last = summary.last;
-    const range = summary.minPrice === summary.maxPrice ? money(summary.minPrice) : `${money(summary.minPrice)} – ${money(summary.maxPrice)}`;
     return `
       <div class="answer${eyebrow === "On repeat" ? " featured" : ""}" role="status">
         <div class="answer-head">
@@ -555,14 +569,7 @@
             <h2>${eyebrow === "On repeat" ? `<span class="answer-dish">${esc(last.name)}</span>` : ""}Yes, ${summary.count} ${summary.count === 1 ? "time" : "times"}. Last ${esc(relative(last.ts))}${last.place ? " at " + esc(last.place) : ""}.</h2>
           </div>
         </div>
-        <dl>
-          <div><dt>Avg price</dt><dd>${esc(money(summary.avgPrice))}</dd></div>
-          <div><dt>Price range</dt><dd>${esc(range)}</dd></div>
-          <div><dt>Avg plate score</dt><dd>${scoreBadge(summary.avgHealth)}</dd></div>
-          <div><dt>Avg rating</dt><dd>${summary.avgRating ? summary.avgRating.toFixed(1) + " / 5" : "–"}</dd></div>
-          <div><dt>Where</dt><dd>${esc(summary.places.join(", ") || "–")}</dd></div>
-          <div><dt>First logged</dt><dd>${esc(new Date(summary.first.ts).toLocaleDateString(undefined, { day: "numeric", month: "short" }))}</dd></div>
-        </dl>
+        ${answerStatsHtml(summary)}
         <div class="btn-row" style="margin-top:12px"><button type="button" class="btn" data-again="${esc(last.id)}">Log “${esc(last.name)}” again</button><button type="button" class="btn" data-share="${esc(last.id)}">Share card</button></div>
       </div>`;
   }
@@ -581,9 +588,6 @@
     if (!summary) return "";
     const last = summary.last;
     const where = last.place ? " at " + esc(last.place) : "";
-    const range = summary.minPrice === summary.maxPrice
-      ? money(summary.minPrice)
-      : `${money(summary.minPrice)} – ${money(summary.maxPrice)}`;
     return `
       <div class="answer featured" role="status">
         <div class="answer-hero">
@@ -594,14 +598,7 @@
             <p class="answer-repeat"><span class="repeat-badge" title="Eaten ${summary.count} times">×${summary.count}</span>Yes, ${summary.count} ${summary.count === 1 ? "time" : "times"}. Last ${esc(relative(last.ts))}${where}.</p>
           </div>
         </div>
-        <dl>
-          <div><dt>Avg price</dt><dd>${esc(money(summary.avgPrice))}</dd></div>
-          <div><dt>Price range</dt><dd>${esc(range)}</dd></div>
-          <div><dt>Avg plate score</dt><dd>${scoreBadge(summary.avgHealth)}</dd></div>
-          <div><dt>Avg rating</dt><dd>${summary.avgRating ? summary.avgRating.toFixed(1) + " / 5" : "–"}</dd></div>
-          <div><dt>Where</dt><dd>${esc(summary.places.join(", ") || "–")}</dd></div>
-          <div><dt>First logged</dt><dd>${esc(new Date(summary.first.ts).toLocaleDateString(undefined, { day: "numeric", month: "short" }))}</dd></div>
-        </dl>
+        ${answerStatsHtml(summary)}
         <div class="btn-row" style="margin-top:12px"><button type="button" class="btn" data-again="${esc(last.id)}">Log “${esc(last.name)}” again</button><button type="button" class="btn" data-share="${esc(last.id)}">Share card</button></div>
       </div>`;
   }
@@ -777,7 +774,18 @@
       return [center + Math.cos(angle) * radius * value, center + Math.sin(angle) * radius * value];
     });
     const rings = [0.33, 0.66, 1].map((level) => `<polygon points="${points(vector.map(() => level)).map((p) => p.join(",")).join(" ")}" fill="none" stroke="#e0d5c2"/>`).join("");
-    const labels = points(vector.map(() => 1.3)).map((p, index) => `<text x="${p[0]}" y="${p[1] - 7}" text-anchor="middle" dominant-baseline="middle" font-size="13" font-weight="600" fill="#1d1813">${TASTES[index]}<tspan class="radar-pct" x="${p[0]}" dy="16" font-size="11" font-weight="700" fill="#4e463c">${Math.round(vector[index] * 100)}%</tspan></text>`).join("");
+    // r12: side labels anchor away from the plot (start on the right, end on the left) so they never sit on a spoke
+    const labels = vector.map((value, index) => {
+      const angle = -Math.PI / 2 + (index * Math.PI * 2) / vector.length;
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle);
+      const side = Math.abs(cos) > 0.3;
+      const reach = radius * (side ? 1.12 : 1.18);
+      const x = center + cos * reach;
+      const y = center + sin * reach + (side ? -6 : sin < 0 ? -14 : 4);
+      const anchor = side ? (cos > 0 ? "start" : "end") : "middle";
+      return `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}" dominant-baseline="middle" font-size="13" font-weight="600" fill="#1d1813">${TASTES[index]}<tspan class="radar-pct" x="${x.toFixed(1)}" dy="16" font-size="11" font-weight="700" fill="#4e463c">${Math.round(value * 100)}%</tspan></text>`;
+    }).join("");
     const shapePoints = points(vector.map((value) => Math.max(0.06, value)));
     const shape = shapePoints.map((p) => p.join(",")).join(" ");
     const dots = shapePoints.map((p) => `<circle cx="${p[0]}" cy="${p[1]}" r="3.5" fill="#b4380f"/>`).join("");
@@ -1051,6 +1059,7 @@
     root.innerHTML = `
       <div class="view-head">
         <div><h1>Taste buds</h1><p>Friends ranked by how close their taste is to yours. Tag them in meals and eat together to grow the connection.</p></div>
+        <button type="button" class="btn primary view-head-cta" data-invite>Invite a friend</button>
       </div>
       <div class="split">
         <div>

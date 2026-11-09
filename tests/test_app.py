@@ -681,6 +681,31 @@ def main():
             points_info,
         )
 
+        # ---- r12: answer card is a 2x2 of four cells with a share action; buds header has an invite CTA; radar side labels anchor outward ----
+        page.evaluate("() => location.hash = 'diary'")
+        page.wait_for_timeout(200)
+        r12_info = page.evaluate(
+            """() => {
+              const answer = document.querySelector('.answer.featured');
+              const cells = answer ? answer.querySelectorAll('dl.answer-stats > div').length : 0;
+              const share = answer ? answer.querySelectorAll('button[data-share]').length : 0;
+              location.hash = 'buds';
+              return { cells, share };
+            }"""
+        )
+        page.wait_for_timeout(200)
+        r12_info["invite"] = page.evaluate("() => document.querySelectorAll('[data-view=buds] .view-head [data-invite]').length")
+        page.evaluate("() => location.hash = 'insights'")
+        page.wait_for_timeout(200)
+        r12_info["anchors"] = page.evaluate("() => [...document.querySelectorAll('[data-view=insights] svg.radar > text')].map((t) => t.getAttribute('text-anchor'))")
+        check("r12 answer: four stat cells plus a Share card action", r12_info["cells"] == 4 and r12_info["share"] == 1, r12_info)
+        check("r12 buds: header carries an Invite a friend button", r12_info["invite"] == 1, r12_info)
+        check(
+            "r12 radar: side labels anchor away from the plot",
+            r12_info["anchors"].count("start") == 2 and r12_info["anchors"].count("end") == 2,
+            r12_info["anchors"],
+        )
+
         # ---- first run: quiz, lab, cutout, OCR in a clean browser profile ----
         fresh = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=1, permissions=["clipboard-read", "clipboard-write"])
         page2 = fresh.new_page()
