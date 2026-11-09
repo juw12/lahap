@@ -232,30 +232,62 @@ def main():
         check("share: week card renders", alpha["weekOk"])
 
         # ---- r11: the share sheet previews every template on the current (photo) background ----
+        # The per-template previews are repainted by an async redraw (openShare / the segment
+        # clicks fire redraw() without awaiting it, and drawShare awaits the photo image load).
+        # A fixed sleep raced that: sometimes it read the canvas before the story size / the
+        # photo / the paper background had actually landed, so it sampled a blank/white canvas.
+        # Poll until the painted pixels match what the assertions check instead of sleeping.
         preview = page.evaluate(
             """async () => {
+              const minisOf = () => [...document.querySelectorAll('#dlg-share .tp-canvas')];
+              const dimsOf = () => minisOf().map((c) => [c.width, c.height]);
+              const varianceOf = (c) => {
+                const d = c.getContext('2d').getImageData(0, 0, c.width, Math.floor(c.height * 0.15)).data;
+                const seen = new Set();
+                for (let i = 0; i < d.length; i += 4 * 137) seen.add((d[i] << 16) | (d[i + 1] << 8) | d[i + 2]);
+                return seen.size;
+              };
+              const varianceAll = () => minisOf().map(varianceOf);
+              const paperCornerOf = () => Array.from(minisOf()[0].getContext('2d').getImageData(6, 6, 1, 1).data);
+              // rAF-paced wait for an async repaint to actually land; the short timeout floor
+              // keeps the test moving if the frame loop is ever throttled, and the wall-clock
+              // deadline guarantees it can never hang the suite.
+              async function pollUntil(cond, timeout) {
+                timeout = timeout || 5000;
+                const deadline = performance.now() + timeout;
+                for (;;) {
+                  if (cond()) return true;
+                  if (performance.now() >= deadline) return false;
+                  await Promise.race([
+                    new Promise((r) => requestAnimationFrame(r)),
+                    new Promise((r) => setTimeout(r, 64)),
+                  ]);
+                }
+              }
               const entry = window.Lahap.state.entries.find(e => e.name === 'Mie goreng test');
               entry.photo = 'tests/fixtures/plate.jpg';
               window.Lahap.openShare(entry);
               document.querySelector('[data-seg=size][data-value=story]').click();
               document.querySelector('[data-seg=background][data-value=photo]').click();
-              await new Promise(r => setTimeout(r, 350));
-              const minis = [...document.querySelectorAll('#dlg-share .tp-canvas')];
+              // wait until every preview is sized to the story canvas AND the photo has actually
+              // been painted behind each one (a blank/white canvas reports a single colour, so
+              // variance > 40 proves the photo is there) -- the state the fixed sleep used to race
+              await pollUntil(() => dimsOf().length === 3 && dimsOf().every((p) => p[0] === 216 && p[1] === 384) && varianceAll().every((v) => v > 40));
+              const minis = minisOf();
               const pressed = [...document.querySelectorAll('#dlg-share .tp-btn')].map((b) => b.getAttribute('aria-pressed'));
               const out = {
                 count: minis.length,
-                dims: minis.map((c) => [c.width, c.height]),
+                dims: dimsOf(),
                 pressed,
-                variance: minis.map((c) => {
-                  const d = c.getContext('2d').getImageData(0, 0, c.width, Math.floor(c.height * 0.15)).data;
-                  const seen = new Set();
-                  for (let i = 0; i < d.length; i += 4 * 137) seen.add((d[i] << 16) | (d[i + 1] << 8) | d[i + 2]);
-                  return seen.size;
-                }),
+                variance: varianceAll(),
               };
               document.querySelector('[data-seg=background][data-value=paper]').click();
-              await new Promise(r => setTimeout(r, 350));
-              out.paperCorner = Array.from(minis[0].getContext('2d').getImageData(6, 6, 1, 1).data);
+              // wait until the paper background has actually been painted onto the preview
+              await pollUntil(() => {
+                const p = paperCornerOf();
+                return p[0] === 245 && p[1] === 239 && p[2] === 227 && p[3] === 255;
+              });
+              out.paperCorner = paperCornerOf();
               entry.photo = null;
               document.getElementById('dlg-share').close();
               return out;
