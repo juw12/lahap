@@ -2306,6 +2306,20 @@ label.chip input {
   margin-bottom: var(--s2);
 }
 
+/* next-level card: a thicker bar so the goal reads at a glance */
+.next-level-card .next-level-progress {
+  margin: var(--s2) 0 var(--s3);
+}
+.next-level-card .next-level-progress .track {
+  height: 10px;
+}
+.next-level-card .level-caption {
+  display: block;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--muted, #5e554a);
+}
+
 /* r8: friend row actions sit next to each other; the remove button is a small
    ghost that only lights up on hover/focus so it does not steal attention. */
 .person-actions {

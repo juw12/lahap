@@ -706,6 +706,74 @@ def main():
             r12_info["anchors"],
         )
 
+        # ---- r13: buds list honours "ranked by taste"; next-level card has a real progress bar; a known dish fills its cuisine ----
+        page.evaluate("() => location.hash = 'buds'")
+        page.wait_for_timeout(200)
+        r13_buds = page.evaluate(
+            """() => {
+              const view = document.querySelector('[data-view=buds]');
+              const matches = [...view.querySelectorAll('.panel .person .name .match')]
+                .map((el) => parseInt(el.textContent, 10))
+                .filter((n) => !Number.isNaN(n));
+              const bar = view.querySelector('.next-level-card [role=progressbar]');
+              const fill = bar ? bar.querySelector('.fill') : null;
+              return {
+                matches,
+                hasBar: !!bar,
+                now: bar ? Number(bar.getAttribute('aria-valuenow')) : -1,
+                fillWidth: fill ? parseInt(fill.style.width, 10) : -1,
+                barHeight: bar ? bar.querySelector('.track').getBoundingClientRect().height : 0,
+              };
+            }"""
+        )
+        check(
+            "r13 buds: your buds are listed closest taste first, as the subtitle says",
+            len(r13_buds["matches"]) >= 2 and r13_buds["matches"] == sorted(r13_buds["matches"], reverse=True),
+            r13_buds["matches"],
+        )
+        check(
+            "r13 buds: next-level card shows a progress bar that matches its aria value",
+            r13_buds["hasBar"] and 0 <= r13_buds["now"] <= 100 and r13_buds["fillWidth"] == r13_buds["now"] and r13_buds["barHeight"] >= 8,
+            r13_buds,
+        )
+        known = page.evaluate(
+            """() => {
+              const norm = (s) => String(s || '').trim().toLowerCase();
+              const entries = window.Lahap.state.entries.slice().sort((a, b) => new Date(b.ts) - new Date(a.ts));
+              const seen = new Set();
+              for (const entry of entries) {
+                const key = norm(entry.name);
+                if (seen.has(key)) continue;
+                seen.add(key);
+                if (entry.cuisine) return { name: entry.name, cuisine: entry.cuisine };
+              }
+              return null;
+            }"""
+        )
+        page.evaluate("() => location.hash = 'diary'")
+        page.wait_for_timeout(150)
+        page.locator(".fab").click()
+        page.wait_for_selector("#log-form")
+        page.fill("#log-form input[name=name]", known["name"] if known else "")
+        page.wait_for_timeout(150)
+        filled_cuisine = page.input_value("#log-form input[name=cuisine]")
+        check(
+            "r13 log: typing a dish you've had before fills its cuisine when the field is empty",
+            known is not None and filled_cuisine == known["cuisine"],
+            {"known": known, "filled": filled_cuisine},
+        )
+        page.fill("#log-form input[name=cuisine]", "Fusion")
+        page.fill("#log-form input[name=name]", "")
+        page.fill("#log-form input[name=name]", known["name"] if known else "")
+        page.wait_for_timeout(150)
+        check(
+            "r13 log: a cuisine you typed yourself is never overwritten",
+            page.input_value("#log-form input[name=cuisine]") == "Fusion",
+            page.input_value("#log-form input[name=cuisine]"),
+        )
+        page.locator("#dlg-log [data-close]").first.click()
+        page.wait_for_timeout(150)
+
         # ---- first run: quiz, lab, cutout, OCR in a clean browser profile ----
         fresh = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=1, permissions=["clipboard-read", "clipboard-write"])
         page2 = fresh.new_page()

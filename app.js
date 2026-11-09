@@ -1026,6 +1026,7 @@
         <span class="eyebrow">Next level</span>
         <h2>${level.toNext} pts to ${esc(level.next)}</h2>
         <p class="muted">Tag ${esc(person.name)} in your next meal to get there.</p>
+        <div class="level next-level-progress" role="progressbar" aria-label="Progress to ${esc(level.next)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(level.progress * 100)}"><div class="track"><div class="fill" style="width:${Math.round(level.progress * 100)}%"></div></div><span class="mono level-caption">${esc(level.name)} → ${esc(level.next)} · ${Math.round(level.progress * 100)}%</span></div>
         <div class="btn-row"><button type="button" class="btn primary" data-tag-meal="${esc(person.id)}">Tag a meal with ${esc(person.name)}</button><button type="button" class="btn" data-hangout="${esc(person.id)}">Plan makan</button></div>
       </section>`;
   }
@@ -1048,7 +1049,9 @@
 
   function renderBuds() {
     const root = $("#view-buds");
-    const friends = PEOPLE.filter((person) => state.friends.includes(person.id));
+    // the subtitle promises "ranked by how close their taste is", so the list honours it
+    const friends = PEOPLE.filter((person) => state.friends.includes(person.id))
+      .sort((a, b) => matchFor(b) - matchFor(a));
     const others = PEOPLE.filter((person) => !state.friends.includes(person.id))
       .map((person) => ({ person, match: matchFor(person) }))
       .sort((a, b) => b.match - a.match);
@@ -1854,7 +1857,13 @@
         return;
       }
       const last = past[0];
-      box.innerHTML = `<p class="notice" style="margin:-8px 0 16px">Had it ${past.length}× before, last ${esc(relative(last.ts))}${last.place ? " at " + esc(last.place) : ""} for ${esc(money(last.price))}. <button type="button" class="btn" style="margin-top:6px" data-fill="${esc(last.id)}">Fill from last time</button></p>`;
+      // the cuisine of a dish rarely changes, so fill it quietly when the field is still empty
+      let filledCuisine = false;
+      if (!form.cuisine.value.trim() && last.cuisine) {
+        form.cuisine.value = last.cuisine;
+        filledCuisine = true;
+      }
+      box.innerHTML = `<p class="notice" style="margin:-8px 0 16px">Had it ${past.length}× before, last ${esc(relative(last.ts))}${last.place ? " at " + esc(last.place) : ""} for ${esc(money(last.price))}.${filledCuisine ? ` Cuisine set to ${esc(last.cuisine)}.` : ""} <button type="button" class="btn" style="margin-top:6px" data-fill="${esc(last.id)}">Fill from last time</button></p>`;
     }
 
     function fillFrom(entry) {
