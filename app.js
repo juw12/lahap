@@ -676,15 +676,17 @@
       }
       group.entries.push(entry);
     }
-    const dayBlocks = groups.map((group) => {
+    const plateKey = '<p class="plate-key">Plate score out of 100 · 75+ Balanced · 50+ Okay · under 50 Heavy</p>';
+    const dayBlocks = groups.map((group, groupIndex) => {
       const spend = group.entries.reduce((sum, entry) => sum + (Number(entry.price) || 0), 0);
       const avg = Math.round(group.entries.reduce((sum, entry) => sum + L.healthScore(entry.plate), 0) / group.entries.length);
       return `
         <section class="day" aria-label="${esc(dayLabel(group.entries[0].ts))}">
           <div class="day-head">
             <h2>${esc(dayLabel(group.entries[0].ts))}</h2>
-            <span class="mono">${plural(group.entries.length, "meal")} · ${esc(money(spend))} · plate ${avg}</span>
+            <span class="mono">${plural(group.entries.length, "meal")} · ${esc(money(spend))} · plate ${avg} ${L.healthLabel(avg)}</span>
           </div>
+          ${groupIndex === 0 ? plateKey : ""}
           ${group.entries.map(ticketHtml).join("")}
         </section>`;
     });
@@ -993,7 +995,7 @@
             ${friends.length ? friends.map((person) => {
               const points = state.points[person.id] || 0;
               const level = L.levelFor(points);
-              return `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(matchFor(person))}</span></div><div class="why">${esc(level.name)} · ${points} pts</div>${level.next ? `<div class="next-step">${esc(nextStep(level))}</div>` : ""}<div class="level"><div class="track"><div class="fill" style="width:${Math.round(level.progress * 100)}%"></div></div></div></div><div class="person-actions"><button type="button" class="btn" data-hangout="${person.id}">Plan makan</button><button type="button" class="person-remove" data-remove="${person.id}" aria-label="Remove ${esc(person.name)}" title="Remove ${esc(person.name)}">✕</button></div></div>`;
+              return `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(matchFor(person))}</span></div><div class="why">${esc(level.name)} · ${points} pts · ${esc(lastTogether(person.id))}</div>${pendingPlanHtml(person.id)}${level.next ? `<div class="next-step">${esc(nextStep(level))}</div>` : ""}<div class="level"><div class="track"><div class="fill" style="width:${Math.round(level.progress * 100)}%"></div></div></div></div><div class="person-actions"><button type="button" class="btn" data-hangout="${person.id}">Plan makan</button><button type="button" class="person-remove" data-remove="${person.id}" aria-label="Remove ${esc(person.name)}" title="Remove ${esc(person.name)}">Remove</button></div></div>`;
             }).join("") : '<p class="muted">No buds yet. Invite a friend, or add an example profile below to try tagging and hangouts.</p>'}
           </section>
           ${inviteHtml()}
@@ -1022,6 +1024,26 @@
           </section>
         </aside>
       </div>`;
+  }
+
+  // "last makan today" / "... 3 days ago" / "no meals together yet" - a reason to come back
+  function lastTogether(personId) {
+    const shared = state.entries.filter((entry) => (entry.friends || []).includes(personId));
+    if (!shared.length) return "no meals together yet";
+    const latest = Math.max(...shared.map((entry) => new Date(entry.ts).getTime()));
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const days = Math.max(0, Math.ceil((startOfToday - latest) / 86400000));
+    if (days === 0) return "last makan today";
+    if (days === 1) return "last makan yesterday";
+    return `last makan ${days} days ago`;
+  }
+
+  function pendingPlanHtml(personId) {
+    const plan = state.invites.find((invite) => invite.friend === personId && !invite.done);
+    if (!plan) return "";
+    const when = new Date(plan.when).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    return `<div class="plan-pending">Planned: ${esc(when)} · ${esc(plan.place || "somewhere new")}. Mark \u201cWe went\u201d after for +${L.POINTS.hangout}.</div>`;
   }
 
   // e.g. "Regular in 40 pts: 1 hangout + 2 tagged meals"
@@ -2417,7 +2439,7 @@
     ctx.font = serif(64);
     ctx.fillText("Lahap", W / 2, cursor);
     cursor += 50;
-    ctx.font = mono(26, 500);
+    ctx.font = mono(30, 500);
     ctx.fillStyle = "#5e554a";
     const dateText = isWeek ? `WEEK ENDING ${new Date().toLocaleDateString(undefined, { day: "numeric", month: "short" }).toUpperCase()}` : new Date(entry.ts).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).toUpperCase();
     ctx.fillText(dateText, W / 2, cursor);
@@ -2436,7 +2458,7 @@
     rule();
     cursor += 56;
     ctx.fillStyle = "#1d1813";
-    ctx.font = mono(30, 600);
+    ctx.font = mono(34, 600);
     for (const item of shown) {
       ctx.textAlign = "left";
       ctx.fillText(wrapText(ctx, item.name.toUpperCase(), right - left - 240, 1)[0], left, cursor);
@@ -2464,7 +2486,7 @@
       rows.push(["EATEN", timesEaten(entry) === 1 ? "1ST TIME" : `${timesEaten(entry)}X`]);
       rows.push(["WITH", withWho.length ? withWho.join(", ").toUpperCase() : "SOLO"]);
     }
-    ctx.font = mono(32, 700);
+    ctx.font = mono(36, 700);
     ctx.fillStyle = "#1d1813";
     for (const [label, value] of rows) {
       ctx.textAlign = "left";
@@ -2474,7 +2496,7 @@
       cursor += lineH;
     }
     ctx.textAlign = "center";
-    ctx.font = mono(24, 500);
+    ctx.font = mono(28, 500);
     ctx.fillStyle = "#5e554a";
     ctx.fillText("TERIMA KASIH · SEE YOU NEXT MEAL", W / 2, y + paperH - 50);
     ctx.textAlign = "left";

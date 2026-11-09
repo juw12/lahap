@@ -4,6 +4,7 @@
 
 Serves the app folder on 127.0.0.1, drives Chromium, prints PASS/FAIL per check, exits 1 on any failure.
 """
+import re
 import functools
 import http.server
 import os
@@ -255,6 +256,22 @@ def main():
         )
         check("G4 share stats never overlap (card + stats, story + square, meal + week)", not overlaps, overlaps)
 
+        # ---- r9: plate score decoded where it appears; nav says what the tab is ----
+        page.goto(base + "?nosw=1#diary")
+        page.wait_for_selector("html[data-ready='1']")
+        key_text = page.evaluate("() => (document.querySelector('.plate-key') || {}).textContent || ''")
+        bands = page.evaluate("() => [75, 74, 50, 49].map((s) => window.LahapLogic.healthLabel(s))")
+        check(
+            "diary: plate key matches the real bands (75+ Balanced, 50+ Okay, under 50 Heavy)",
+            "75+ Balanced" in key_text and "50+ Okay" in key_text and "under 50 Heavy" in key_text
+            and bands == ["Balanced", "Okay", "Okay", "Heavy"],
+            [key_text, bands],
+        )
+        day_head = page.evaluate("() => (document.querySelector('.day-head .mono') || {}).textContent || ''")
+        check("diary: day header names the plate band, not a bare number", re.search(r"plate \d+ (Balanced|Okay|Heavy)", day_head) is not None, day_head)
+        nav_labels = page.evaluate("() => [...document.querySelectorAll('a[data-tab=lab] span')].map((s) => s.textContent)")
+        check("nav: phone tab says Recipes, not Lab", "Recipes" in nav_labels and "Lab" not in nav_labels, nav_labels)
+
         # ---- taste buds ----
         page.goto(base + "?nosw=1#buds")
         page.wait_for_selector("html[data-ready='1']")
@@ -262,6 +279,14 @@ def main():
         page.wait_for_timeout(200)
         friends = page.evaluate("() => window.Lahap.state.friends.length")
         check("add a bud", friends == 3, friends)
+        why_lines = page.evaluate("() => [...document.querySelectorAll('#view-buds .person .why')].map((el) => el.textContent)")
+        check(
+            "buds: every bud row says when you last ate together",
+            why_lines and all(("last makan" in line) or ("no meals together yet" in line) for line in why_lines[:3]),
+            why_lines[:3],
+        )
+        remove_labels = page.evaluate("() => [...document.querySelectorAll('#view-buds [data-remove]')].map((b) => b.textContent.trim())")
+        check("buds: remove control is labelled Remove", remove_labels and all(label == "Remove" for label in remove_labels), remove_labels)
         size_before = page.viewport_size
         page.set_viewport_size({"width": 390, "height": 844})
         page.wait_for_timeout(150)
@@ -283,6 +308,8 @@ def main():
         check("hangout: WhatsApp link has message", wa.startswith("https://wa.me/?text=Hi%20Rina"), wa[:60])
         page.locator("#hangout-form button[type=submit]").click()
         page.wait_for_timeout(200)
+        pending = page.evaluate("() => (document.querySelector('#view-buds .plan-pending') || {}).textContent || ''")
+        check("buds: a saved plan shows on the bud row with the We went step", "Planned:" in pending and "We went" in pending, pending)
         before = page.evaluate("() => window.Lahap.state.points.rina || 0")
         page.locator("[data-done]").first.click()
         page.wait_for_timeout(300)
