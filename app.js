@@ -551,8 +551,8 @@
         <div class="answer-head">
           <img class="answer-thumb${last.cutout ? " cut" : ""}" src="${imageFor(last)}" alt="${last.photo ? "Photo of " + esc(last.name) : "Plate drawing of " + esc(last.name)}" width="64" height="64">
           <div>
-            <p class="eyebrow">${eyebrow}</p>
-            <h2>Yes, ${summary.count} ${summary.count === 1 ? "time" : "times"}. Last ${esc(relative(last.ts))}${last.place ? " at " + esc(last.place) : ""}.</h2>
+            <p class="eyebrow">${eyebrow === "On repeat" ? "On repeat · your most-eaten" : eyebrow}</p>
+            <h2>${eyebrow === "On repeat" ? `<span class="answer-dish">${esc(last.name)}</span>` : ""}Yes, ${summary.count} ${summary.count === 1 ? "time" : "times"}. Last ${esc(relative(last.ts))}${last.place ? " at " + esc(last.place) : ""}.</h2>
           </div>
         </div>
         <dl>
@@ -1505,7 +1505,7 @@
     const quick = QUICK_ADD.filter((id) => R.INGREDIENTS[id] && !have.includes(id)).slice(0, 12);
     const defaultStatus = speech ? "Type, speak (English or Bahasa Indonesia) or scan a written list or receipt." : "Type or scan a written list or receipt. Voice input is not available in this browser.";
     root.innerHTML = `
-      <div class="view-head"><div><h1>Recipe lab</h1><p>Tell Lahap what is in your kitchen and get home recipes sized for your goal, with the calories and protein worked out.</p></div></div>
+      <div class="view-head"><div><h1>Recipes</h1><p>Tell Lahap what is in your kitchen and get home recipes sized for your goal, with the calories and protein worked out.</p></div></div>
       <div class="lab-grid">
         <section class="panel lab-input">
           <h2>What do you have?</h2>
@@ -2055,6 +2055,8 @@
     const isWeek = share.subject === "week";
     const entry = isWeek ? null : share.subject;
     const bg = share.background;
+    const stage = canvas.closest(".canvas-stage");
+    if (stage) stage.classList.toggle("checker", bg === "clear");
     const photo = entry && entry.photo ? await loadImage(entry.photo) : null;
     const cutout = entry && entry.cutout ? await loadImage(entry.cutout) : null;
     const light = bg === "paper";

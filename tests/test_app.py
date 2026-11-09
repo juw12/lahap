@@ -133,6 +133,8 @@ def main():
         check("first screen shows a featured answer", feat.count() == 1, feat.count())
         feat_text = feat.text_content()
         check("featured answer reads the go-to dish", "On repeat" in feat_text and "Yes," in feat_text, feat_text)
+        feat_dish = page.evaluate("() => (document.querySelector('.answer.featured .answer-dish') || {}).textContent || ''")
+        check("featured answer heading names the dish", len(feat_dish.strip()) > 2 and feat_dish.strip() in feat_text, feat_dish)
         check("featured answer offers to log it again", feat.locator("button[data-again]").count() == 1, feat.locator("button[data-again]").count())
         check("featured answer shows the dish", feat.locator("img.answer-thumb").count() == 1, feat.locator("img.answer-thumb").count())
         original_viewport = page.viewport_size
@@ -269,8 +271,8 @@ def main():
         )
         day_head = page.evaluate("() => (document.querySelector('.day-head .mono') || {}).textContent || ''")
         check("diary: day header names the plate band, not a bare number", re.search(r"plate \d+ (Balanced|Okay|Heavy)", day_head) is not None, day_head)
-        nav_labels = page.evaluate("() => [...document.querySelectorAll('a[data-tab=lab] span')].map((s) => s.textContent)")
-        check("nav: phone tab says Recipes, not Lab", "Recipes" in nav_labels and "Lab" not in nav_labels, nav_labels)
+        nav_labels = page.evaluate("() => [...document.querySelectorAll('a[data-tab=lab]')].map((a) => a.textContent.trim())")
+        check("nav: one name for recipes on every breakpoint", nav_labels and all(label == "Recipes" for label in nav_labels), nav_labels)
 
         # ---- r8b: the plate score stamp sits on the plate's top-right rim, fully inside the card ----
         stamp = page.evaluate(
