@@ -1315,6 +1315,72 @@ def main():
             """() => [...document.querySelectorAll('#view-diary .week-strip .ws-label')].map((l) => l.textContent.trim())"""
         )
         check("r23 diary: the phone week strip says Variety and Plate are out of 100", any(s.startswith("Variety") and "/100" in s for s in strip23) and any(s.startswith("Plate") and "/100" in s for s in strip23), strip23)
+        # ---- r24: louder buds pulse with a meter and taste ring, Receipt-first share, shorter log sheet ----
+        page.reload()
+        page.wait_for_selector("html[data-ready='1']")
+        page.wait_for_timeout(300)
+        pulse24 = page.evaluate(
+            """() => {
+              const p = document.querySelector('#view-diary .lead-day .day-pulse');
+              if (!p) return null;
+              const meter = p.querySelector('.pulse-meter > span');
+              const av = p.querySelector('.avatar');
+              return {
+                meter: meter ? Math.round(meter.getBoundingClientRect().width) : 0,
+                ring: av ? getComputedStyle(av).boxShadow : '',
+                taste: av ? av.dataset.taste || '' : '',
+                edge: getComputedStyle(p).borderLeftWidth,
+                height: Math.round(p.getBoundingClientRect().height),
+              };
+            }"""
+        )
+        check(
+            "r24 diary: the buds pulse has a progress meter, a solid accent edge and a top-taste ring, still one compact row",
+            pulse24 and pulse24["meter"] > 0 and pulse24["edge"] == "4px" and pulse24["taste"] != "" and "rgb" in pulse24["ring"] and pulse24["height"] < 84,
+            pulse24,
+        )
+        share24 = page.evaluate(
+            """async () => {
+              const btn = document.querySelector('#view-diary .ticket-share');
+              if (!btn) return null;
+              btn.click();
+              await new Promise((r) => setTimeout(r, 500));
+              const t = document.querySelector('#dlg-share [data-seg=template][aria-pressed=true]');
+              const bg = document.querySelector('#dlg-share [data-seg=background][aria-pressed=true]');
+              return { tpl: t ? t.dataset.value : null, bg: bg ? bg.dataset.value : null };
+            }"""
+        )
+        check(
+            "r24 share: a meal's first share opens on the Receipt (the photo Card only when the meal has its own photo)",
+            share24 and share24["tpl"] == ("card" if share24["bg"] == "photo" else "receipt"),
+            share24,
+        )
+        page.keyboard.press("Escape")
+        page.wait_for_timeout(200)
+        page.locator(".fab").click()
+        page.wait_for_selector("#log-form")
+        page.wait_for_timeout(250)
+        log24 = page.evaluate(
+            """() => {
+              const f = document.getElementById('log-form');
+              const ts = f.querySelector('input[name=ts]');
+              const cuisine = f.querySelector('input[name=cuisine]');
+              const price = f.querySelector('input[name=price]');
+              return {
+                whenFolded: !!(ts && ts.closest('#log-more')),
+                sameRow: !!(cuisine && price && cuisine.closest('.row') && cuisine.closest('.row') === price.closest('.row')),
+                priceVisible: !!(price && price.checkVisibility()),
+                sum: document.getElementById('log-more-sum').textContent,
+              };
+            }"""
+        )
+        check(
+            "r24 log: the time folds into More details, price sits beside cuisine, and the fold says it holds the time",
+            log24["whenFolded"] and log24["sameRow"] and log24["priceVisible"] and "time" in log24["sum"],
+            log24,
+        )
+        page.locator("#dlg-log [data-close]").first.click()
+        page.wait_for_timeout(150)
         scroll22 = page.evaluate(
             """async () => {
               window.scrollTo(0, 1400);
@@ -1546,6 +1612,22 @@ def main():
             "r23 diary: the desktop On repeat card is compact, says 'all time', and the week aside says 'this week'",
             feat23 and feat23["height"] <= 330 and "all time" in feat23["eyebrow"] and feat23["todayTop"] < 900 and (feat23["note"] == "" or "this week" in feat23["note"]),
             feat23,
+        )
+        desk21_page.goto(base + "?demo=1&nosw=1#buds")
+        desk21_page.wait_for_selector("html[data-ready='1']")
+        desk21_page.wait_for_timeout(300)
+        buds24 = desk21_page.evaluate(
+            """() => {
+              const why = document.querySelector('#view-buds .suggested-why');
+              const ringed = document.querySelectorAll('#view-buds .avatar.ringed').length;
+              const avatars = document.querySelectorAll('#view-buds .avatar').length;
+              return { why: why ? why.textContent : '', ringed, avatars };
+            }"""
+        )
+        check(
+            "r24 buds: suggested buds say where they come from, and every bud avatar wears a taste ring",
+            "invite" in buds24["why"] and "this phone" in buds24["why"] and buds24["avatars"] > 0 and buds24["ringed"] == buds24["avatars"],
+            buds24,
         )
         desk21_page.goto(base + "?demo=1&nosw=1#diary")
         desk21_page.wait_for_selector("html[data-ready='1']")

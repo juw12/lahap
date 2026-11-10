@@ -3260,3 +3260,37 @@ label.chip input {
     margin-top: var(--s3);
   }
 }
+
+/* ---------------- r24: louder buds pulse, taste rings, quieter log sheet ---------------- */
+/* each bud wears a ring in their strongest taste's colour */
+.avatar.ringed {
+  box-shadow: 0 0 0 2px var(--card), 0 0 0 4.5px var(--ring, transparent);
+}
+/* the Diary's buds pulse reads as a nudge, not a footnote: solid accent edge, warm tint, a meter */
+.day-pulse {
+  background: color-mix(in srgb, var(--accent) 6%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
+  border-left: 4px solid var(--accent);
+}
+.pulse-meter {
+  display: block;
+  height: 4px;
+  max-width: 200px;
+  margin-top: 3px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--line));
+  overflow: hidden;
+}
+.pulse-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+.suggested-why {
+  margin: -4px 0 var(--s3);
+  max-width: 62ch;
+}
+.more-fields .when-field {
+  margin-top: var(--s2);
+}

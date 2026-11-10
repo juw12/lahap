@@ -659,7 +659,7 @@
     }
     const { person, level } = ranked[0];
     const match = hasTasteProfile() ? ` · ${matchFor(person)}% match` : "";
-    return `<div class="day-pulse">${avatar(person)}<span class="pulse-text"><strong>${esc(person.name)}${match}</strong><span class="muted small">${level.toNext} pts to ${esc(level.next)} · +${L.POINTS.tag} a tag</span></span><button type="button" class="btn small primary" data-tag-meal="${esc(person.id)}">Tag ${esc(person.name)}</button>${shareButton}</div>`;
+    return `<div class="day-pulse">${avatar(person)}<span class="pulse-text"><strong>${esc(person.name)}${match}</strong><span class="muted small">${level.toNext} pts to ${esc(level.next)} · +${L.POINTS.tag} a tag</span><span class="pulse-meter" aria-hidden="true"><span style="width:${Math.max(4, Math.round((level.progress || 0) * 100))}%"></span></span></span><button type="button" class="btn small primary" data-tag-meal="${esc(person.id)}">Tag ${esc(person.name)}</button>${shareButton}</div>`;
   }
 
   // r16: short money for the phone week strip - "IDR 533k", "IDR 1.2M"
@@ -684,7 +684,7 @@
         <span><span class="ws-label">7 days</span><span class="ws-value">${week.length} ${week.length === 1 ? "meal" : "meals"}</span></span>
         <span><span class="ws-label">Variety <i class="ws-scale">/100</i></span><span class="ws-value">${variety}</span></span>
         <span><span class="ws-label">Plate <i class="ws-scale">/100</i></span><span class="ws-value">${avg}</span></span>
-        <span><span class="ws-label">Spent</span><span class="ws-value">${esc(compactMoney(spend.total))}</span></span>
+        <span><span class="ws-label">Spent</span><span class="ws-value" title="${esc(money(spend.total))}" aria-label="${esc(money(spend.total))}">${esc(compactMoney(spend.total))}</span></span>
       </a>`;
   }
 
@@ -1010,8 +1010,20 @@
     return `Try ${place.name} together · they like ${cuisine}`;
   }
 
+  // r24: each bud wears a ring in their strongest taste's colour, so a glance says who likes what
+  const TASTE_RING = { Spicy: "#c2381c", Sweet: "#c9558f", Sour: "#9aa81c", Salty: "#3f74a3", Umami: "#7a4a24", Rich: "#d1901a" };
+  function topTaste(person) {
+    if (!person.tastes || !person.tastes.length) return null;
+    let best = 0;
+    person.tastes.forEach((value, index) => {
+      if (value > person.tastes[best]) best = index;
+    });
+    return TASTES[best] || null;
+  }
   function avatar(person) {
-    return `<span class="avatar" style="background:${person.color}" aria-hidden="true">${esc(person.name[0])}</span>`;
+    const taste = topTaste(person);
+    const ring = taste ? `;--ring:${TASTE_RING[taste]}` : "";
+    return `<span class="avatar${taste ? " ringed" : ""}" style="background:${person.color}${ring}"${taste ? ` data-taste="${taste}"` : ""} aria-hidden="true">${esc(person.name[0])}</span>`;
   }
 
   // a taste profile needs a few meals; before that a match % would be noise
@@ -1179,6 +1191,7 @@
           </section>
           <section class="panel suggested-panel">
             <h2>${hasTasteProfile() ? "Suggested by taste" : "Example buds to try"}</h2>
+            <p class="muted small panel-sub suggested-why">${hasTasteProfile() ? "Example profiles, ranked by how close their tastes are to the meals you logged. Worked out on this phone; nothing is uploaded. Real friends join through your invite link." : "Example profiles to try tagging and hangouts. Log a few meals and they get ranked by taste."}</p>
             ${others.length ? others.map(({ person, match }) => `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(match)}</span></div><div class="why">${esc(hasTasteProfile() ? reasonsFor(person) : "Log a few meals to see what you share")} · ${esc(person.area)}</div>${hasTasteProfile() && spotFor(person) ? `<div class="spot">${esc(spotFor(person))}</div>` : ""}</div><button type="button" class="btn" data-add="${person.id}" aria-label="Add ${esc(person.name)} as a bud on this device">Add bud</button></div>`).join("") : '<p class="muted">You added everyone. Nice.</p>'}
             <p class="notice">These are example profiles so you can try matching, tagging and hangouts. Lahap has no server yet: buds and points stay on this device, and invites go out through WhatsApp or your phone's share sheet.</p>
           </section>
@@ -1211,7 +1224,7 @@
     const shown = friends.slice(0, 5);
     const more = friends.length - shown.length;
     return `<section class="buds-strip" aria-label="Your buds">
-      <p class="buds-strip-head"><span class="eyebrow">Your buds · ${friends.length}</span><span class="mono">ranked by taste match</span></p>
+      <p class="buds-strip-head"><span class="eyebrow">Your buds · ${friends.length}</span><span class="mono">by match · ring = top taste</span></p>
       <ul>${shown.map((person) => `<li>${avatar(person)}<span class="buds-strip-name">${esc(person.name)}</span><span class="mono">${hasTasteProfile() ? matchFor(person) + "%" : "–"}</span></li>`).join("")}${more > 0 ? `<li class="buds-strip-more mono">+${more}</li>` : ""}</ul>
     </section>`;
   }
@@ -1859,9 +1872,11 @@
           <datalist id="dish-list">${names.map((name) => `<option value="${esc(name)}">`).join("")}</datalist>
           <div id="seen-before"></div>
           <div class="field"><span>Where from</span>${segHtml("source", Object.entries(SOURCES), draft.source)}</div>
+          <label class="field"><span>Place</span><input type="text" name="place" list="place-list" value="${esc(draft.place)}" placeholder="Warung or Home"></label>
+          <!-- r24: price sits with cuisine so the quick log is one row shorter; the time moved into More details -->
           <div class="row">
-            <label class="field"><span>Place</span><input type="text" name="place" list="place-list" value="${esc(draft.place)}" placeholder="Warung or Home"></label>
             <label class="field"><span>Cuisine</span><input type="text" name="cuisine" list="cuisine-list" value="${esc(draft.cuisine)}" placeholder="Indonesian"></label>
+            <label class="field"><span>Price (${esc(state.settings.currency)})</span><input type="number" name="price" inputmode="decimal" min="0" step="any" value="${esc(draft.price)}"></label>
           </div>
           <datalist id="place-list">${places.map((place) => `<option value="${esc(place)}">`).join("")}</datalist>
           <!-- r18: who you ate with sits next to Place, outside the fold - tagging is the social loop -->
@@ -1869,10 +1884,6 @@
             ${buds.length ? `<div class="chips">${buds.map((person) => `<label class="chip"><input type="checkbox" name="friend" value="${person.id}" ${draft.friends.includes(person.id) ? "checked" : ""}><span>${esc(person.name)}${hasTasteProfile() ? `<span class="chip-match">${matchFor(person)}%</span>` : ""}</span></label>`).join("")}</div>` : '<p class="muted small">Add buds on the Taste buds tab to tag them here.</p>'}
           </fieldset>
           <datalist id="cuisine-list">${CUISINES.map((cuisine) => `<option value="${esc(cuisine)}">`).join("")}</datalist>
-          <div class="row">
-            <label class="field"><span>Price (${esc(state.settings.currency)})</span><input type="number" name="price" inputmode="decimal" min="0" step="any" value="${esc(draft.price)}"></label>
-            <label class="field"><span>When</span><input type="datetime-local" name="ts" value="${localInputValue(new Date(draft.ts))}"></label>
-          </div>
           <fieldset class="field"><legend>How did the plate look? <span class="hint">sets the plate score</span></legend>
             <div class="plate-step">
               <div>
@@ -1893,6 +1904,7 @@
           <section class="nutri" id="log-nutri" aria-live="polite"></section>
           <details class="more-fields" id="log-more"${openMore ? " open" : ""}>
             <summary><span>More details</span><span class="more-sum" id="log-more-sum"></span></summary>
+            <label class="field when-field"><span>When</span><input type="datetime-local" name="ts" value="${localInputValue(new Date(draft.ts))}"></label>
             <fieldset class="field"><legend>Taste</legend><div class="chips">${TASTES.map((taste) => `<label class="chip"><input type="checkbox" name="taste" value="${taste}" ${draft.tastes.includes(taste) ? "checked" : ""}><span>${taste}</span></label>`).join("")}</div></fieldset>
             <div class="field"><span>Rating</span>${segHtml("rating", [[1, "1"], [2, "2"], [3, "3"], [4, "4"], [5, "5"]], draft.rating)}</div>
             <label class="field"><span>Notes</span><textarea name="notes" placeholder="Less sambal next time, ask for extra lime">${esc(draft.notes)}</textarea></label>
@@ -1906,6 +1918,7 @@
 
     const form = $("#log-form");
     const plateCanvas = $("#log-plate");
+    const initialWhen = form.ts ? form.ts.value : "";
 
     // r16: the folded section still says what is in it ("Spicy · ★4 · with Rina")
     function updateMoreSummary() {
@@ -1917,7 +1930,9 @@
       if (tastes.length) parts.push(tastes.join(", "));
       if (rated) parts.push(`★${rated.dataset.value}`);
       if (form.notes && form.notes.value.trim()) parts.push("note");
-      summary.textContent = parts.length ? parts.join(" · ") : "Taste, rating, notes";
+      // r24: a back-dated meal says so on the folded row
+      if (form.ts && form.ts.value && form.ts.value !== initialWhen) parts.push(form.ts.value.replace("T", " "));
+      summary.textContent = parts.length ? parts.join(" · ") : "Taste, rating, notes, time";
     }
     updateMoreSummary();
     form.addEventListener("change", updateMoreSummary);
@@ -2203,7 +2218,7 @@
   }
 
   /* ---------------- share cards ---------------- */
-  const share = { subject: null, template: "card", background: "paper", size: "story", photo: null };
+  const share = { subject: null, template: null, background: "paper", size: "story", photo: null };
   // r16: real dish photos bundled as the "Photo" background when a meal has no photo of its own,
   // picked per meal (stable hash) so share cards feel varied instead of all showing one plate.
   const DISH_PHOTOS = ["assets/dish/noodle.jpg", "assets/dish/salad.jpg", "assets/dish/pizza.jpg"];
@@ -2883,9 +2898,9 @@
     const stampColor = bandInk(avg);
     const stampText = `PLATE ${avg} · ${L.healthLabel(avg).toUpperCase()}`;
     ctx.save();
-    ctx.font = mono(34, 800);
-    const stampW = ctx.measureText(stampText).width + 56;
-    const stampH = 78;
+    ctx.font = mono(46, 800);
+    const stampW = ctx.measureText(stampText).width + 64;
+    const stampH = 100;
     const stampY = cursor - 6 + stampH / 2;
     ctx.translate(W / 2, stampY);
     ctx.rotate(-0.07);
@@ -2936,7 +2951,9 @@
     const isWeek = subject === "week";
     if (!isWeek && subject.photo) share.background = "photo";
     if (isWeek && share.background === "photo") share.background = "paper";
-    if (!["card", "receipt", "stats"].includes(share.template)) share.template = "card";
+    // r24: the first share opens on Lahap's own look - the till receipt - unless the meal has a photo,
+    // which reads best as the photo Card; the week opens on its row of plates. A later pick sticks.
+    if (!["card", "receipt", "stats"].includes(share.template)) share.template = isWeek || subject.photo ? "card" : "receipt";
     const dialog = $("#dlg-share");
     // r17: a single meal always offers Photo; with no photo yet, tapping it picks one and saves it to the meal
     const backgrounds = [["paper", "Paper"], ["ink", "Dark"], ["photo", !isWeek && !subject.photo ? "+ Photo" : "Photo"], ["clear", "Transparent"]].filter(([key]) => key !== "photo" || !isWeek);
