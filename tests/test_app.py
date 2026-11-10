@@ -165,6 +165,8 @@ def main():
         share_chips = page.locator(".ticket-share").count()
         check("diary: every ticket has a share chip", share_chips == tickets, f"{share_chips} of {tickets}")
         first_id = page.locator(".ticket").first.get_attribute("data-open")
+        page.evaluate("() => document.querySelector('.ticket-share').scrollIntoView({block: 'center'})")
+        page.wait_for_timeout(150)
         page.locator(".ticket-share").first.click()
         page.wait_for_selector("#dlg-share[open]", timeout=5000)
         shared_name = page.evaluate("() => document.querySelector('#dlg-share').textContent")
@@ -743,6 +745,54 @@ def main():
         page.wait_for_selector("html[data-ready='1']")
         page.wait_for_timeout(200)
 
+        # ---- r19: phone Diary leads with the day you are living; desktop keeps On repeat on top; Me is Profile ----
+        r19_order = {}
+        for r19_width, r19_tag in ((390, "phone"), (1280, "desk")):
+            r19_ctx = browser.new_context(viewport={"width": r19_width, "height": 900}, device_scale_factor=1)
+            r19_page = r19_ctx.new_page()
+            r19_page.goto(base + "?demo=1&nosw=1#diary")
+            r19_page.wait_for_selector("html[data-ready='1']")
+            r19_page.wait_for_timeout(300)
+            r19_order[r19_tag] = r19_page.evaluate(
+                """() => {
+                  const col = document.querySelector("#view-diary .diary-col");
+                  const kids = col ? [...col.children] : [];
+                  const at = (selector) => kids.findIndex((el) => el.matches(selector));
+                  const lead = document.querySelector("#view-diary .lead-day");
+                  return {
+                    lead: at(".lead-day"),
+                    answer: at(".answer.featured"),
+                    search: at(".search"),
+                    today: lead ? lead.querySelectorAll(".today").length : 0,
+                    tab: [...document.querySelectorAll('a[data-tab=me]')].map((a) => a.textContent.trim()),
+                  };
+                }"""
+            )
+            if r19_tag == "phone":
+                r19_page.evaluate("() => location.hash = 'me'")
+                r19_page.wait_for_timeout(200)
+                r19_order["profile_h1"] = r19_page.inner_text("#view-me h1")
+                r19_page.evaluate("() => location.hash = 'insights'")
+                r19_page.wait_for_timeout(200)
+                r19_order["score_px"] = r19_page.evaluate("() => parseFloat(getComputedStyle(document.querySelector('.plate-week .pday b')).fontSize)")
+                r19_page.set_viewport_size({"width": 1280, "height": 900})
+                r19_page.evaluate("() => location.hash = 'diary'")
+                r19_page.wait_for_timeout(300)
+                r19_order["resized"] = r19_page.evaluate(
+                    """() => {
+                      const kids = [...document.querySelector("#view-diary .diary-col").children];
+                      return kids.findIndex((el) => el.matches(".answer.featured")) < kids.findIndex((el) => el.matches(".lead-day"));
+                    }"""
+                )
+            r19_ctx.close()
+        phone_order = r19_order["phone"]
+        desk_order = r19_order["desk"]
+        check("r19 diary: on a phone the latest day and Today come before the On repeat answer", phone_order["lead"] > phone_order["search"] >= 0 and 0 <= phone_order["lead"] < phone_order["answer"] and phone_order["today"] == 1, phone_order)
+        check("r19 diary: on desktop the On repeat answer still leads the column", 0 <= desk_order["answer"] < desk_order["lead"], desk_order)
+        check("r19 diary: widening a phone to desktop re-orders the Diary", r19_order.get("resized") is True, r19_order.get("resized"))
+        check("r19 nav: the Me tab is labelled Profile everywhere", phone_order["tab"] and all(label == "Profile" for label in phone_order["tab"]) and r19_order.get("profile_h1") == "Profile", (phone_order["tab"], r19_order.get("profile_h1")))
+        check("r19 insights: day scores read at 16px on a phone", r19_order.get("score_px", 0) >= 16, r19_order.get("score_px"))
+
         # ---- r8b: early-state buds card is the next step when there are no buds yet ----
         fresh = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=1)
         fresh_page = fresh.new_page()
@@ -935,24 +985,33 @@ def main():
 
         page.evaluate("() => location.hash = 'insights'")
         page.wait_for_timeout(200)
-        radar_info = page.evaluate(
+        tally_info = page.evaluate(
             """() => {
-              const svg = document.querySelector('[data-view=insights] svg.radar');
+              const tally = document.querySelector('[data-view=insights] ol.taste-tally');
               const lead = document.querySelector('[data-view=insights] .taste-lead');
+              const rows = tally ? [...tally.querySelectorAll('li')] : [];
               return {
-                pcts: svg ? [...svg.querySelectorAll('.radar-pct')].map((t) => t.textContent) : [],
-                dots: svg ? svg.querySelectorAll('circle').length : 0,
+                pcts: rows.map((row) => row.querySelector('.t-pct').textContent),
+                names: rows.map((row) => row.querySelector('.t-name').textContent),
+                leads: rows.filter((row) => row.classList.contains('lead')).map((row) => row.querySelector('.t-name').textContent.toLowerCase()),
+                radar: document.querySelectorAll('[data-view=insights] svg.radar').length,
                 lead: lead ? lead.textContent : '',
               };
             }"""
         )
+        tally_values = [int(p.rstrip("%")) for p in tally_info["pcts"]] if all(p.endswith("%") for p in tally_info["pcts"]) else []
         check(
-            "insights: taste radar prints a % under every taste and names the lead tastes",
-            len(radar_info["pcts"]) == 6
-            and all(p.endswith("%") for p in radar_info["pcts"])
-            and radar_info["dots"] == 6
-            and "lean" in radar_info["lead"],
-            radar_info,
+            "r19 insights: taste tally prints a % for every taste, sorted high to low, and names the lead tastes",
+            len(tally_info["pcts"]) == 6
+            and tally_values == sorted(tally_values, reverse=True)
+            and tally_info["radar"] == 0
+            and "lean" in tally_info["lead"],
+            tally_info,
+        )
+        check(
+            "r19 insights: the highlighted tally rows are the tastes the lead sentence names",
+            len(tally_info["leads"]) >= 1 and all(name in tally_info["lead"].lower() for name in tally_info["leads"]),
+            tally_info,
         )
 
         page.evaluate("() => location.hash = 'buds'")
@@ -990,13 +1049,13 @@ def main():
         r12_info["invite"] = page.evaluate("() => document.querySelectorAll('[data-view=buds] .view-head [data-invite]').length")
         page.evaluate("() => location.hash = 'insights'")
         page.wait_for_timeout(200)
-        r12_info["anchors"] = page.evaluate("() => [...document.querySelectorAll('[data-view=insights] svg.radar > text')].map((t) => t.getAttribute('text-anchor'))")
+        r12_info["fills"] = page.evaluate("() => [...document.querySelectorAll('[data-view=insights] .bar-row .fill')].map((el) => getComputedStyle(el).backgroundImage)")
         check("r12 answer: four stat cells plus a Share card action", r12_info["cells"] == 4 and r12_info["share"] == 1, r12_info)
         check("r12 buds: header carries an Invite a friend button", r12_info["invite"] == 1, r12_info)
         check(
-            "r12 radar: side labels anchor away from the plot",
-            r12_info["anchors"].count("start") == 2 and r12_info["anchors"].count("end") == 2,
-            r12_info["anchors"],
+            "r19 insights: cuisine and money bars use the ticked tally fill",
+            r12_info["fills"] and all("repeating-linear-gradient" in fill for fill in r12_info["fills"]),
+            r12_info["fills"][:2],
         )
 
         # ---- r13: buds list honours "ranked by taste"; next-level card has a real progress bar; a known dish fills its cuisine ----
@@ -1166,7 +1225,7 @@ def main():
         check("quiz does not reopen after finishing", not page2.evaluate("() => document.getElementById('dlg-quiz').open"))
         page2.evaluate("() => location.hash = 'me'")
         page2.wait_for_timeout(150)
-        check("Me shows goal and retake", "Retake the quiz" in page2.inner_text("#view-me") and "1820" in page2.inner_text("#view-me"))
+        check("Profile shows goal and retake", "Retake the quiz" in page2.inner_text("#view-me") and "1820" in page2.inner_text("#view-me"))
 
         # lab: typed list -> recipes for the goal, vegetarian respected, log as meal
         page2.evaluate("() => location.hash = 'lab'")

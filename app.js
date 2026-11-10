@@ -733,6 +733,11 @@
       </div>`;
   }
 
+  const PHONE_QUERY = "(max-width: 760px)";
+  function isPhone() {
+    return Boolean(window.matchMedia && window.matchMedia(PHONE_QUERY).matches);
+  }
+
   function renderDiary() {
     const root = $("#view-diary");
     // on a phone the six taste chips sit behind one "Taste" chip so the row never runs off the edge mid-word
@@ -783,23 +788,25 @@
         </section>`;
     });
     // meals lead; today's targets and the week line follow the first day, the bud nudge the second
+    let leadHtml = "";
     let listHtml = '<p class="muted">No meals match these filters.</p>';
     if (dayBlocks.length && state.query) {
       listHtml = dayBlocks.join("");
     } else if (dayBlocks.length) {
-      listHtml = dayBlocks.map((block, index) => {
-        if (index === 0) return block + todayHtml() + weekLineHtml();
-        if (index === 1) return block + budNudgeHtml();
-        return block;
-      }).join("");
+      // r19: the latest day, its Today targets and the week line travel together as the lead block
+      leadHtml = `<div class="lead-day">${dayBlocks[0]}${todayHtml()}${weekLineHtml()}</div>`;
+      listHtml = dayBlocks.slice(1).map((block, index) => (index === 0 ? block + budNudgeHtml() : block)).join("");
       if (dayBlocks.length === 1) listHtml += budNudgeHtml();
     }
+    // r19: on a phone the day you are living leads; the "On repeat" answer follows it. Desktop keeps the answer on top.
+    const answer = answerHtml(state.query, list) || featuredAnswerHtml();
+    const ordered = isPhone() ? leadHtml + answer + listHtml : answer + leadHtml + listHtml;
     const keepFocus = document.activeElement && document.activeElement.id === "q";
     const caret = keepFocus ? document.activeElement.selectionStart : null;
     root.innerHTML = `
       ${head}
       <div class="split">
-        <div>
+        <div class="diary-col">
           <form class="search" role="search" onsubmit="return false">
             ${ICON_SEARCH}
             <label class="sr" for="q" style="position:absolute;left:-9999px">Search your meals</label>
@@ -807,8 +814,7 @@
           </form>
           ${filters}
           ${dayBlocks.length && !state.query ? weekStripHtml() : ""}
-          ${answerHtml(state.query, list) || featuredAnswerHtml()}
-          ${listHtml}
+          ${ordered}
         </div>
         ${weekAsideHtml()}
       </div>`;
@@ -820,31 +826,18 @@
   }
 
   /* ---------------- insights ---------------- */
-  function radarSvg(vector) {
-    const size = 300;
-    const center = size / 2;
-    const radius = 92;
-    const points = (values) => values.map((value, index) => {
-      const angle = -Math.PI / 2 + (index * Math.PI * 2) / values.length;
-      return [center + Math.cos(angle) * radius * value, center + Math.sin(angle) * radius * value];
-    });
-    const rings = [0.33, 0.66, 1].map((level) => `<polygon points="${points(vector.map(() => level)).map((p) => p.join(",")).join(" ")}" fill="none" stroke="#e0d5c2"/>`).join("");
-    // r12: side labels anchor away from the plot (start on the right, end on the left) so they never sit on a spoke
-    const labels = vector.map((value, index) => {
-      const angle = -Math.PI / 2 + (index * Math.PI * 2) / vector.length;
-      const cos = Math.cos(angle);
-      const sin = Math.sin(angle);
-      const side = Math.abs(cos) > 0.3;
-      const reach = radius * (side ? 1.12 : 1.18);
-      const x = center + cos * reach;
-      const y = center + sin * reach + (side ? -6 : sin < 0 ? -14 : 4);
-      const anchor = side ? (cos > 0 ? "start" : "end") : "middle";
-      return `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="${anchor}" dominant-baseline="middle" font-size="13" font-weight="600" fill="#1d1813">${TASTES[index]}<tspan class="radar-pct" x="${x.toFixed(1)}" dy="16" font-size="11" font-weight="700" fill="#4e463c">${Math.round(value * 100)}%</tspan></text>`;
-    }).join("");
-    const shapePoints = points(vector.map((value) => Math.max(0.06, value)));
-    const shape = shapePoints.map((p) => p.join(",")).join(" ");
-    const dots = shapePoints.map((p) => `<circle cx="${p[0]}" cy="${p[1]}" r="3.5" fill="#b4380f"/>`).join("");
-    return `<svg class="radar" viewBox="0 0 ${size} ${size}" role="img" aria-label="Taste profile: ${TASTES.map((taste, index) => `${taste} ${Math.round(vector[index] * 100)}%`).join(", ")}">${rings}<polygon points="${shape}" fill="rgba(180,56,15,0.22)" stroke="#b4380f" stroke-width="2.5" stroke-linejoin="round"/>${dots}${labels}</svg>`;
+  // r19: taste profile as a receipt tally (mono names, ticked bars, share of meals) instead of a generic radar
+  function tasteTallyHtml(entries) {
+    const total = Math.max(1, entries.length);
+    const rows = TASTES
+      .map((name) => ({ name, count: entries.filter((entry) => (entry.tastes || []).includes(name)).length }))
+      .map((item) => ({ ...item, pct: Math.round((item.count / total) * 100) }))
+      .sort((a, b) => b.count - a.count);
+    const max = Math.max(1, rows[0] ? rows[0].count : 1);
+    const label = rows.map((item) => `${item.name} ${item.pct}%`).join(", ");
+    return `<ol class="taste-tally" aria-label="Taste profile, share of meals: ${esc(label)}">${rows
+      .map((item, index) => `<li class="${index < 2 && item.count ? "lead" : ""}"><span class="t-name">${esc(item.name)}</span><span class="t-bar" aria-hidden="true"><span style="width:${Math.round((item.count / max) * 100)}%"></span></span><span class="t-pct">${item.pct}%</span></li>`)
+      .join("")}</ol><p class="tally-foot">% of meals tagged with each taste</p>`;
   }
 
   function tasteLeadHtml(vector) {
@@ -940,7 +933,7 @@
         <section class="panel">
           <h2>Taste profile</h2>
           ${tasteLeadHtml(L.tasteVector(entries))}
-          ${radarSvg(L.tasteVector(entries))}
+          ${tasteTallyHtml(entries)}
         </section>
         <section class="panel">
           <h2>Cuisines</h2>
@@ -1330,7 +1323,7 @@
     const root = $("#view-me");
     const photos = state.entries.filter((entry) => entry.photo).length;
     root.innerHTML = `
-      <div class="view-head"><div><h1>Me</h1><p>Your diary lives in this browser only. No account, no server, no ads.</p></div></div>
+      <div class="view-head"><div><h1>Profile</h1><p>Your goal, your settings and your data. It all lives in this browser: no account, no server, no ads.</p></div></div>
       <div class="grid-2">
         ${goalPanelHtml()}
         <section class="panel">
@@ -1467,7 +1460,7 @@
           <div><dt>Fat</dt><dd>${target.fat}<small> g</small></dd></div>
         </dl>
         <p class="small">Goal: <strong>${esc(goal.label)}</strong>. Your body burns about ${target.tdee} kcal a day (Mifflin-St Jeor, ${target.bmr} kcal at rest, times your activity)${goal.kcal ? `, ${goal.kcal > 0 ? "plus" : "minus"} ${Math.abs(goal.kcal)} kcal for your goal` : ""}.</p>
-        ${missing ? '<p class="notice">Some details were blank, so these use average values. Retake the quiz from Me any time.</p>' : ""}
+        ${missing ? '<p class="notice">Some details were blank, so these use average values. Retake the quiz from Profile any time.</p>' : ""}
         <p class="hint small">A starting point, not medical advice. If you have a health condition, are pregnant or under 18, ask a doctor or dietitian.</p>`;
     }
 
@@ -3110,6 +3103,14 @@
   }
 
   window.addEventListener("hashchange", route);
+  // r19: the Diary order differs on phone, so re-render when the viewport crosses the phone breakpoint
+  if (window.matchMedia) {
+    const phoneMedia = window.matchMedia(PHONE_QUERY);
+    const onPhoneChange = () => {
+      if (state.view === "diary") renderDiary();
+    };
+    if (phoneMedia.addEventListener) phoneMedia.addEventListener("change", onPhoneChange);
+  }
 
   async function init() {
     await store.open();

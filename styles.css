@@ -823,18 +823,32 @@ textarea {
   align-items: center;
   font-size: 14px;
 }
+.bar-row > span:first-child {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.bar-row .n {
+  font-weight: 700;
+}
 
+/* r19: cuisine and money bars use the same ticked tally as Today and the taste tally */
 .bar-row .track {
-  height: 10px;
-  border-radius: 999px;
-  background: rgba(29, 24, 19, 0.08);
+  height: 12px;
+  border-radius: 1px;
+  background: repeating-linear-gradient(90deg, var(--line-strong) 0 4px, transparent 4px 7px);
   overflow: hidden;
 }
 
 .bar-row .fill {
   height: 100%;
-  background: var(--accent);
-  border-radius: 999px;
+  min-width: 4px;
+  background: repeating-linear-gradient(90deg, var(--accent) 0 4px, transparent 4px 7px);
+  border-radius: 0;
 }
 
 .bar-row .n {
@@ -889,11 +903,62 @@ textarea {
   color: var(--ink);
 }
 
-.radar {
-  width: 100%;
-  max-width: 320px;
+/* r19: taste tally, the receipt cousin of the Today bars */
+.taste-tally {
+  list-style: none;
+  margin: var(--s3) 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.taste-tally li {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) 44px;
+  gap: var(--s2);
+  align-items: center;
+}
+.taste-tally .t-name {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.taste-tally .t-bar {
+  height: 14px;
+  background: repeating-linear-gradient(90deg, var(--line-strong) 0 4px, transparent 4px 7px);
+}
+.taste-tally .t-bar > span {
   display: block;
-  margin: 0 auto;
+  height: 100%;
+  min-width: 4px;
+  background: repeating-linear-gradient(90deg, var(--ink) 0 4px, transparent 4px 7px);
+  opacity: 0.55;
+}
+.taste-tally .t-pct {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  text-align: right;
+}
+.taste-tally li.lead .t-name {
+  color: var(--ink);
+}
+.taste-tally li.lead .t-bar > span {
+  background: repeating-linear-gradient(90deg, var(--accent) 0 4px, transparent 4px 7px);
+  opacity: 1;
+}
+.taste-tally li.lead .t-pct {
+  color: var(--accent);
+}
+.tally-foot {
+  margin: var(--s3) 0 0;
+  padding-top: var(--s2);
+  border-top: 1px dashed var(--line-strong);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .seg {
@@ -2738,5 +2803,29 @@ label.chip input {
   }
   .ticket .stub {
     gap: 8px;
+  }
+}
+
+/* r19: day scores are the headline of the week strip; on a phone they read at a glance */
+@media (max-width: 760px) {
+  .plate-week .pday b {
+    font-size: 16px;
+    font-weight: 700;
+    padding: 2px 5px;
+    min-width: 34px;
+    text-align: center;
+  }
+  .plate-week .pday span {
+    font-size: 12px;
+  }
+  /* r19: breathing room between the day header and the first ticket */
+  .lead-day .day-head {
+    margin-bottom: var(--s2);
+  }
+  .lead-day .plate-key {
+    margin-bottom: var(--s3);
+  }
+  .taste-tally li {
+    grid-template-columns: 76px minmax(0, 1fr) 40px;
   }
 }

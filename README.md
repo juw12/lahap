@@ -12,7 +12,7 @@ Run locally: serve this folder (e.g. `python -m http.server 8765`) and open http
 Add `?demo=1` to load a sample fortnight, `?noquiz=1` to skip the first-run quiz.
 
 What it does
-- Goal quiz on first run (skippable, retake from Me): goal, body, activity, cooking time, diet. It works out daily
+- Goal quiz on first run (skippable, retake from Profile): goal, body, activity, cooking time, diet. It works out daily
   calories (Mifflin-St Jeor times activity, plus or minus your goal) and protein per kg, and shows the maths.
 - Log a meal fast: photo (optional), dish with "seen before" prefill, place, cuisine, price, taste, plate balance,
   portion, rating, buds.
@@ -55,7 +55,7 @@ Limits (honest)
 - Suggested buds are example profiles. Invited buds are real but one-way snapshots: there is no server, so buds,
   matching and points live on each device and do not sync after the invite.
 
-Tests: `python tests/test_app.py` (Playwright, 244 checks, including a real cut-out and OCR run). Design rules: `design.md`.
+Tests: `python tests/test_app.py` (Playwright, 250 checks, including a real cut-out and OCR run). Design rules: `design.md`.
 
 Why another food diary: PlateDiary is a private restaurant photo journal and Mynu is a home-cooking journal.
 Lahap logs both (ate out, home-cooked, delivery), answers "have I eaten this before?", estimates what is on the
