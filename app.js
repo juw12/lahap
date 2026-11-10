@@ -622,6 +622,7 @@
     const onRepeat = L.repeats(week, 3).slice(0, 3);
     return `
       <aside class="panel" aria-labelledby="week-title">
+        ${week.length ? '<canvas id="week-plate" class="week-plate" width="128" height="128" aria-hidden="true"></canvas>' : ""}
         <p class="eyebrow">Last 7 days</p>
         <h2 id="week-title">Your week on a plate</h2>
         <div class="stat-grid">
@@ -630,7 +631,7 @@
           <div class="stat"><div class="label">Plate score</div><div class="value">${avg}</div><div class="note">${esc(L.healthLabel(avg))}</div></div>
           <div class="stat"><div class="label">Spent</div><div class="value money">${esc(money(spend.total))}</div></div>
         </div>
-        ${onRepeat.length ? `<p class="notice">On repeat this week: ${onRepeat.map((item) => `${esc(item.name)} ×${item.count}`).join(", ")}.</p>` : ""}
+        ${onRepeat.length ? `<p class="notice week-repeat">On repeat this week (last 7 days): ${onRepeat.map((item) => `${esc(item.name)} ×${item.count}`).join(", ")}.</p>` : ""}
         <div class="btn-row" style="margin-top:16px">
           <button type="button" class="btn primary" data-share-week>Share my week</button>
           <a class="btn" href="#insights">All insights</a>
@@ -862,6 +863,8 @@
         </div>
         ${weekAsideHtml()}
       </div>`;
+    const weekPlate = $("#week-plate");
+    if (weekPlate) drawPlate(weekPlate.getContext("2d"), 64, 64, 56, averagePlate(L.withinDays(state.entries, 7)), "week");
     if (keepFocus) {
       const input = $("#q");
       input.focus();
@@ -894,9 +897,16 @@
     return `<p class="taste-lead">Your plates lean <b>${esc(lead)}</b>.</p>`;
   }
 
-  function barsHtml(items, max) {
+  function barsHtml(items, max, label) {
     return `<div class="bars">${items.map((item) => `
-      <div class="bar-row"><span>${esc(item.name)}</span><span class="track"><span class="fill" style="display:block;width:${Math.round((item.count / max) * 100)}%"></span></span><span class="n">${item.count}</span></div>`).join("")}</div>`;
+      <div class="bar-row"><span>${esc(item.name)}</span><span class="track"><span class="fill" style="display:block;width:${Math.round((item.count / max) * 100)}%"></span></span><span class="n">${esc(label ? label(item) : String(item.count))}</span></div>`).join("")}</div>`;
+  }
+
+  // r29: spend bars say what they count - "IDR 404k", not a bare 404
+  function compactMoney(thousands) {
+    const currency = state.settings.currency;
+    if (!thousands) return `${currency} 0`;
+    return thousands >= 1000 ? `${currency} ${(thousands / 1000).toFixed(1).replace(/\.0$/, "")}M` : `${currency} ${thousands}k`;
   }
 
   // the day's plate: average portions of everything eaten that day
@@ -990,9 +1000,9 @@
         </section>
         <section class="panel">
           <h2>Where the money went</h2>
-          ${barsHtml(Object.keys(SOURCES).map((key) => ({ name: SOURCES[key], count: Math.round(spend[key] / 1000) })), Math.max(1, Math.round(Math.max(spend.out, spend.home, spend.delivery) / 1000)))}
+          ${barsHtml(Object.keys(SOURCES).map((key) => ({ name: SOURCES[key], count: Math.round(spend[key] / 1000) })), Math.max(1, Math.round(Math.max(spend.out, spend.home, spend.delivery) / 1000)), (item) => compactMoney(item.count))}
           ${spendSplitHtml(spend)}
-          <p class="notice">Bars in thousands of ${esc(state.settings.currency)}. Out ${esc(money(spend.out))}, home ${esc(money(spend.home))}, delivery ${esc(money(spend.delivery))}.</p>
+          <p class="notice">Exact: out ${esc(money(spend.out))}, home ${esc(money(spend.home))}, delivery ${esc(money(spend.delivery))}.</p>
         </section>
       </div>`;
   }

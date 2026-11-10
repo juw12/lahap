@@ -818,7 +818,7 @@ textarea {
 
 .bar-row {
   display: grid;
-  grid-template-columns: minmax(0, 120px) minmax(0, 1fr) 40px;
+  grid-template-columns: minmax(0, 120px) minmax(0, 1fr) minmax(40px, auto);
   gap: var(--s2);
   align-items: center;
   font-size: 14px;
@@ -854,6 +854,7 @@ textarea {
 .bar-row .n {
   font-family: var(--font-mono);
   text-align: right;
+  white-space: nowrap;
 }
 
 .week-strip {
@@ -3601,4 +3602,12 @@ label.chip input {
   padding: var(--s2) var(--s3);
   border-left: 3px solid var(--accent);
   background: rgba(0, 0, 0, 0.025);
+}
+
+/* r29: the desktop week panel carries its own plate glyph (the week's average plate), like the day cards beside it */
+.week-plate {
+  float: right;
+  width: 64px;
+  height: 64px;
+  margin: -6px 0 6px var(--s3);
 }

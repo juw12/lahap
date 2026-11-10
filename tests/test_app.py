@@ -1574,6 +1574,50 @@ def main():
             bool(foot28) and foot28.get("top", 0) > foot28.get("statsBottom", 1e9) and foot28.get("y", 2000) <= 1920 - 60 and "LAHAP" in foot28.get("text", ""),
             foot28,
         )
+        # ---- r29: spend bars carry units; the week panel's repeat line says its scope; the desktop week panel has its plate ----
+        page.goto(base + "#insights")
+        page.wait_for_selector("html[data-ready='1']")
+        page.wait_for_timeout(250)
+        money29 = page.evaluate(
+            """() => {
+              const panel = [...document.querySelectorAll('[data-view=insights] .panel')].find((p) => /Where the money went/.test(p.textContent));
+              if (!panel) return null;
+              const values = [...panel.querySelectorAll('.bar-row .n')].map((el) => el.textContent.trim());
+              const overflow = [...panel.querySelectorAll('.bar-row')].some((row) => row.scrollWidth > row.clientWidth + 1);
+              return { values, overflow, notice: (panel.querySelector('.notice') || {}).textContent || '' };
+            }"""
+        )
+        check(
+            "r29 insights: every spend bar says its money (IDR 404k), not a bare number, and nothing spills",
+            money29 and len(money29["values"]) == 3 and all(re.match(r"^[A-Z]{3} [0-9.]+[kM]?$", v) for v in money29["values"]) and not money29["overflow"] and "thousands" not in money29["notice"],
+            money29,
+        )
+        size_before29 = page.viewport_size
+        page.set_viewport_size({"width": 1440, "height": 900})
+        page.goto(base + "#diary")
+        page.wait_for_selector("html[data-ready='1']")
+        page.wait_for_timeout(300)
+        week29 = page.evaluate(
+            """() => {
+              const aside = document.querySelector('#view-diary aside.panel');
+              if (!aside) return null;
+              const c = aside.querySelector('canvas.week-plate');
+              let inked = 0;
+              if (c) {
+                const data = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+                for (let i = 3; i < data.length; i += 4) if (data[i] > 0) inked += 1;
+              }
+              const note = aside.querySelector('.week-repeat');
+              const r = c ? c.getBoundingClientRect() : null;
+              return { canvas: !!c, inked, w: r ? Math.round(r.width) : 0, note: note ? note.textContent : null };
+            }"""
+        )
+        page.set_viewport_size(size_before29)
+        check(
+            "r29 diary desk: the week panel shows the week's average plate and its repeat line names its 7-day scope",
+            week29 and week29["canvas"] and week29["inked"] > 500 and 40 <= week29["w"] <= 80 and (week29["note"] is None or week29["note"].startswith("On repeat this week (last 7 days)")),
+            week29,
+        )
         actions22 = page.evaluate(
             """async () => {
               window.Lahap.openShare(window.Lahap.state.entries.find(e => e.name === 'Tom yum seafood'));
