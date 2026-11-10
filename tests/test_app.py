@@ -2014,6 +2014,23 @@ def main():
             week25 and week25["torn"] and week25["keyShown"],
             week25,
         )
+        legend24 = desk21_page.evaluate(
+            """() => {
+              const key = document.querySelector('#view-diary .plate-key');
+              if (!key) return null;
+              const pks = [...key.querySelectorAll('.pk')];
+              return { count: pks.length, classes: pks.map((s) => s.className), text: key.textContent.trim() };
+            }"""
+        )
+        check(
+            "r24 diary desk: the plate legend shows the three band swatches (Balanced/Okay/Heavy)",
+            legend24 and legend24["count"] == 3
+            and "pk good" in legend24["classes"][0]
+            and "pk ok" in legend24["classes"][1]
+            and "pk heavy" in legend24["classes"][2]
+            and "75+ Balanced" in legend24["text"],
+            legend24,
+        )
         desk21_page.goto(base + "?demo=1&nosw=1#diary")
         desk21_page.wait_for_selector("html[data-ready='1']")
         desk21_page.wait_for_timeout(300)

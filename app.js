@@ -817,7 +817,7 @@
       }
       group.entries.push(entry);
     }
-    const plateKey = '<p class="plate-key">Plate score out of 100 · 75+ Balanced · 50+ Okay · under 50 Heavy</p>';
+    const plateKey = '<p class="plate-key">Plate score /100 · <span class="pk good">75+ Balanced</span> · <span class="pk ok">50+ Okay</span> · <span class="pk heavy">under 50 Heavy</span></p>';
     const dayBlocks = groups.map((group, groupIndex) => {
       const spend = group.entries.reduce((sum, entry) => sum + (Number(entry.price) || 0), 0);
       const avg = Math.round(group.entries.reduce((sum, entry) => sum + L.healthScore(entry.plate), 0) / group.entries.length);

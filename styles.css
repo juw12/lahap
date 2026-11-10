@@ -2510,8 +2510,26 @@ label.chip input {
 /* r9: plate score decoded where it first appears */
 .plate-key {
   margin: calc(-1 * var(--s1)) 0 var(--s2);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
+}
+.plate-key .pk {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  margin: 0 1px;
+}
+.plate-key .pk.good {
+  background: var(--leaf-soft);
+  color: var(--leaf);
+}
+.plate-key .pk.ok {
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+.plate-key .pk.heavy {
+  background: var(--chili-soft);
+  color: #8f2a0a;
 }
 /* r9: a pending plan on the bud row, so the next step is on the row itself */
 .plan-pending {
