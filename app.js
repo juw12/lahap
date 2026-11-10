@@ -640,12 +640,38 @@
     return `<div class="bud-nudge"><span class="avatar" style="background:${best.person.color || "var(--accent)"}">${esc(best.person.name[0])}</span><span><strong>${esc(best.person.name)} · ${best.match}% match</strong><span class="muted small">${esc(reasonsFor(best.person))}</span></span>${action}</div>`;
   }
 
+  // r16: short money for the phone week strip - "IDR 533k", "IDR 1.2M"
+  function compactMoney(value) {
+    const amount = Number(value) || 0;
+    const currency = state.settings.currency;
+    if (amount >= 1e6) return `${currency} ${(amount / 1e6).toFixed(amount >= 1e7 ? 0 : 1).replace(/\.0$/, "")}M`;
+    if (amount >= 1e3) return `${currency} ${Math.round(amount / 1e3)}k`;
+    return `${currency} ${Math.round(amount)}`;
+  }
+
+  // r16: the phone Diary's first screen answers "how's my week" without scrolling (desktop has the aside)
+  function weekStripHtml() {
+    const week = L.withinDays(state.entries, 7);
+    if (!week.length) return "";
+    const spend = L.spendSummary(week);
+    const avg = Math.round(week.reduce((sum, entry) => sum + L.healthScore(entry.plate), 0) / week.length);
+    const variety = L.varietyScore(week);
+    const label = `Last 7 days: ${week.length} ${week.length === 1 ? "meal" : "meals"}, variety ${variety}, plate score ${avg} ${L.healthLabel(avg)}, ${money(spend.total)} spent. Open Insights`;
+    return `
+      <a class="week-strip" href="#insights" aria-label="${esc(label)}">
+        <span><span class="ws-label">7 days</span><span class="ws-value">${week.length} ${week.length === 1 ? "meal" : "meals"}</span></span>
+        <span><span class="ws-label">Variety</span><span class="ws-value">${variety}</span></span>
+        <span><span class="ws-label">Plate</span><span class="ws-value">${avg}</span></span>
+        <span><span class="ws-label">Spent</span><span class="ws-value">${esc(compactMoney(spend.total))}</span></span>
+      </a>`;
+  }
+
   function weekLineHtml() {
     const week = L.withinDays(state.entries, 7);
     const spend = L.spendSummary(week);
     const avg = week.length ? Math.round(week.reduce((sum, entry) => sum + L.healthScore(entry.plate), 0) / week.length) : 0;
     return `
-      <div class="weekline">
+      <div class="weekline${week.length ? " has-strip" : ""}">
         <dl>
           <div><dt>7-day meals</dt><dd>${week.length}</dd></div>
           <div><dt>Variety</dt><dd>${L.varietyScore(week)}</dd></div>
@@ -742,6 +768,7 @@
             <input id="q" type="search" placeholder="Have I eaten this? Try “bakso”" value="${esc(state.query)}" autocomplete="off">
           </form>
           ${filters}
+          ${dayBlocks.length && !state.query ? weekStripHtml() : ""}
           ${answerHtml(state.query, list) || featuredAnswerHtml()}
           ${listHtml}
         </div>
@@ -1733,6 +1760,8 @@
     const names = Array.from(new Set(sortedEntries().map((entry) => entry.name)));
     const places = Array.from(new Set(sortedEntries().map((entry) => entry.place).filter(Boolean)));
     const buds = PEOPLE.filter((person) => state.friends.includes(person.id));
+    // r16: a quick log shows only what it needs; editing, or anything already set below, opens the rest
+    const openMore = !!editing || draft.tastes.length > 0 || draft.friends.length > 0 || !!draft.notes || draft.rating > 0;
     dialog.innerHTML = `
       <form id="log-form" novalidate>
         <div class="sheet-head"><h2 id="log-title">${editing ? "Edit meal" : "Log a meal"}</h2><button type="button" class="icon-btn" data-close aria-label="Close">${ICON_CLOSE}</button></div>
@@ -1760,7 +1789,6 @@
             <label class="field"><span>Price (${esc(state.settings.currency)})</span><input type="number" name="price" inputmode="decimal" min="0" step="any" value="${esc(draft.price)}"></label>
             <label class="field"><span>When</span><input type="datetime-local" name="ts" value="${localInputValue(new Date(draft.ts))}"></label>
           </div>
-          <fieldset class="field"><legend>Taste</legend><div class="chips">${TASTES.map((taste) => `<label class="chip"><input type="checkbox" name="taste" value="${taste}" ${draft.tastes.includes(taste) ? "checked" : ""}><span>${taste}</span></label>`).join("")}</div></fieldset>
           <fieldset class="field"><legend>How did the plate look? <span class="hint">sets the plate score</span></legend>
             <div class="plate-step">
               <div>
@@ -1779,11 +1807,15 @@
             <p class="hint small" id="plate-source"></p>
           </fieldset>
           <section class="nutri" id="log-nutri" aria-live="polite"></section>
-          <div class="field"><span>Rating</span>${segHtml("rating", [[1, "1"], [2, "2"], [3, "3"], [4, "4"], [5, "5"]], draft.rating)}</div>
-          <fieldset class="field"><legend>Ate with <span class="hint">${esc(closestBudNudge() || `+${L.POINTS.tag} connection points each`)}</span></legend>
-            ${buds.length ? `<div class="chips">${buds.map((person) => `<label class="chip"><input type="checkbox" name="friend" value="${person.id}" ${draft.friends.includes(person.id) ? "checked" : ""}><span>${esc(person.name)}</span></label>`).join("")}</div>` : '<p class="muted small">Add buds on the Taste buds tab to tag them here.</p>'}
-          </fieldset>
-          <label class="field"><span>Notes</span><textarea name="notes" placeholder="Less sambal next time, ask for extra lime">${esc(draft.notes)}</textarea></label>
+          <details class="more-fields" id="log-more"${openMore ? " open" : ""}>
+            <summary><span>More details</span><span class="more-sum" id="log-more-sum"></span></summary>
+            <fieldset class="field"><legend>Taste</legend><div class="chips">${TASTES.map((taste) => `<label class="chip"><input type="checkbox" name="taste" value="${taste}" ${draft.tastes.includes(taste) ? "checked" : ""}><span>${taste}</span></label>`).join("")}</div></fieldset>
+            <div class="field"><span>Rating</span>${segHtml("rating", [[1, "1"], [2, "2"], [3, "3"], [4, "4"], [5, "5"]], draft.rating)}</div>
+            <fieldset class="field"><legend>Ate with <span class="hint">${esc(closestBudNudge() || `+${L.POINTS.tag} connection points each`)}</span></legend>
+              ${buds.length ? `<div class="chips">${buds.map((person) => `<label class="chip"><input type="checkbox" name="friend" value="${person.id}" ${draft.friends.includes(person.id) ? "checked" : ""}><span>${esc(person.name)}</span></label>`).join("")}</div>` : '<p class="muted small">Add buds on the Taste buds tab to tag them here.</p>'}
+            </fieldset>
+            <label class="field"><span>Notes</span><textarea name="notes" placeholder="Less sambal next time, ask for extra lime">${esc(draft.notes)}</textarea></label>
+          </details>
         </div>
         <div class="sheet-foot">
           <button type="button" class="btn ghost" data-close>Cancel</button>
@@ -1793,6 +1825,25 @@
 
     const form = $("#log-form");
     const plateCanvas = $("#log-plate");
+
+    // r16: the folded section still says what is in it ("Spicy · ★4 · with Rina")
+    function updateMoreSummary() {
+      const summary = $("#log-more-sum");
+      if (!summary) return;
+      const tastes = Array.from(form.querySelectorAll("input[name=taste]:checked")).map((input) => input.value);
+      const rated = form.querySelector("[data-seg=rating][aria-pressed=true]");
+      const friends = Array.from(form.querySelectorAll("input[name=friend]:checked")).map((input) => (personById(input.value) || {}).name).filter(Boolean);
+      const parts = [];
+      if (tastes.length) parts.push(tastes.join(", "));
+      if (rated) parts.push(`★${rated.dataset.value}`);
+      if (friends.length) parts.push(`with ${friends.join(", ")}`);
+      if (form.notes && form.notes.value.trim()) parts.push("note");
+      summary.textContent = parts.length ? parts.join(" · ") : "Taste, rating, who you ate with, notes";
+    }
+    updateMoreSummary();
+    form.addEventListener("change", updateMoreSummary);
+    form.addEventListener("input", updateMoreSummary);
+    form.addEventListener("click", () => setTimeout(updateMoreSummary, 0));
 
     function readPlate() {
       return {

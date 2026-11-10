@@ -2104,11 +2104,26 @@ label.chip input {
 .ticket-wrap > .ticket {
   margin-bottom: 0;
 }
-/* r15: the button box is the full 44px target; the 30px disc is drawn by ::before */
+/* r16: the share disc has its own spot - the bottom-right of the middle column, level with the taste
+   chips (which keep 38px clear for it), never on the photo. The stub column has a fixed width so the
+   offset is exact; 44px button box, 30px disc drawn by ::before */
+.ticket-wrap {
+  --tpad: 12px;
+  --tgap: 12px;
+  --stub-w: 120px;
+}
+.ticket-wrap > .ticket {
+  grid-template-columns: 72px minmax(0, 1fr) var(--stub-w);
+}
+.ticket-wrap .ticket .tags {
+  min-height: 30px;
+  padding-right: 38px;
+  align-content: flex-start;
+}
 .ticket-share {
   position: absolute;
-  left: 56px;
-  top: calc(50% + 7px);
+  right: calc(var(--tpad) + var(--stub-w) + var(--tgap) - 7px);
+  bottom: calc(var(--tpad) - 7px);
   width: 44px;
   height: 44px;
   display: grid;
@@ -2139,9 +2154,13 @@ label.chip input {
   border-color: var(--ink);
 }
 @media (max-width: 420px) {
-  .ticket-share {
-    left: 38px;
-    top: calc(50% + 1px);
+  .ticket-wrap {
+    --tpad: 10px;
+    --tgap: 8px;
+    --stub-w: 104px;
+  }
+  .ticket-wrap > .ticket {
+    grid-template-columns: 56px minmax(0, 1fr) var(--stub-w);
   }
 }
 
@@ -2439,4 +2458,89 @@ label.chip input {
   font-size: 13px;
   color: var(--leaf);
   font-weight: 600;
+}
+
+/* r16: phone Diary gets the week in one glance under the filters (desktop has the sticky aside) */
+.week-strip {
+  display: none;
+}
+@media (max-width: 760px) {
+  .week-strip {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--s2);
+    margin: 0 0 var(--s4);
+    padding: var(--s2) var(--s3);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--card);
+    color: var(--ink);
+    text-decoration: none;
+    align-self: start;
+    align-content: start;
+    height: auto;
+  }
+  .week-strip > span {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+  .week-strip .ws-label {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .week-strip .ws-value {
+    font-weight: 700;
+    font-size: 16px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  /* the numbers now sit at the top; further down the week line keeps only its share action */
+  .weekline.has-strip dl {
+    display: none;
+  }
+}
+
+/* r16: log sheet - the quick fields stay open, the rest folds into 'More details' */
+.more-fields {
+  border-top: 1px solid var(--line);
+  padding-top: var(--s3);
+  margin-top: var(--s2);
+}
+.more-fields > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  min-height: 44px;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 700;
+}
+.more-fields > summary::-webkit-details-marker {
+  display: none;
+}
+.more-fields > summary::after {
+  content: "▾";
+  color: var(--muted);
+}
+.more-fields[open] > summary::after {
+  content: "▴";
+}
+.more-fields .more-sum {
+  flex: 1;
+  font-weight: 400;
+  font-size: 14px;
+  color: var(--muted);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.more-fields[open] > summary {
+  margin-bottom: var(--s2);
 }

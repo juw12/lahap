@@ -193,6 +193,8 @@ def main():
         page.fill("#log-form input[name=name]", "Mie goreng test")
         page.fill("#log-form input[name=place]", "Warung Uji")
         page.fill("#log-form input[name=price]", "15000")
+        check("r16 log: a fresh log keeps the optional fields folded", page.evaluate("() => !document.getElementById('log-more').open"))
+        page.locator("#log-more > summary").click()
         page.locator("#log-form label.chip:has(input[value=Spicy])").click()
         page.locator("#log-form [data-seg=veg][data-value='2']").click()
         page.locator("#log-form label.chip:has(input[value=rina])").click()
@@ -484,6 +486,73 @@ def main():
         page.wait_for_timeout(150)
         check("r15 filters: closing Taste clears the taste filter", page.evaluate("() => window.Lahap.state.tasteFilter.length") == 0)
 
+        # ---- r16: phone week strip, share disc in its own spot, log sheet folds optional fields ----
+        page.goto(base + "#diary")
+        page.wait_for_selector("html[data-ready='1']")
+        page.wait_for_timeout(300)
+        strip = page.evaluate(
+            """() => {
+              const el = document.querySelector("#view-diary .week-strip");
+              if (!el) return null;
+              const filters = document.querySelector(".filters").getBoundingClientRect();
+              const box = el.getBoundingClientRect();
+              const line = document.querySelector("#view-diary .weekline dl");
+              return {
+                shown: el.offsetParent !== null,
+                cells: el.querySelectorAll(".ws-value").length,
+                values: [...el.querySelectorAll(".ws-value")].map((v) => v.textContent.trim()),
+                href: el.getAttribute("href"),
+                belowFilters: box.top >= filters.bottom - 1,
+                height: Math.round(box.height),
+                fits: el.scrollWidth <= el.clientWidth + 1,
+                lineNumbersHidden: !line || line.offsetParent === null,
+              };
+            }"""
+        )
+        check("r16 week strip: phone Diary shows four week numbers under the filters", strip and strip["shown"] and strip["cells"] == 4 and strip["belowFilters"] and strip["fits"], strip)
+        check("r16 week strip: it is compact and opens Insights", strip and strip["height"] <= 64 and strip["href"] == "#insights", strip)
+        check("r16 week strip: spend uses the short form", strip and strip["values"][3].startswith("IDR ") and strip["values"][3][-1] in "kM", strip)
+        check("r16 week strip: the week line further down no longer repeats the numbers on a phone", strip and strip["lineNumbersHidden"], strip)
+        share_spot = page.evaluate(
+            """() => [...document.querySelectorAll("#view-diary .ticket-wrap")].slice(0, 6).map((wrap) => {
+              const r = (el) => el.getBoundingClientRect();
+              const share = wrap.querySelector(".ticket-share");
+              const disc = r(share);
+              const discBox = { left: disc.left + 7, right: disc.right - 7, top: disc.top + 7, bottom: disc.bottom - 7 };
+              const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+              const tags = [...wrap.querySelectorAll(".tags .tag")].map(r);
+              return {
+                size: [Math.round(disc.width), Math.round(disc.height)],
+                onThumb: hit(discBox, r(wrap.querySelector(".thumb"))),
+                onStub: hit(discBox, r(wrap.querySelector(".stub"))),
+                onTag: tags.some((t) => hit(discBox, t)),
+                inside: discBox.left >= r(wrap).left && discBox.right <= r(wrap).right && discBox.bottom <= r(wrap).bottom,
+              };
+            })"""
+        )
+        check("r16 share: the share disc never sits on the photo, the price stub or a taste chip", share_spot and all(not s["onThumb"] and not s["onStub"] and not s["onTag"] and s["inside"] for s in share_spot), share_spot)
+        check("r16 share: the share button is still a 44px target", share_spot and all(s["size"] == [44, 44] for s in share_spot), share_spot[:2])
+        page.locator(".fab").click()
+        page.wait_for_selector("#log-form")
+        fold = page.evaluate(
+            """() => ({
+              open: document.getElementById("log-more").open,
+              tasteVisible: [...document.querySelectorAll("#log-form input[name=taste]")].some((i) => i.closest("label").checkVisibility()),
+              plateVisible: document.getElementById("log-plate").checkVisibility(),
+              sum: document.getElementById("log-more-sum").textContent,
+            })"""
+        )
+        check("r16 log: More details is folded on a new log, the plate step stays open", not fold["open"] and not fold["tasteVisible"] and fold["plateVisible"], fold)
+        check("r16 log: the folded section says what is inside", "Taste" in fold["sum"] and "notes" in fold["sum"], fold["sum"])
+        page.locator("#log-more > summary").click()
+        page.locator("#log-form label.chip:has(input[value=Sour])").click()
+        page.locator("#log-form [data-seg=rating][data-value='4']").click()
+        page.wait_for_timeout(100)
+        live_sum = page.evaluate("() => document.getElementById('log-more-sum').textContent")
+        check("r16 log: the summary follows what you pick (taste and rating)", "Sour" in live_sum and "4" in live_sum, live_sum)
+        page.locator("#dlg-log [data-close]").first.click()
+        page.wait_for_timeout(150)
+
         # ---- r8b: early-state buds card is the next step when there are no buds yet ----
         fresh = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=1)
         fresh_page = fresh.new_page()
@@ -544,6 +613,8 @@ def main():
         after = page.evaluate("() => window.Lahap.state.points.rina || 0")
         check("hangout done adds 25 points", after - before == 25, f"{before} -> {after}")
         check("hangout done opens log with bud tagged", page.locator("#log-form input[value=rina]:checked").count() == 1)
+        hangout_more = page.evaluate("() => ({ open: document.getElementById('log-more').open, sum: document.getElementById('log-more-sum').textContent })")
+        check("r16 log: a prefilled bud opens More details and the summary names them", hangout_more["open"] and "with Rina" in hangout_more["sum"], hangout_more)
         page.locator("#dlg-log [data-close]").first.click()
 
         # ---- next-level card: appears when a bud is close to the next tier ----
