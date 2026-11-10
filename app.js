@@ -1069,7 +1069,7 @@
         <h2>${level.toNext} pts to ${esc(level.next)}</h2>
         <p class="muted">Tag ${esc(person.name)} in your next meal to get there.</p>
         <div class="level next-level-progress" role="progressbar" aria-label="Progress to ${esc(level.next)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(level.progress * 100)}"><div class="track"><div class="fill" style="width:${Math.round(level.progress * 100)}%"></div></div><span class="mono level-caption">${esc(level.name)} → ${esc(level.next)} · ${Math.round(level.progress * 100)}%</span></div>
-        <div class="btn-row"><button type="button" class="btn primary" data-tag-meal="${esc(person.id)}">Tag a meal with ${esc(person.name)}</button><button type="button" class="btn" data-hangout="${esc(person.id)}">Plan makan</button></div>
+        <div class="btn-row"><button type="button" class="btn primary" data-tag-meal="${esc(person.id)}">Tag a meal with ${esc(person.name)}</button></div>
       </section>`;
   }
 
@@ -1118,7 +1118,7 @@
             ${friends.length ? friends.map((person) => {
               const points = state.points[person.id] || 0;
               const level = L.levelFor(points);
-              return `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(matchFor(person))}</span></div><div class="why">${esc(level.name)} · ${points} pts · ${esc(lastTogether(person.id))}</div>${spotFor(person) ? `<div class="spot">${esc(spotFor(person))}</div>` : ""}${pendingPlanHtml(person.id)}${person.id === featuredId ? `<div class="featured-note">Next level shown above</div>` : `${level.next ? `<div class="next-step">${esc(nextStep(level))}</div>` : ""}<div class="level"><div class="track"><div class="fill" style="width:${Math.round(level.progress * 100)}%"></div></div></div>`}</div><div class="person-actions"><button type="button" class="btn" data-hangout="${person.id}">Plan makan</button><button type="button" class="person-remove" data-remove="${person.id}" aria-label="Remove ${esc(person.name)}" title="Remove ${esc(person.name)}">Remove</button></div></div>`;
+              return `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(matchFor(person))}</span></div><div class="why">${esc(level.name)} · ${points} pts · ${esc(lastTogether(person.id))}</div>${spotFor(person) ? `<div class="spot">${esc(spotFor(person))}</div>` : ""}${pendingPlanHtml(person.id)}${person.id === featuredId ? `<div class="featured-note">Next level shown above</div>` : `${level.next ? `<div class="next-step">${esc(nextStep(level))}</div>` : ""}<div class="level"><div class="track"><div class="fill" style="width:${Math.round(level.progress * 100)}%"></div></div></div>`}</div><div class="person-actions"><button type="button" class="btn small" data-hangout="${person.id}" aria-label="Plan makan with ${esc(person.name)}">Plan makan</button><button type="button" class="person-remove" data-remove="${person.id}" aria-label="Remove ${esc(person.name)}" title="Remove ${esc(person.name)}">Remove</button></div></div>`;
             }).join("") : '<p class="muted">No buds yet. Invite a friend, or add an example profile below to try tagging and hangouts.</p>'}
           </section>
           ${inviteHtml()}
@@ -1183,7 +1183,7 @@
     const best = friends.map((person) => ({ person, match: matchFor(person) })).sort((a, b) => b.match - a.match)[0];
     if (!best) return '<p class="muted">No plans yet. Add a bud first.</p>';
     const place = L.topPlaces(state.entries, 20).find((item) => item.name !== "Home" && item.cuisines.some((cuisine) => best.person.cuisines.includes(cuisine)));
-    return `<div class="invite suggested"><span class="eyebrow">Suggested</span><strong>Makan with ${esc(best.person.name)}${place ? " at " + esc(place.name) : ""}</strong><span class="muted small">${best.match}% match. ${esc(reasonsFor(best.person))}.</span><div class="btn-row"><button type="button" class="btn primary" data-hangout="${best.person.id}">Plan makan</button></div></div>`;
+    return `<div class="invite suggested"><span class="eyebrow">Suggested</span><strong>Makan with ${esc(best.person.name)}${place ? " at " + esc(place.name) : ""}</strong><span class="muted small">${best.match}% match. ${esc(reasonsFor(best.person))}.</span><div class="btn-row"><button type="button" class="btn primary" data-hangout="${best.person.id}">${place ? "Plan makan at " + esc(place.name) : "Plan makan with " + esc(best.person.name)}</button></div></div>`;
   }
 
   // the bud closest to their next level, for the log form nudge
@@ -2683,7 +2683,8 @@
     if (isWeek && share.background === "photo") share.background = "paper";
     if (!["card", "receipt", "stats"].includes(share.template)) share.template = "card";
     const dialog = $("#dlg-share");
-    const backgrounds = [["paper", "Paper"], ["ink", "Dark"], ["photo", "Photo"], ["clear", "Transparent"]].filter(([key]) => key !== "photo" || (!isWeek && subject.photo));
+    // r17: a single meal always offers Photo; with no photo yet, tapping it picks one and saves it to the meal
+    const backgrounds = [["paper", "Paper"], ["ink", "Dark"], ["photo", !isWeek && !subject.photo ? "+ Photo" : "Photo"], ["clear", "Transparent"]].filter(([key]) => key !== "photo" || !isWeek);
     if (share.background === "photo" && (isWeek || !subject.photo)) share.background = "paper";
     const templates = [["card", isWeek ? "Plates" : "Card"], ["receipt", "Receipt"], ["stats", "Stats"]];
     dialog.innerHTML = `
@@ -2698,7 +2699,8 @@
           </div>
           <div class="control"><span>Background</span>${segHtml("background", backgrounds, share.background)}</div>
           <div class="control"><span>Size</span>${segHtml("size", [["story", "Story 9:16"], ["square", "Post 1:1"]], share.size)}</div>
-          <p class="notice">Transparent saves a PNG with no background: drop it on your own photo in Instagram or WhatsApp stories, like a Strava sticker.${!isWeek && !subject.photo ? " Add a photo to this meal to use it as the background." : ""}</p>
+          <input type="file" id="share-photo" accept="image/*" hidden>
+          <p class="notice">Transparent saves a PNG with no background: drop it on your own photo in Instagram or WhatsApp stories, like a Strava sticker.${!isWeek && !subject.photo ? " + Photo picks a picture of this meal and keeps it with the meal." : ""}</p>
           <div class="btn-row" style="margin-top:16px">
             <button type="button" class="btn primary" id="share-save">Save PNG</button>
             <button type="button" class="btn" id="share-send">Share…</button>
@@ -2738,10 +2740,31 @@
     dialog.onclick = (event) => {
       const button = event.target.closest("[data-seg]");
       if (!button) return;
+      if (button.dataset.seg === "background" && button.dataset.value === "photo" && !isWeek && !subject.photo) {
+        $("#share-photo").click();
+        return;
+      }
       share[button.dataset.seg] = button.dataset.value;
       for (const sibling of $$(`[data-seg="${button.dataset.seg}"]`, dialog)) sibling.setAttribute("aria-pressed", String(sibling === button));
       redraw();
     };
+    $("#share-photo").addEventListener("change", async (event) => {
+      const file = event.target.files && event.target.files[0];
+      if (!file || isWeek) return;
+      try {
+        subject.photo = await resizePhoto(file);
+      } catch (error) {
+        toast("That photo could not be read. Try another one.");
+        return;
+      }
+      const stored = state.entries.find((item) => item.id === subject.id);
+      if (stored && stored !== subject) stored.photo = subject.photo;
+      await store.put(stored || subject);
+      share.background = "photo";
+      openShare(subject);
+      render();
+      toast("Photo saved to this meal");
+    });
     $("#share-save").addEventListener("click", () => {
       if (prepared) download(prepared, prepared.name);
       else canvas.toBlob((blob) => download(blob, filename()), "image/png");
@@ -2761,7 +2784,7 @@
       }
     });
     redraw();
-    dialog.showModal();
+    if (!dialog.open) dialog.showModal();
   }
 
   /* ---------------- global events ---------------- */

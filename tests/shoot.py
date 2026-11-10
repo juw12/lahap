@@ -32,6 +32,7 @@ STATES = [
     ("search", "#diary", "search"),
     ("insights", "#insights", None),
     ("buds", "#buds", None),
+    ("recipes", "#lab", None),
     ("log", "#diary", "log"),
     ("share", "#diary", "share"),
     ("empty", "#diary", "empty"),
@@ -64,7 +65,7 @@ with sync_playwright() as playwright:
             if action == "share":
                 target.evaluate("() => window.Lahap.openShare(window.Lahap.state.entries.find(e => e.name === \'Tom yum seafood\'))")
                 target.wait_for_timeout(500)
-            full = action in (None, "search") and width == 1440
+            full = action in (None, "search") and width == 1440 and name != "recipes"
             print('shot', name, width, flush=True)
             target.screenshot(path=str(OUT / f"{name}-{width}.png"), full_page=full)
             if action == "empty":

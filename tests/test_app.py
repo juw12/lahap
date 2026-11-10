@@ -553,6 +553,88 @@ def main():
         page.locator("#dlg-log [data-close]").first.click()
         page.wait_for_timeout(150)
 
+        # ---- r17: share sheet shows every background (Photo picks one), receipt-style Today, one plan button per place ----
+        r17ctx = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=1)
+        r17 = r17ctx.new_page()
+        r17.goto(base + "?demo=1&nosw=1#diary")
+        r17.wait_for_selector("html[data-ready='1']")
+        r17.wait_for_timeout(300)
+        r17.evaluate("() => window.Lahap.openShare(window.Lahap.state.entries.find((e) => !e.photo))")
+        r17.wait_for_timeout(600)
+        sheet = r17.evaluate(
+            """() => {
+              const bg = [...document.querySelectorAll("#dlg-share [data-seg=background]")];
+              const size = document.querySelector("#dlg-share [data-seg=size]").getBoundingClientRect();
+              const tpl = document.querySelector("#dlg-share .tp-btn").getBoundingClientRect();
+              return {
+                labels: bg.map((b) => b.textContent.trim()),
+                sizeBottom: Math.round(size.bottom),
+                tplBottom: Math.round(tpl.bottom),
+                viewport: window.innerHeight,
+              };
+            }"""
+        )
+        check("r17 share: a meal without a photo still offers Photo (as '+ Photo') next to Paper, Dark and Transparent", sheet["labels"] == ["Paper", "Dark", "+ Photo", "Transparent"], sheet["labels"])
+        check("r17 share: on a phone, Template, Background and Size all fit on the first screen", sheet["sizeBottom"] <= sheet["viewport"] and sheet["tplBottom"] <= sheet["viewport"], sheet)
+        with r17.expect_file_chooser() as chooser_info:
+            r17.locator("#dlg-share [data-seg=background][data-value=photo]").click()
+        chooser_info.value.set_files(str(ROOT / "tests" / "fixtures" / "plate.jpg"))
+        r17.wait_for_timeout(1200)
+        picked = r17.evaluate(
+            """() => {
+              const button = document.querySelector("#dlg-share [data-seg=background][data-value=photo]");
+              return {
+                open: document.getElementById("dlg-share").open,
+                label: button.textContent.trim(),
+                pressed: button.getAttribute("aria-pressed"),
+                saved: window.Lahap.state.entries.filter((e) => e.photo && String(e.photo).startsWith("data:image/jpeg")).length,
+              };
+            }"""
+        )
+        check("r17 share: + Photo opens the picker, saves the photo to the meal and switches the card to it", picked["open"] and picked["label"] == "Photo" and picked["pressed"] == "true" and picked["saved"] == 1, picked)
+        r17.evaluate("() => document.getElementById('dlg-share').close()")
+        r17.evaluate("() => window.Lahap.openShare('week')")
+        r17.wait_for_timeout(300)
+        week_labels = r17.evaluate("() => [...document.querySelectorAll('#dlg-share [data-seg=background]')].map((b) => b.textContent.trim())")
+        check("r17 share: the week card has no Photo option", "Photo" not in " ".join(week_labels), week_labels)
+        r17ctx.close()
+
+        page.goto(base + "#diary")
+        page.wait_for_selector("html[data-ready='1']")
+        page.wait_for_timeout(300)
+        receipt = page.evaluate(
+            """() => {
+              const today = document.querySelector("#view-diary .today");
+              if (!today) return null;
+              const edge = getComputedStyle(today, "::after");
+              const bar = getComputedStyle(today.querySelector(".bar"));
+              const label = getComputedStyle(today.querySelector(".today-row > span"));
+              return {
+                torn: edge.content !== "none" && parseFloat(edge.height) >= 6,
+                tally: bar.backgroundImage.includes("repeating-linear-gradient"),
+                mono: label.textTransform === "uppercase",
+              };
+            }"""
+        )
+        check("r17 today: the Today card reads as a receipt (torn edge, tally bars, mono labels)", receipt and receipt["torn"] and receipt["tally"] and receipt["mono"], receipt)
+
+        page.goto(base + "#buds")
+        page.wait_for_selector("html[data-ready='1']")
+        page.wait_for_timeout(300)
+        plans = page.evaluate(
+            """() => ({
+              nextLevelPlan: document.querySelectorAll("#view-buds .next-level-card [data-hangout]").length,
+              suggested: [...document.querySelectorAll("#view-buds .invite.suggested [data-hangout]")].map((b) => b.textContent.trim()),
+              rows: [...document.querySelectorAll("#view-buds .person-actions [data-hangout]")].map((b) => ({ small: b.classList.contains("small"), label: b.getAttribute("aria-label") || "" })),
+            })"""
+        )
+        check("r17 buds: the Next-level card has one action (tag a meal), no second Plan makan", plans["nextLevelPlan"] == 0, plans["nextLevelPlan"])
+        check("r17 buds: the suggested plan's button names the place or the bud", plans["suggested"] and all(s.startswith("Plan makan at ") or s.startswith("Plan makan with ") for s in plans["suggested"]), plans["suggested"])
+        check("r17 buds: row plan buttons are the quiet small style and say who they are for", plans["rows"] and all(r["small"] and r["label"].startswith("Plan makan with ") for r in plans["rows"]), plans["rows"])
+        page.goto(base + "#diary")
+        page.wait_for_selector("html[data-ready='1']")
+        page.wait_for_timeout(200)
+
         # ---- r8b: early-state buds card is the next step when there are no buds yet ----
         fresh = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=1)
         fresh_page = fresh.new_page()
@@ -679,17 +761,18 @@ def main():
         check("invite: a broken code is ignored", not bad.query_selector(".invite-in"))
         guest.close()
 
-        # ---- share: Photo background only offered when the meal has a photo ----
+        # ---- share: a meal without a photo offers "+ Photo" (it picks one) and never selects Photo by itself (r17) ----
         photo_options = page.evaluate(
             """() => {
               const plain = window.Lahap.state.entries.find((e) => !e.photo);
               window.Lahap.openShare(plain);
-              const count = document.querySelectorAll('[data-seg=background][data-value=photo]').length;
+              const button = document.querySelector('[data-seg=background][data-value=photo]');
+              const result = { label: button ? button.textContent.trim() : null, pressed: button ? button.getAttribute('aria-pressed') : null };
               document.getElementById('dlg-share').close();
-              return count;
+              return result;
             }"""
         )
-        check("share: no Photo background for a meal without a photo", photo_options == 0, photo_options)
+        check("share: a meal without a photo offers '+ Photo' and does not start on it", photo_options["label"] == "+ Photo" and photo_options["pressed"] == "false", photo_options)
 
 
         # ---- nutrition, targets, recipes (pure logic) ----
