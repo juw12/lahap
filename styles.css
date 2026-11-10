@@ -1824,7 +1824,9 @@ dialog.working .photo-status::before {
 .today {
   margin: 0 0 var(--s4);
   padding: var(--s3) var(--s4);
-  background: var(--card);
+  background-color: var(--card);
+  background-image: var(--grain);
+  background-size: 180px 180px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
 }
