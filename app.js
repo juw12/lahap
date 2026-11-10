@@ -659,7 +659,7 @@
     }
     const { person, level } = ranked[0];
     const match = hasTasteProfile() ? ` · ${matchFor(person)}% match` : "";
-    return `<div class="day-pulse">${avatar(person)}<span class="pulse-text"><strong>${esc(person.name)}${match}</strong><span class="muted small">${level.toNext} pts to ${esc(level.next)} · +${L.POINTS.tag} a tag</span><span class="pulse-meter" aria-hidden="true"><span style="width:${Math.max(4, Math.round((level.progress || 0) * 100))}%"></span></span></span><button type="button" class="btn small primary" data-tag-meal="${esc(person.id)}">Tag ${esc(person.name)}</button>${shareButton}</div>`;
+    return `<div class="day-pulse">${avatar(person)}<span class="pulse-text"><strong>${esc(person.name)}${match}</strong><span class="muted small">${level.toNext} pts to ${esc(level.next)}<span class="pulse-extra"> · +${L.POINTS.tag} a tag</span></span><span class="pulse-meter" aria-hidden="true"><span style="width:${Math.max(4, Math.round((level.progress || 0) * 100))}%"></span></span></span><button type="button" class="btn small primary" data-tag-meal="${esc(person.id)}">Tag ${esc(person.name)}</button>${shareButton}</div>`;
   }
 
   // r16: short money for the phone week strip - "IDR 533k", "IDR 1.2M"
@@ -803,7 +803,7 @@
         <section class="day" aria-label="${esc(dayLabel(group.entries[0].ts))}">
           <div class="day-head">
             <h2>${esc(dayLabel(group.entries[0].ts))}</h2>
-            <span class="mono day-sum"><span class="day-chip">${plural(group.entries.length, "meal")}</span> <span class="day-chip">${esc(money(spend))}</span> <span class="day-chip score ${scoreClass(avg)}">plate ${avg} ${L.healthLabel(avg)}</span></span>
+            <span class="mono day-sum"><span class="day-chip">${plural(group.entries.length, "meal")}</span> <span class="day-chip">${esc(money(spend))}</span> <span class="day-chip score ${scoreClass(avg)}" title="Plate score out of 100 · 75+ Balanced · 50+ Okay · under 50 Heavy">plate ${avg} <strong class="verdict">${L.healthLabel(avg)}</strong></span></span>
           </div>
           ${groupIndex === 0 ? plateKey : ""}
           ${groupIndex === 0 && !state.query ? dayPulseHtml(group) : ""}
@@ -1190,7 +1190,7 @@
             }).join("") : '<p class="muted">No buds yet. Invite a friend, or add an example profile below to try tagging and hangouts.</p>'}
           </section>
           <section class="panel suggested-panel">
-            <h2>${hasTasteProfile() ? "Suggested by taste" : "Example buds to try"}</h2>
+            <h2>${hasTasteProfile() ? "Demo matches · suggested by taste" : "Example buds to try"}</h2>
             <p class="muted small panel-sub suggested-why">${hasTasteProfile() ? "Example profiles, ranked by how close their tastes are to the meals you logged. Worked out on this phone; nothing is uploaded. Real friends join through your invite link." : "Example profiles to try tagging and hangouts. Log a few meals and they get ranked by taste."}</p>
             ${others.length ? others.map(({ person, match }) => `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(match)}</span></div><div class="why">${esc(hasTasteProfile() ? reasonsFor(person) : "Log a few meals to see what you share")} · ${esc(person.area)}</div>${hasTasteProfile() && spotFor(person) ? `<div class="spot">${esc(spotFor(person))}</div>` : ""}</div><button type="button" class="btn" data-add="${person.id}" aria-label="Add ${esc(person.name)} as a bud on this device">Add bud</button></div>`).join("") : '<p class="muted">You added everyone. Nice.</p>'}
             <p class="notice">These are example profiles so you can try matching, tagging and hangouts. Lahap has no server yet: buds and points stay on this device, and invites go out through WhatsApp or your phone's share sheet.</p>

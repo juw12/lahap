@@ -3294,3 +3294,43 @@ label.chip input {
 .more-fields .when-field {
   margin-top: var(--s2);
 }
+
+/* ---------------- r25: a calmer phone Diary, the verdict before the number, one paper language ---------------- */
+/* the plate verdict reads first; the number is the detail */
+.day-chip.score .verdict {
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+@media (max-width: 599px) {
+  /* the band legend lives in the chip's label and the week strip's /100 - no extra line before the meals */
+  .day > .plate-key {
+    display: none;
+  }
+  .day-chip.score .verdict {
+    font-size: 13px;
+  }
+}
+@media (max-width: 420px) {
+  /* the pulse keeps one idea per line: who, and how far to the next level */
+  .pulse-extra {
+    display: none;
+  }
+}
+/* the search answer and the desktop week panel are receipt slips too: ruled head, torn foot */
+.answer,
+#view-diary aside.panel {
+  --tear: 7px;
+  padding-bottom: calc(var(--s4) + var(--tear));
+  border-bottom: 0;
+  border-radius: var(--radius) var(--radius) 0 0;
+  -webkit-mask:
+    radial-gradient(circle at 50% 100%, transparent 4.5px, #000 5px) bottom / 13px var(--tear) repeat-x,
+    linear-gradient(#000, #000) top / 100% calc(100% - var(--tear) + 1px) no-repeat;
+  mask:
+    radial-gradient(circle at 50% 100%, transparent 4.5px, #000 5px) bottom / 13px var(--tear) repeat-x,
+    linear-gradient(#000, #000) top / 100% calc(100% - var(--tear) + 1px) no-repeat;
+}
+#view-diary aside.panel > h2 {
+  padding-bottom: var(--s2);
+  border-bottom: 1px dashed var(--line-strong);
+}

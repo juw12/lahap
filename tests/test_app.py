@@ -1150,7 +1150,7 @@ def main():
             """() => {
               const panels = [...document.querySelectorAll('[data-view=buds] .panel')];
               const mine = panels.find((p) => /Your buds/.test((p.querySelector('h2') || {}).textContent || ''));
-              const suggested = panels.find((p) => /Suggested by taste/.test((p.querySelector('h2') || {}).textContent || ''));
+              const suggested = panels.find((p) => /Suggested by taste|Demo matches/.test((p.querySelector('h2') || {}).textContent || ''));
               const rows = (panel) => panel ? [...panel.querySelectorAll('.person')].map((row) => (row.querySelector('.spot') || {}).textContent || '') : [];
               return { buds: rows(mine), suggested: rows(suggested) };
             }"""
@@ -1381,6 +1381,44 @@ def main():
         )
         page.locator("#dlg-log [data-close]").first.click()
         page.wait_for_timeout(150)
+        # ---- r25: calmer phone Diary - verdict-first plate chip, legend in the chip, one-idea pulse, torn search answer ----
+        calm25 = page.evaluate(
+            """async () => {
+              const day = document.querySelector('#view-diary .lead-day .day');
+              const key = day ? day.querySelector('.plate-key') : null;
+              const chip = day ? day.querySelector('.day-chip.score') : null;
+              const verdict = chip ? chip.querySelector('.verdict') : null;
+              const extra = document.querySelector('#view-diary .day-pulse .pulse-extra');
+              // read everything on the resting Diary first - a search re-renders the view
+              const result = {
+                keyShown: !!(key && key.checkVisibility()),
+                title: chip ? chip.title : '',
+                verdictWeight: verdict ? Number(getComputedStyle(verdict).fontWeight) : 0,
+                extraShown: !!(extra && extra.checkVisibility()),
+                torn: false,
+              };
+              const type = async (text) => {
+                const q = document.getElementById('q');
+                q.value = text;
+                q.dispatchEvent(new Event('input', { bubbles: true }));
+                await new Promise((r) => setTimeout(r, 400));
+              };
+              await type('nasi lemak');
+              const ans = document.querySelector('#view-diary .answer');
+              if (ans) {
+                const cs = getComputedStyle(ans);
+                result.torn = (cs.maskImage || cs.webkitMaskImage || '').includes('radial-gradient');
+              }
+              await type('');
+              result.pulseBack = !!document.querySelector('#view-diary .day-pulse');
+              return result;
+            }"""
+        )
+        check(
+            "r25 diary: on a phone the band legend folds into the plate chip, the verdict is bold, the pulse is one idea per line, and the search answer is a torn slip",
+            not calm25["keyShown"] and "75+ Balanced" in calm25["title"] and calm25["verdictWeight"] >= 700 and not calm25["extraShown"] and calm25["torn"] and calm25["pulseBack"],
+            calm25,
+        )
         scroll22 = page.evaluate(
             """async () => {
               window.scrollTo(0, 1400);
@@ -1628,6 +1666,23 @@ def main():
             "r24 buds: suggested buds say where they come from, and every bud avatar wears a taste ring",
             "invite" in buds24["why"] and "this phone" in buds24["why"] and buds24["avatars"] > 0 and buds24["ringed"] == buds24["avatars"],
             buds24,
+        )
+        desk21_page.goto(base + "?demo=1&nosw=1#diary")
+        desk21_page.wait_for_selector("html[data-ready='1']")
+        desk21_page.wait_for_timeout(300)
+        week25 = desk21_page.evaluate(
+            """() => {
+              const p = document.querySelector('#view-diary aside.panel');
+              const key = document.querySelector('#view-diary .plate-key');
+              if (!p) return null;
+              const cs = getComputedStyle(p);
+              return { torn: (cs.maskImage || cs.webkitMaskImage || '').includes('radial-gradient'), keyShown: !!(key && key.checkVisibility()) };
+            }"""
+        )
+        check(
+            "r25 diary desk: the week panel is a torn receipt slip and the desktop keeps the plate legend line",
+            week25 and week25["torn"] and week25["keyShown"],
+            week25,
         )
         desk21_page.goto(base + "?demo=1&nosw=1#diary")
         desk21_page.wait_for_selector("html[data-ready='1']")
