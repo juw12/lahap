@@ -2164,6 +2164,30 @@ label.chip input {
   }
 }
 
+/* r16: denser desktop Diary - tickets flow two-up once there's room (a 340px floor keeps the middle
+   column readable), falling back to a single full-width ticket in a narrow pane or a one-meal day.
+   The day header and plate key always span both columns. Only the thumbnail track shrinks (72 -> 56);
+   the share disc is anchored to the stub edge, so its r16 spot is untouched. */
+@media (min-width: 1000px) {
+  .day {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    column-gap: var(--s4);
+    align-items: start;
+  }
+  .day > .day-head,
+  .day > .plate-key {
+    grid-column: 1 / -1;
+  }
+  .day > .ticket-wrap > .ticket {
+    grid-template-columns: 56px minmax(0, 1fr) var(--stub-w);
+  }
+  .day > .ticket-wrap .ticket .thumb {
+    width: 56px;
+    height: 56px;
+  }
+}
+
 /* r7: the answer card leads with the dish itself */
 .answer-head {
   display: grid;

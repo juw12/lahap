@@ -2162,6 +2162,9 @@
 
   /* ---------------- share cards ---------------- */
   const share = { subject: null, template: "card", background: "paper", size: "story", photo: null };
+  // r16: real dish photos bundled as the "Photo" background when a meal has no photo of its own,
+  // picked per meal (stable hash) so share cards feel varied instead of all showing one plate.
+  const DISH_PHOTOS = ["assets/dish/noodle.jpg", "assets/dish/salad.jpg", "assets/dish/pizza.jpg"];
 
   function loadImage(src) {
     return new Promise((resolve) => {
@@ -2208,6 +2211,15 @@
     ctx.drawImage(image, (image.width - sw) / 2, (image.height - sh) / 2, sw, sh, x, y, w, h);
   }
 
+  // r16: which bundled dish photo backs a meal that has no photo of its own (stable per meal)
+  function dishPhotoFor(entry) {
+    if (!entry) return DISH_PHOTOS[0];
+    const s = String((entry && (entry.id || entry.name)) || "");
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return DISH_PHOTOS[h % DISH_PHOTOS.length];
+  }
+
   async function drawShare(canvas, opts) {
     const W = 1080;
     // opts lets the share sheet render small per-template previews (and other
@@ -2250,9 +2262,17 @@
       if (photo) {
         cover(ctx, photo, 0, 0, W, H);
       } else {
-        ctx.fillStyle = "#3b2a1e";
-        ctx.fillRect(0, 0, W, H);
-        drawPlate(ctx, W / 2, H / 2, W * 0.42, entry ? entry.plate : { veg: 1, protein: 1, carbs: 1 }, entry ? entry.name : "week");
+        // r16: no photo of this meal - use a bundled real dish photo (rotates per meal), cover-cropped.
+        // The scrim below keeps the white text readable. Falls back to the plate glyph only if the
+        // image can't load (e.g. offline before the first precache).
+        const dish = await loadImage(dishPhotoFor(entry));
+        if (dish) {
+          cover(ctx, dish, 0, 0, W, H);
+        } else {
+          ctx.fillStyle = "#3b2a1e";
+          ctx.fillRect(0, 0, W, H);
+          drawPlate(ctx, W / 2, H / 2, W * 0.42, entry ? entry.plate : { veg: 1, protein: 1, carbs: 1 }, entry ? entry.name : "week");
+        }
       }
       // scrim: clear over the food, then a solid dark band behind the title and stats so
       // white text stays readable over pale plates and busy photos
