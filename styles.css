@@ -2721,7 +2721,7 @@ label.chip input {
     padding: var(--s2);
   }
   .canvas-stage canvas {
-    max-height: 38vh;
+    max-height: 32vh;
   }
   .tp-btn canvas {
     width: auto;
@@ -3001,15 +3001,36 @@ label.chip input {
   height: 16px;
 }
 @media (max-width: 420px) {
+  /* r22: one row on a phone - avatar, two short lines, Tag, and an icon-only Share */
   .day-pulse {
-    flex-wrap: wrap;
-    gap: var(--s2) var(--s3);
+    gap: var(--s2);
+    padding: 8px 10px;
   }
-  .pulse-text {
-    flex-basis: calc(100% - 56px);
+  .day-pulse .avatar {
+    width: 34px;
+    height: 34px;
+  }
+  .pulse-text strong {
+    font-size: 14px;
+  }
+  .pulse-text .small {
+    font-size: 12.5px;
   }
   .day-pulse .btn {
-    flex: 1;
+    padding-inline: 12px;
+  }
+  .day-pulse [data-share] {
+    width: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+  .pulse-share-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
 }
 @media (min-width: 1000px) {
@@ -3177,4 +3198,15 @@ label.chip input {
     padding-left: var(--s3);
     padding-right: var(--s3);
   }
+}
+
+/* ---------------- r22 ---------------- */
+/* the share sheet's Save / Share row stays on screen while the options scroll */
+.share-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin-top: var(--s3);
+  padding: var(--s3) 0 max(var(--s3), env(safe-area-inset-bottom));
+  background: linear-gradient(to bottom, rgba(245, 239, 227, 0), var(--paper) 30%);
 }

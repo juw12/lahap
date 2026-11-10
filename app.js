@@ -483,7 +483,10 @@
 
   function route() {
     const hash = location.hash.replace("#", "");
+    const previousView = state.view;
     state.view = VIEWS.includes(hash) ? hash : "diary";
+    // r22: a new view opens at its top, not at the scroll depth of the last one
+    if (previousView && previousView !== state.view) window.scrollTo(0, 0);
     for (const section of $$(".view")) section.hidden = section.dataset.view !== state.view;
     for (const link of $$("[data-tab]")) {
       if (link.dataset.tab === state.view) link.setAttribute("aria-current", "page");
@@ -645,7 +648,7 @@
   // the bud closest to their next level (one tap tags them in a new meal) and a share of that day's plate
   function dayPulseHtml(group) {
     const latest = group.entries[0];
-    const shareButton = `<button type="button" class="btn small" data-share="${esc(latest.id)}" aria-label="Share a card of ${esc(latest.name)}">${ICON_SHARE_SMALL}<span>Share</span></button>`;
+    const shareButton = `<button type="button" class="btn small" data-share="${esc(latest.id)}" aria-label="Share a card of ${esc(latest.name)}">${ICON_SHARE_SMALL}<span class="pulse-share-label">Share</span></button>`;
     const buds = PEOPLE.filter((person) => state.friends.includes(person.id));
     const ranked = buds
       .map((person) => ({ person, level: L.levelFor(state.points[person.id] || 0) }))
@@ -2481,19 +2484,19 @@
       // the score itself, big, under the ring
       ctx.textAlign = "center";
       ctx.fillStyle = ink;
-      ctx.font = serif(story ? 168 : 104);
-      const scoreY = ringY + ringR + (story ? 190 : 118);
+      ctx.font = serif(story ? 216 : 132);
+      const scoreY = ringY + ringR + (story ? 232 : 146);
       // r18: the number carries its scale ("/100") so it reads as a score, not a count
       const scoreText = String(score);
       const scoreW = ctx.measureText(scoreText).width;
-      ctx.font = serif(story ? 60 : 40);
+      ctx.font = serif(story ? 64 : 42);
       const outOfW = ctx.measureText("/100").width;
       const scoreX = W / 2 - outOfW / 2;
-      ctx.font = serif(story ? 168 : 104);
+      ctx.font = serif(story ? 216 : 132);
       ctx.fillText(scoreText, scoreX, scoreY);
       ctx.textAlign = "left";
       ctx.fillStyle = sub;
-      ctx.font = serif(story ? 60 : 40);
+      ctx.font = serif(story ? 64 : 42);
       ctx.fillText("/100", scoreX + scoreW / 2 + (story ? 8 : 6), scoreY);
       ctx.textAlign = "center";
       // r18: the label is ink and bold so the metric is understood at feed size; the date follows quieter
@@ -2952,7 +2955,7 @@
           <div class="control"><span>Background <small class="share-note">· Transparent = a sticker PNG for your own photo</small></span>${segHtml("background", backgrounds, share.background)}</div>
           <div class="control"><span>Size</span>${segHtml("size", [["story", "Story 9:16"], ["square", "Post 1:1"]], share.size)}</div>
           <input type="file" id="share-photo" accept="image/*" hidden>
-          <div class="btn-row" style="margin-top:16px">
+          <div class="btn-row share-actions">
             <button type="button" class="btn primary" id="share-save">Save PNG</button>
             <button type="button" class="btn" id="share-send">Share…</button>
           </div>

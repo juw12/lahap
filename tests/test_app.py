@@ -1307,6 +1307,61 @@ def main():
             hero["stamp"],
         )
 
+        # ---- r22: a new view opens at its top, one-row phone pulse, share actions always on screen ----
+        page.goto(base + "#diary")
+        page.wait_for_selector("html[data-ready='1']")
+        page.wait_for_timeout(250)
+        scroll22 = page.evaluate(
+            """async () => {
+              window.scrollTo(0, 1400);
+              await new Promise(r => setTimeout(r, 100));
+              const before = window.scrollY;
+              location.hash = '#insights';
+              await new Promise(r => setTimeout(r, 300));
+              const after = window.scrollY;
+              location.hash = '#diary';
+              await new Promise(r => setTimeout(r, 300));
+              return { before, after };
+            }"""
+        )
+        check("r22 nav: switching views from a scrolled Diary opens Insights at its top", scroll22["before"] > 300 and scroll22["after"] == 0, scroll22)
+        pulse22 = page.evaluate(
+            """() => {
+              const p = document.querySelector('#view-diary .lead-day .day-pulse');
+              if (!p) return null;
+              const r = p.getBoundingClientRect();
+              const tag = p.querySelector('[data-tag-meal]').getBoundingClientRect();
+              const share = p.querySelector('[data-share]');
+              const sr = share.getBoundingClientRect();
+              return {
+                height: Math.round(r.height),
+                oneRow: Math.abs((tag.top + tag.height / 2) - (sr.top + sr.height / 2)) < 4 && tag.top < r.top + r.height / 2,
+                shareW: Math.round(sr.width),
+                shareName: share.getAttribute('aria-label') || '',
+              };
+            }"""
+        )
+        check(
+            "r22 diary: on a phone the buds pulse is one compact row (Tag + icon Share, labelled for screen readers)",
+            pulse22 and pulse22["height"] <= 80 and pulse22["oneRow"] and pulse22["shareW"] <= 48 and pulse22["shareName"].startswith("Share"),
+            pulse22,
+        )
+        actions22 = page.evaluate(
+            """async () => {
+              window.Lahap.openShare(window.Lahap.state.entries.find(e => e.name === 'Tom yum seafood'));
+              await new Promise(r => setTimeout(r, 500));
+              const save = document.getElementById('share-save');
+              const r = save.getBoundingClientRect();
+              const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+              const size = document.querySelector('#dlg-share [data-seg=size]').closest('.seg') || document.querySelector('#dlg-share [data-seg=size]');
+              const sizeBottom = Math.round(size.getBoundingClientRect().bottom);
+              const out = { bottom: Math.round(r.bottom), top: Math.round(r.top), sizeBottom, vh: window.innerHeight, hit: !!hit && save.contains(hit) };
+              document.getElementById('dlg-share').close();
+              return out;
+            }"""
+        )
+        check("r22 share: Save PNG is on screen and tappable as soon as the share sheet opens on a phone, with Size still clear above it", actions22["bottom"] <= actions22["vh"] and actions22["hit"] and actions22["sizeBottom"] <= actions22["top"], actions22)
+
         # ---- r21: diary pulse (tag a bud, share the day), match % on Ate with, photo card hero, recipe tickets, desk buds order ----
         page.goto(base + "#diary")
         page.wait_for_selector("html[data-ready='1']")
