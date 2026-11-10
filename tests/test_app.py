@@ -1195,6 +1195,110 @@ def main():
         )
         check("r15 insights: the plate-score rule sits right under its heading, with the bands", rule and rule["has"] and rule["afterHeading"] and "75+" in rule["text"], rule)
 
+        # ---- r20: folded score method, day chips, bigger log plate, buds strip + legend, meal photo on Stats, till-receipt stamp ----
+        rule20 = page.evaluate(
+            """() => {
+              const el = document.querySelector('[data-view=insights] details.score-rule');
+              if (!el) return null;
+              return { open: el.open, summary: el.querySelector('summary').textContent, method: el.querySelector('p').textContent };
+            }"""
+        )
+        check(
+            "r20 insights: the plate bands stay in view and the method folds away by default",
+            rule20 and not rule20["open"] and "75+ Balanced" in rule20["summary"] and "under 50 Heavy" in rule20["summary"] and "Veg and protein" in rule20["method"],
+            rule20,
+        )
+        page.goto(base + "#diary")
+        page.wait_for_selector("html[data-ready='1']")
+        page.wait_for_timeout(200)
+        chips = page.evaluate(
+            """() => [...document.querySelectorAll('#view-diary .day-head')].slice(0, 1).map((head) => {
+              const list = [...head.querySelectorAll('.day-chip')];
+              return { count: list.length, texts: list.map((c) => c.textContent), scored: list.length ? ['good', 'ok', 'heavy'].some((band) => list[list.length - 1].classList.contains(band)) : false };
+            })[0] || null"""
+        )
+        check(
+            "r20 diary: the day summary is three labelled chips and the plate chip carries its band colour",
+            chips and chips["count"] == 3 and re.search(r"\d+ meals?", chips["texts"][0]) and chips["texts"][1].startswith("IDR") and chips["scored"],
+            chips,
+        )
+        page.locator(".fab").click()
+        page.wait_for_selector("#log-form")
+        page.wait_for_timeout(300)
+        preview = page.evaluate("() => { const r = document.getElementById('log-preview').getBoundingClientRect(); return { w: r.width, h: r.height }; }")
+        check("r20 log: the plate preview on a phone is at least 120px so the balance reads", preview["w"] >= 120 and preview["h"] >= 120, preview)
+        page.locator("#dlg-log [data-close]").first.click()
+        page.wait_for_timeout(150)
+        page.goto(base + "#buds")
+        page.wait_for_selector("html[data-ready='1']")
+        page.wait_for_timeout(300)
+        strip = page.evaluate(
+            """() => {
+              const s = document.querySelector('#view-buds .buds-strip');
+              const next = document.querySelector('#view-buds .next-level-card');
+              const legend = document.querySelector('#view-buds .buds-legend');
+              const friends = window.Lahap.state.friends.length;
+              return {
+                visible: !!(s && s.checkVisibility()),
+                names: s ? s.querySelectorAll('.buds-strip-name').length : 0,
+                friends,
+                above: !!(s && next && s.getBoundingClientRect().top < next.getBoundingClientRect().top),
+                inFold: !!(s && s.getBoundingClientRect().bottom <= window.innerHeight),
+                legend: legend ? legend.textContent : '',
+              };
+            }"""
+        )
+        check(
+            "r20 buds: on a phone a 'Your buds' strip sits above the fold, before Next level, naming each bud",
+            strip["visible"] and strip["above"] and strip["inFold"] and strip["names"] == min(strip["friends"], 5) and strip["names"] > 0,
+            strip,
+        )
+        check("r20 buds: a legend says match % is taste and connection pts are meals together", "Match %" in strip["legend"] and "Connection pts" in strip["legend"], strip["legend"])
+        hero = page.evaluate(
+            """async () => {
+              const entry = window.Lahap.state.entries.find(e => e.name === 'Tom yum seafood');
+              const keep = { photo: entry.photo, cutout: entry.cutout };
+              const render = async () => {
+                window.Lahap.openShare(entry);
+                document.querySelector('[data-seg=template][data-value=stats]').click();
+                document.querySelector('[data-seg=background][data-value=ink]').click();
+                for (let i = 0; i < 30; i++) {
+                  await new Promise(r => setTimeout(r, 100));
+                  if (window.Lahap.drawShare.statsHero) break;
+                }
+                const kind = window.Lahap.drawShare.statsHero;
+                window.Lahap.drawShare.statsHero = null;
+                document.getElementById('dlg-share').close();
+                return kind;
+              };
+              entry.photo = null;
+              entry.cutout = null;
+              const plain = await render();
+              entry.photo = 'tests/fixtures/plate.jpg';
+              const withPhoto = await render();
+              entry.cutout = 'tests/fixtures/plate.jpg';
+              const withCutout = await render();
+              entry.photo = keep.photo;
+              entry.cutout = keep.cutout;
+              window.Lahap.openShare(entry);
+              document.querySelector('[data-seg=template][data-value=receipt]').click();
+              await new Promise(r => setTimeout(r, 300));
+              const stamp = window.Lahap.drawShare.receiptStamp;
+              document.getElementById('dlg-share').close();
+              return { plain, withPhoto, withCutout, stamp };
+            }"""
+        )
+        check(
+            "r20 share: the Stats card puts the meal's own cut-out or photo in the score ring, the drawn plate only as a fallback",
+            hero["plain"] == "plate" and hero["withPhoto"] == "photo" and hero["withCutout"] == "cutout",
+            hero,
+        )
+        check(
+            "r20 share: the Receipt card rubber-stamps the plate score with its band",
+            bool(re.fullmatch(r"PLATE \d+ · (BALANCED|OKAY|HEAVY)", hero["stamp"] or "")),
+            hero["stamp"],
+        )
+
         # ---- first run: quiz, lab, cutout, OCR in a clean browser profile ----
         fresh = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=1, permissions=["clipboard-read", "clipboard-write"])
         page2 = fresh.new_page()

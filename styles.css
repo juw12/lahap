@@ -2537,10 +2537,34 @@ label.chip input {
     display: none;
   }
 }
+/* r20: the bands stay visible, the method folds away so the plates sit higher on a phone */
 .score-rule {
   margin: 2px 0 var(--s3);
   font-size: 14px;
   color: var(--muted);
+}
+.score-rule summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px var(--s3);
+  cursor: pointer;
+  list-style: none;
+}
+.score-rule summary::-webkit-details-marker {
+  display: none;
+}
+.score-rule-how {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.score-rule[open] .score-rule-how {
+  color: var(--muted);
+}
+.score-rule p {
+  margin: 6px 0 0;
 }
 .person .featured-note {
   margin-top: 4px;
@@ -2827,5 +2851,114 @@ label.chip input {
   }
   .taste-tally li {
     grid-template-columns: 76px minmax(0, 1fr) 40px;
+  }
+}
+
+/* r20: the day header reads as three labelled chips, not one dense mono string */
+.day-head .day-sum {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: var(--ink);
+}
+.day-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.day-chip.score {
+  border-color: transparent;
+}
+
+/* r20: a bigger plate preview in the Log sheet so the balance reads at a glance on a phone */
+@media (max-width: 599px) {
+  .photo-pick {
+    grid-template-columns: 128px minmax(0, 1fr);
+  }
+  .photo-pick .preview {
+    width: 128px;
+    height: 128px;
+  }
+}
+
+/* r20: desktop day plates big enough to read the score at a glance */
+@media (min-width: 1000px) {
+  .plate-week .pday img {
+    width: 72px;
+    height: 72px;
+  }
+  .plate-week .pday b {
+    font-size: 16px;
+    font-weight: 700;
+    padding: 2px 8px;
+  }
+}
+
+/* r20: who your buds are, above the fold on a phone; the full list carries it on desktop */
+.buds-strip {
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+}
+.buds-strip-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--s2);
+  margin: 0 0 var(--s2);
+}
+.buds-strip-head .mono {
+  font-size: 12px;
+  color: var(--muted);
+}
+.buds-strip ul {
+  display: flex;
+  gap: var(--s3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+}
+.buds-strip li {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-width: 52px;
+}
+.buds-strip-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+.buds-strip li .mono {
+  font-size: 12px;
+  color: var(--leaf);
+  font-weight: 700;
+}
+.buds-strip-more {
+  align-self: center;
+  color: var(--muted);
+}
+.buds-legend {
+  margin: 0 0 var(--s3);
+  font-size: 13px;
+  color: var(--muted);
+}
+.buds-legend b {
+  color: var(--ink);
+}
+@media (max-width: 999px) {
+  .buds-split .buds-strip {
+    order: -4;
+  }
+}
+@media (min-width: 1000px) {
+  .buds-strip {
+    display: none;
   }
 }

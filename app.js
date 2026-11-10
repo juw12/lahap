@@ -781,7 +781,7 @@
         <section class="day" aria-label="${esc(dayLabel(group.entries[0].ts))}">
           <div class="day-head">
             <h2>${esc(dayLabel(group.entries[0].ts))}</h2>
-            <span class="mono">${plural(group.entries.length, "meal")} · ${esc(money(spend))} · plate ${avg} ${L.healthLabel(avg)}</span>
+            <span class="mono day-sum"><span class="day-chip">${plural(group.entries.length, "meal")}</span> <span class="day-chip">${esc(money(spend))}</span> <span class="day-chip score ${scoreClass(avg)}">plate ${avg} ${L.healthLabel(avg)}</span></span>
           </div>
           ${groupIndex === 0 ? plateKey : ""}
           ${group.entries.map(ticketHtml).join("")}
@@ -927,7 +927,7 @@
         <section class="panel">
           <p class="eyebrow">Last 7 days</p>
           <h2>Plate score by day</h2>
-          <p class="score-rule">How it's scored: veg and protein add points; deep-fried, sugary and processed take points off. 75+ Balanced, 50+ Okay, under 50 Heavy. A nudge, not medical advice.</p>
+          <details class="score-rule"><summary><span>75+ Balanced · 50+ Okay · under 50 Heavy</span><span class="score-rule-how">How it's scored</span></summary><p>Veg and protein add points; deep-fried, sugary and processed take points off. A nudge, not medical advice.</p></details>
           ${strip}
         </section>
         <section class="panel">
@@ -1142,10 +1142,12 @@
       </div>
       <div class="split buds-split">
         <div>
+          ${budsStripHtml(friends)}
           ${incomingInviteHtml()}
           ${friends.length ? nextLevelCardHtml(friends) : earlyBudsCardHtml()}
           <section class="panel">
             <div class="panel-head"><h2>Your buds</h2>${totalPoints ? `<span class="pts mono">${totalPoints} connection pts</span>` : ""}</div>
+            ${friends.length ? '<p class="buds-legend"><b>Match %</b> is how alike your tastes are, from what you both log. <b>Connection pts</b> come from meals and makan together; they raise your level.</p>' : ""}
             ${friends.length ? friends.map((person) => {
               const points = state.points[person.id] || 0;
               const level = L.levelFor(points);
@@ -1178,6 +1180,17 @@
           </section>
         </aside>
       </div>`;
+  }
+
+  // r20: on a phone the buds themselves show above the fold - a one-line ledger of who, ranked by taste match
+  function budsStripHtml(friends) {
+    if (!friends.length) return "";
+    const shown = friends.slice(0, 5);
+    const more = friends.length - shown.length;
+    return `<section class="buds-strip" aria-label="Your buds">
+      <p class="buds-strip-head"><span class="eyebrow">Your buds · ${friends.length}</span><span class="mono">ranked by taste match</span></p>
+      <ul>${shown.map((person) => `<li>${avatar(person)}<span class="buds-strip-name">${esc(person.name)}</span><span class="mono">${hasTasteProfile() ? matchFor(person) + "%" : "–"}</span></li>`).join("")}${more > 0 ? `<li class="buds-strip-more mono">+${more}</li>` : ""}</ul>
+    </section>`;
   }
 
   // "last makan today" / "... 3 days ago" / "no meals together yet" - a reason to come back
@@ -2359,7 +2372,7 @@
     }
 
     if (template === "receipt") {
-      drawReceipt(ctx, W, H, entry, isWeek, mono, serif, size);
+      drawReceipt(ctx, W, H, entry, isWeek, mono, serif, size, preview);
       return;
     }
 
@@ -2391,7 +2404,29 @@
       ctx.arc(W / 2, ringY, ringR, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * Math.max(score, 2)) / 100);
       ctx.stroke();
       ctx.restore();
-      drawPlate(ctx, W / 2, ringY, ringR - (story ? 44 : 32), isWeek ? averagePlate(data.entries) : entry.plate, isWeek ? "week" : entry.name);
+      // r20: the meal's own cut-out or photo sits in the ring when there is one; the drawn plate is the fallback
+      const innerR = ringR - (story ? 44 : 32);
+      if (!isWeek && cutout) {
+        const fit = Math.min((innerR * 2) / cutout.width, (innerR * 2) / cutout.height);
+        const cw = cutout.width * fit;
+        const ch = cutout.height * fit;
+        ctx.save();
+        ctx.shadowColor = light ? "rgba(29,24,19,0.28)" : "rgba(0,0,0,0.5)";
+        ctx.shadowBlur = 30;
+        ctx.shadowOffsetY = 12;
+        ctx.drawImage(cutout, W / 2 - cw / 2, ringY - ch / 2, cw, ch);
+        ctx.restore();
+      } else if (!isWeek && photo) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(W / 2, ringY, innerR, 0, Math.PI * 2);
+        ctx.clip();
+        cover(ctx, photo, W / 2 - innerR, ringY - innerR, innerR * 2, innerR * 2);
+        ctx.restore();
+      } else {
+        drawPlate(ctx, W / 2, ringY, innerR, isWeek ? averagePlate(data.entries) : entry.plate, isWeek ? "week" : entry.name);
+      }
+      if (!preview) drawShare.statsHero = !isWeek && (cutout || photo) ? (cutout ? "cutout" : "photo") : "plate";
 
       // the score itself, big, under the ring
       ctx.textAlign = "center";
@@ -2637,18 +2672,20 @@
     ctx.restore();
   }
 
-  function drawReceipt(ctx, W, H, entry, isWeek, mono, serif, size) {
+  function drawReceipt(ctx, W, H, entry, isWeek, mono, serif, size, preview) {
+    // r20: a till receipt, not a recoloured Card - shop header, struk number, QTY column,
+    // a rubber-stamped plate score and a barcode; no plate glyph leading the slip
     ctx.shadowColor = "transparent";
     ctx.shadowBlur = 0;
     ctx.shadowOffsetY = 0;
     const paperW = 760;
     const x = (W - paperW) / 2;
     const items = isWeek ? weekData().entries.slice().sort((a, b) => new Date(a.ts) - new Date(b.ts)) : [entry];
-    const maxItems = size === "story" ? 16 : 7;
+    const maxItems = size === "story" ? 16 : 6;
     const shown = items.slice(-maxItems);
     const lineH = 52;
     const extraRows = isWeek ? 0 : 3;
-    const paperH = Math.min(H - 160, 610 + (shown.length + extraRows) * lineH);
+    const paperH = Math.min(H - 160, 760 + (shown.length + extraRows) * lineH);
     const y = (H - paperH) / 2;
     // scale the slip up so it fills the frame instead of floating as a small sticker
     const fill = Math.min((W - 100) / paperW, (H - 140) / paperH, 1.3);
@@ -2680,21 +2717,30 @@
 
     const left = x + 56;
     const right = x + paperW - 56;
-    drawPlate(ctx, W / 2, y + 86, 46, isWeek ? averagePlate(items) : entry.plate, isWeek ? "week" : entry.name);
-    let cursor = y + 200;
-    ctx.fillStyle = "#1d1813";
+    const ink = "#1d1813";
+    const faded = "#5e554a";
+    // a stable struk number per meal / week so the same slip always prints the same number
+    const seedText = isWeek ? "week" + new Date().toDateString() : entry.name + entry.ts;
+    let seed = 0;
+    for (const char of seedText) seed = (seed * 31 + char.charCodeAt(0)) >>> 0;
+    const struk = String(seed % 10000).padStart(4, "0");
+
+    let cursor = y + 92;
+    ctx.fillStyle = ink;
     ctx.textAlign = "center";
     ctx.font = serif(64);
     ctx.fillText("Lahap", W / 2, cursor);
-    cursor += 50;
-    ctx.font = mono(30, 500);
-    ctx.fillStyle = "#5e554a";
+    cursor += 44;
+    ctx.font = mono(26, 600);
+    ctx.fillStyle = faded;
+    ctx.fillText(`FOOD DIARY · STRUK NO. ${struk}`, W / 2, cursor);
+    cursor += 40;
     const dateText = isWeek ? `WEEK ENDING ${new Date().toLocaleDateString(undefined, { day: "numeric", month: "short" }).toUpperCase()}` : new Date(entry.ts).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).toUpperCase();
     ctx.fillText(dateText, W / 2, cursor);
-    cursor += 30;
+    cursor += 26;
     const rule = () => {
       ctx.save();
-      ctx.strokeStyle = "#1d1813";
+      ctx.strokeStyle = ink;
       ctx.setLineDash([10, 8]);
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -2704,20 +2750,29 @@
       ctx.restore();
     };
     rule();
-    cursor += 56;
-    ctx.fillStyle = "#1d1813";
+    cursor += 46;
+    ctx.font = mono(24, 600);
+    ctx.fillStyle = faded;
+    ctx.textAlign = "left";
+    ctx.fillText("QTY  ITEM", left, cursor);
+    ctx.textAlign = "right";
+    ctx.fillText("HARGA", right, cursor);
+    cursor += 50;
+    ctx.fillStyle = ink;
     ctx.font = mono(34, 600);
     for (const item of shown) {
       ctx.textAlign = "left";
-      ctx.fillText(wrapText(ctx, item.name.toUpperCase(), right - left - 240, 1)[0], left, cursor);
+      ctx.fillText("1x", left, cursor);
+      ctx.fillText(wrapText(ctx, item.name.toUpperCase(), right - left - 330, 1)[0], left + 72, cursor);
       ctx.textAlign = "right";
       ctx.fillText(money(item.price), right, cursor);
       cursor += lineH;
     }
     if (items.length > shown.length) {
       ctx.textAlign = "left";
-      ctx.fillStyle = "#5e554a";
-      ctx.fillText(`+${items.length - shown.length} MORE`, left, cursor);
+      ctx.fillStyle = faded;
+      ctx.fillText(`+${items.length - shown.length} MORE`, left + 72, cursor);
+      ctx.fillStyle = ink;
       cursor += lineH;
     }
     cursor -= 20;
@@ -2725,7 +2780,7 @@
     cursor += 56;
     const total = items.reduce((sum, item) => sum + (Number(item.price) || 0), 0);
     const avg = items.length ? Math.round(items.reduce((sum, item) => sum + L.healthScore(item.plate), 0) / items.length) : 0;
-    const rows = [["TOTAL", money(total)], ["PLATE SCORE", String(avg)]];
+    const rows = [["TOTAL", money(total)]];
     if (isWeek) rows.push(["VARIETY", String(L.varietyScore(items))]);
     else {
       const withWho = (entry.friends || []).map((id) => (personById(id) || {}).name).filter(Boolean);
@@ -2735,7 +2790,7 @@
       rows.push(["WITH", withWho.length ? withWho.join(", ").toUpperCase() : "SOLO"]);
     }
     ctx.font = mono(36, 700);
-    ctx.fillStyle = "#1d1813";
+    ctx.fillStyle = ink;
     for (const [label, value] of rows) {
       ctx.textAlign = "left";
       ctx.fillText(label, left, cursor);
@@ -2743,10 +2798,55 @@
       ctx.fillText(wrapText(ctx, value, right - left - 260, 1)[0], right, cursor);
       cursor += lineH;
     }
+
+    // the plate score is rubber-stamped, slightly crooked, in the band's ink
+    const stampColor = avg >= 75 ? "#3f7a2f" : avg >= 50 ? "#a5761c" : "#b4380f";
+    const stampText = `PLATE ${avg} · ${L.healthLabel(avg).toUpperCase()}`;
+    ctx.save();
+    ctx.font = mono(34, 800);
+    const stampW = ctx.measureText(stampText).width + 56;
+    const stampH = 78;
+    const stampY = cursor - 6 + stampH / 2;
+    ctx.translate(W / 2, stampY);
+    ctx.rotate(-0.07);
+    ctx.globalAlpha = 0.9;
+    ctx.strokeStyle = stampColor;
+    ctx.fillStyle = stampColor;
+    ctx.lineWidth = 4;
+    ctx.strokeRect(-stampW / 2, -stampH / 2, stampW, stampH);
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(-stampW / 2 + 7, -stampH / 2 + 7, stampW - 14, stampH - 14);
     ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(stampText, 0, 2);
+    ctx.restore();
+    if (!preview) drawShare.receiptStamp = stampText;
+    cursor = stampY + stampH / 2 + 28;
+
+    // barcode only when the slip has room for it above the footer
+    const footerY = y + paperH - 44;
+    const barH = 54;
+    if (cursor + barH + 34 < footerY - 30) {
+      const barW = 420;
+      let bx = W / 2 - barW / 2;
+      let state = seed || 7;
+      ctx.fillStyle = ink;
+      while (bx < W / 2 + barW / 2) {
+        state = (state * 1103515245 + 12345) >>> 0;
+        const width = 2 + (state % 4) * 1.5;
+        ctx.fillRect(bx, cursor, width, barH);
+        bx += width + 2 + ((state >> 4) % 3) * 2;
+      }
+      ctx.font = mono(20, 500);
+      ctx.fillStyle = faded;
+      ctx.textAlign = "center";
+      ctx.fillText(`LHP-${struk}-${String(avg).padStart(3, "0")}`, W / 2, cursor + barH + 26);
+    }
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
     ctx.font = mono(28, 500);
-    ctx.fillStyle = "#5e554a";
-    ctx.fillText("TERIMA KASIH · SEE YOU NEXT MEAL", W / 2, y + paperH - 50);
+    ctx.fillStyle = faded;
+    ctx.fillText("TERIMA KASIH · SEE YOU NEXT MEAL", W / 2, footerY);
     ctx.textAlign = "left";
     ctx.restore();
   }
