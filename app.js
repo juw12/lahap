@@ -390,6 +390,13 @@
       <p class="hint small">Estimated from typical portions, not measured. Not medical advice.</p>`;
   }
 
+  // r28: when the newest day is not today, a one-line Today row says so and offers the 15-second log
+  function todayEmptyHtml() {
+    const key = L.dayKey(new Date());
+    if (!state.entries.length || state.entries.some((entry) => L.dayKey(entry.ts) === key)) return "";
+    return `<div class="today-empty"><p><b>Today</b><span class="te-sub">nothing logged yet</span></p><button type="button" class="btn small primary" data-action="log">Log a meal</button></div>`;
+  }
+
   function todayHtml() {
     const key = L.dayKey(new Date());
     const today = state.entries.filter((entry) => L.dayKey(entry.ts) === key);
@@ -831,7 +838,7 @@
       listHtml = dayBlocks.join("");
     } else if (dayBlocks.length) {
       // r19: the latest day, its Today targets and the week line travel together as the lead block
-      leadHtml = `<div class="lead-day">${dayBlocks[0]}${todayHtml()}${weekLineHtml()}</div>`;
+      leadHtml = `${todayEmptyHtml()}<div class="lead-day">${dayBlocks[0]}${todayHtml()}${weekLineHtml()}</div>`;
       listHtml = dayBlocks.slice(1).map((block, index) => (index === 0 ? block + budNudgeHtml() : block)).join("");
       if (dayBlocks.length === 1) listHtml += budNudgeHtml();
     }
@@ -964,7 +971,7 @@
         <section class="panel">
           <p class="eyebrow">Last 7 days</p>
           <h2>Plate score by day</h2>
-          <details class="score-rule"><summary><span>75+ Balanced · 50+ Okay · under 50 Heavy</span><span class="score-rule-how">How it's scored</span></summary><p>Veg and protein add points; deep-fried, sugary and processed take points off. A nudge, not medical advice.</p></details>
+          <details class="score-rule"><summary><span>75+ Balanced · 50+ Okay · under 50 Heavy</span><span class="score-rule-how"><span class="srh-i" aria-hidden="true">i</span>How it's scored</span></summary><p>Veg and protein add points; deep-fried, sugary and processed take points off. A nudge, not medical advice.</p></details>
           ${strip}
         </section>
         <section class="panel">
@@ -1032,12 +1039,12 @@
         dishes[key].count += 1;
       }
       const dish = Object.values(dishes).sort((a, b) => b.count - a.count)[0];
-      return `Your spot: ${place.name} · ${dish.name}${dish.count > 1 ? ` ×${dish.count}` : ""}`;
+      return `Your spot: ${place.name}\u00a0·\u00a0${dish.name}${dish.count > 1 ? `\u00a0×${dish.count}` : ""}`;
     }
     const place = L.topPlaces(state.entries, 20).find((item) => !/^home$/i.test(item.name) && item.cuisines.some((cuisine) => person.cuisines.includes(cuisine)));
     if (!place) return "";
     const cuisine = place.cuisines.find((item) => person.cuisines.includes(item));
-    return `Try ${place.name} together · they like ${cuisine}`;
+    return `Try ${place.name} together\u00a0·\u00a0they like ${cuisine}`;
   }
 
   // r24: each bud wears a ring in their strongest taste's colour, so a glance says who likes what
@@ -1728,7 +1735,7 @@
     root.innerHTML = `
       <div class="view-head"><div><h1>Recipes</h1><p>Tell Lahap what is in your kitchen and get home recipes sized for your goal. Cooked one? Log it to your Diary in one tap, plate and calories already filled in.</p></div></div>
       <div class="lab-grid">
-        <section class="panel lab-input">
+        <section class="panel lab-input slip">
           <h2>What do you have?</h2>
           <label class="field"><span class="sr-only">Ingredients you have</span><textarea id="lab-text" rows="3" placeholder="e.g. 3 telur, tempe, kangkung, nasi, bawang putih">${esc(state.lab.text)}</textarea></label>
           <div class="btn-row">
@@ -2321,6 +2328,7 @@
     if (!preview) drawShare.statLabels = [];
     if (!preview) drawShare.stamp = null;
     if (!preview) drawShare.photoHero = null;
+    if (!preview) drawShare.footer = null;
     canvas.width = Math.round(W * scale);
     canvas.height = Math.round(H * scale);
     const ctx = canvas.getContext("2d");
@@ -2762,6 +2770,26 @@
       statBlock(pad, rowY, "Taste", (entry.tastes || []).join(" · ") || "–", 56, priceW - gutter);
       statBlock(pad + priceW, rowY, "Cuisine", entry.cuisine || "–", 56, smallW - gutter);
       statBlock(pad + priceW + smallW, rowY, "With", withWho.length ? withWho.join(", ") : "Solo", 56, smallW - gutter);
+      // r28: a printed foot (a short barcode and the diary line) so the lower edge reads finished, not empty
+      const footY = H - (bg === "paper" ? 74 : 58);
+      if (footY - rowY > 150) {
+        ctx.save();
+        ctx.fillStyle = sub;
+        let barX = pad;
+        const seed = String(entry.id || entry.name || "lahap");
+        for (let i = 0; i < 34; i += 1) {
+          const code = seed.charCodeAt(i % seed.length) + i * 7;
+          const barW = 2 + (code % 3) * 2;
+          ctx.fillRect(barX, footY - 30, barW, 30);
+          barX += barW + 3 + (code % 2) * 2;
+        }
+        ctx.font = mono(24, 600);
+        ctx.textAlign = "right";
+        const footText = `LAHAP · FOOD DIARY · NO. ${String(timesEaten(entry)).padStart(2, "0")}`;
+        ctx.fillText(footText, W - pad, footY - 6);
+        ctx.restore();
+        if (!preview) drawShare.footer = { y: footY, top: footY - 30, statsBottom: rowY + 70, text: footText, barsRight: barX };
+      }
     }
   }
 

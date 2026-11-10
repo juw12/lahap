@@ -1162,7 +1162,7 @@ def main():
         )
         check(
             "r14 buds: suggestions name a real place of yours in a cuisine they like",
-            any(s.startswith("Try ") and " together · they like " in s for s in spots["suggested"]),
+            any(s.startswith("Try ") and " together · they like " in s.replace("\u00a0", " ") for s in spots["suggested"]),
             spots["suggested"],
         )
 
@@ -1503,6 +1503,77 @@ def main():
         )
         check("r27 empty: on a phone the three unlocks sit in one row with short labels", r27["unlockRow"] and r27["shortShown"], r27)
         check("r27 buds: demo matches are a dashed panel with a Demo badge", r27["dashed"] == "dashed" and r27["badge"].strip().lower() == "demo", r27)
+        # ---- r28: a Today row when nothing is logged today; Recipes input is a slip; no orphan dots; paper card foot ----
+        r28 = page.evaluate(
+            """async () => {
+              const S = window.Lahap.state;
+              const L = window.LahapLogic || null;
+              const dayKey = (ts) => { const d = new Date(ts); return d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate(); };
+              const todayKey = dayKey(Date.now());
+              const keep = S.entries.slice();
+              const out = {};
+              S.entries = keep.filter((entry) => dayKey(entry.ts) !== todayKey);
+              location.hash = '#diary';
+              window.Lahap.render();
+              await new Promise(r => setTimeout(r, 200));
+              const row = document.querySelector('#view-diary .today-empty');
+              out.row = !!row;
+              out.rowText = row ? row.textContent : '';
+              out.rowLog = !!(row && row.querySelector('[data-action="log"]'));
+              out.rowH = row ? Math.round(row.getBoundingClientRect().height) : 0;
+              const lead = document.querySelector('#view-diary .lead-day');
+              out.rowFirst = !!(row && lead && (row.compareDocumentPosition(lead) & Node.DOCUMENT_POSITION_FOLLOWING));
+              S.entries = keep.concat([{ ...keep[0], id: 'r28-today', ts: Date.now() }]);
+              window.Lahap.render();
+              await new Promise(r => setTimeout(r, 200));
+              out.goneWithToday = !document.querySelector('#view-diary .today-empty');
+              S.entries = keep;
+              window.Lahap.render();
+              await new Promise(r => setTimeout(r, 200));
+              location.hash = '#lab';
+              await new Promise(r => setTimeout(r, 300));
+              const lab = document.querySelector('.lab-input');
+              const mask = lab ? (getComputedStyle(lab).maskImage || getComputedStyle(lab).webkitMaskImage || '') : '';
+              out.labSlip = !!(lab && lab.classList.contains('slip') && /radial-gradient/.test(mask));
+              location.hash = '#buds';
+              await new Promise(r => setTimeout(r, 300));
+              const spots = [...document.querySelectorAll('#view-buds .spot')].map((el) => el.textContent);
+              out.spots = spots;
+              out.spotsNbsp = spots.length > 0 && spots.every((t) => !/ ·|· /.test(t));
+              location.hash = '#diary';
+              await new Promise(r => setTimeout(r, 300));
+              const entry = S.entries.find(e => e.name === 'Tom yum seafood');
+              const photo = entry.photo;
+              entry.photo = null;
+              window.Lahap.openShare(entry);
+              document.querySelector('[data-seg=template][data-value=card]').click();
+              document.querySelector('[data-seg=size][data-value=story]').click();
+              document.querySelector('[data-seg=background][data-value=paper]').click();
+              let foot = null;
+              for (let i = 0; i < 30; i++) {
+                await new Promise(r => setTimeout(r, 100));
+                foot = window.Lahap.drawShare.footer;
+                if (foot) break;
+              }
+              out.foot = foot;
+              document.getElementById('dlg-share').close();
+              entry.photo = photo;
+              return out;
+            }"""
+        )
+        check(
+            "r28 diary: when nothing is logged today a one-line Today row leads with Log a meal, and it goes once today has a meal",
+            r28["row"] and r28["rowLog"] and "Today" in r28["rowText"] and r28["rowH"] <= 60 and r28["rowFirst"] and r28["goneWithToday"],
+            {k: r28[k] for k in ("row", "rowLog", "rowText", "rowH", "rowFirst", "goneWithToday")},
+        )
+        check("r28 recipes: the What do you have card is a torn receipt slip", r28["labSlip"], r28["labSlip"])
+        check("r28 buds: 'Your spot' lines keep their separators glued (no orphan dot at a wrap)", r28["spotsNbsp"], r28["spots"])
+        foot28 = r28["foot"] or {}
+        check(
+            "r28 share: the paper story card ends in a printed foot (barcode + diary line) below the stats, inside the frame",
+            bool(foot28) and foot28.get("top", 0) > foot28.get("statsBottom", 1e9) and foot28.get("y", 2000) <= 1920 - 60 and "LAHAP" in foot28.get("text", ""),
+            foot28,
+        )
         actions22 = page.evaluate(
             """async () => {
               window.Lahap.openShare(window.Lahap.state.entries.find(e => e.name === 'Tom yum seafood'));

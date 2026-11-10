@@ -3516,3 +3516,89 @@ label.chip input {
   margin-left: auto;
   flex: none;
 }
+
+/* r28: a Today row leads the diary when the newest day is yesterday or older */
+.today-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  margin: 0 0 var(--s3);
+  padding: 6px 6px 6px var(--s3);
+  border: 1.5px dashed var(--line-strong);
+  border-radius: var(--radius);
+  background: transparent;
+}
+.today-empty p {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.today-empty b {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+}
+.today-empty .te-sub {
+  font-size: 14px;
+  color: var(--muted);
+}
+.today-empty .btn {
+  flex: none;
+}
+
+/* r28: the Recipes "What do you have?" card is a receipt slip like Insights and Taste buds */
+.lab-input.slip {
+  --tear: 7px;
+  padding-bottom: calc(var(--s4) + var(--tear));
+  border-bottom: 0;
+  border-radius: var(--radius) var(--radius) 0 0;
+  -webkit-mask:
+    radial-gradient(circle at 50% 100%, transparent 4.5px, #000 5px) bottom / 13px var(--tear) repeat-x,
+    linear-gradient(#000, #000) top / 100% calc(100% - var(--tear) + 1px) no-repeat;
+  mask:
+    radial-gradient(circle at 50% 100%, transparent 4.5px, #000 5px) bottom / 13px var(--tear) repeat-x,
+    linear-gradient(#000, #000) top / 100% calc(100% - var(--tear) + 1px) no-repeat;
+}
+.lab-input.slip > h2 {
+  padding-bottom: var(--s2);
+  border-bottom: 1px dashed var(--line-strong);
+}
+
+/* r28: "How it's scored" is a visible pill toggle, not a small link */
+.score-rule-how {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  text-decoration: none;
+  background: var(--paper, #fffdf8);
+}
+.score-rule-how .srh-i {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 13px;
+  line-height: 1;
+}
+.score-rule[open] .score-rule-how .srh-i {
+  background: var(--muted);
+}
+.score-rule[open] p {
+  padding: var(--s2) var(--s3);
+  border-left: 3px solid var(--accent);
+  background: rgba(0, 0, 0, 0.025);
+}
