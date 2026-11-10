@@ -3316,7 +3316,9 @@ label.chip input {
 /* ---------------- r24: louder buds pulse, taste rings, quieter log sheet ---------------- */
 /* each bud wears a ring in their strongest taste's colour */
 .avatar.ringed {
-  box-shadow: 0 0 0 2px var(--card), 0 0 0 4.5px var(--ring, transparent);
+  /* card gap, a crisp ink hairline, then the taste ring - the hairline keeps a red ring
+     readable on a red fill (the ring never vanishes when taste colour ~ avatar colour) */
+  box-shadow: 0 0 0 2px var(--card), 0 0 0 3px rgba(29, 24, 19, 0.4), 0 0 0 5.5px var(--ring, transparent);
 }
 /* the Diary's buds pulse reads as a nudge, not a footnote: solid accent edge, warm tint, a meter */
 .day-pulse {

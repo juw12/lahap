@@ -649,7 +649,7 @@
     const action = isBud
       ? `<button type="button" class="btn" data-hangout="${best.person.id}">Plan makan</button>`
       : `<button type="button" class="btn" data-add="${best.person.id}">Add bud</button>`;
-    return `<div class="bud-nudge"><span class="avatar" style="background:${best.person.color || "var(--accent)"}">${esc(best.person.name[0])}</span><span><strong>${esc(best.person.name)} · ${best.match}% match</strong><span class="muted small">${esc(reasonsFor(best.person))}</span></span>${action}</div>`;
+    return `<div class="bud-nudge">${avatar(best.person)}<span><strong>${esc(best.person.name)} · ${best.match}% match</strong><span class="muted small">${esc(reasonsFor(best.person))}</span></span>${action}</div>`;
   }
 
   // r21: the social loop and the share action on the Diary's first screen, under the latest day's header:
@@ -1063,7 +1063,7 @@
   function avatar(person) {
     const taste = topTaste(person);
     const ring = taste ? `;--ring:${TASTE_RING[taste]}` : "";
-    return `<span class="avatar${taste ? " ringed" : ""}" style="background:${person.color}${ring}"${taste ? ` data-taste="${taste}"` : ""} aria-hidden="true">${esc(person.name[0])}</span>`;
+    return `<span class="avatar${taste ? " ringed" : ""}" style="background:${person.color || "var(--accent)"}${ring}"${taste ? ` data-taste="${taste}"` : ""} aria-hidden="true">${esc(person.name[0])}</span>`;
   }
 
   // a taste profile needs a few meals; before that a match % would be noise
@@ -2429,12 +2429,15 @@
         ctx.fillStyle = shade;
         ctx.fillRect(0, 0, W, H);
       }
-      // top scrim so the brand row reads over bright photos too
-      const topShade = ctx.createLinearGradient(0, 0, 0, H * 0.14);
+      // top scrim so the brand row reads over bright photos too: a tall, smooth fade (not a short
+      // hard band) so it blends into the photo with no visible seam at the edge
+      const topH = H * 0.22;
+      const topShade = ctx.createLinearGradient(0, 0, 0, topH);
       topShade.addColorStop(0, "rgba(20,14,10,0.5)");
+      topShade.addColorStop(0.45, "rgba(20,14,10,0.3)");
       topShade.addColorStop(1, "rgba(20,14,10,0)");
       ctx.fillStyle = topShade;
-      ctx.fillRect(0, 0, W, H * 0.14);
+      ctx.fillRect(0, 0, W, topH);
     }
     // paper card: a printed menu-card frame (double rule) so it reads as a keepsake, not a blank page
     if (bg === "paper" && template !== "receipt" && template !== "stats") {
@@ -2990,23 +2993,33 @@
       cursor += lineH;
     }
 
-    // the plate score is rubber-stamped, slightly crooked, in the band's ink
+    // the plate score is rubber-stamped, slightly crooked, in the band's ink; rounded corners and a
+    // dashed inner rule echo the Card's round score stamp so the two feel like a family
     const stampColor = bandInk(avg);
     const stampText = `PLATE ${avg} · ${L.healthLabel(avg).toUpperCase()}`;
     ctx.save();
     ctx.font = mono(46, 800);
-    const stampW = ctx.measureText(stampText).width + 64;
-    const stampH = 100;
+    const stampW = ctx.measureText(stampText).width + 72;
+    const stampH = 104;
     const stampY = cursor - 6 + stampH / 2;
+    const stampRect = (x, y, w, h, r) => {
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(x, y, w, h, r);
+      else ctx.rect(x, y, w, h);
+    };
     ctx.translate(W / 2, stampY);
     ctx.rotate(-0.07);
     ctx.globalAlpha = 0.9;
     ctx.strokeStyle = stampColor;
     ctx.fillStyle = stampColor;
-    ctx.lineWidth = 4;
-    ctx.strokeRect(-stampW / 2, -stampH / 2, stampW, stampH);
+    ctx.lineWidth = 3.5;
+    stampRect(-stampW / 2, -stampH / 2, stampW, stampH, 16);
+    ctx.stroke();
     ctx.lineWidth = 1.5;
-    ctx.strokeRect(-stampW / 2 + 7, -stampH / 2 + 7, stampW - 14, stampH - 14);
+    ctx.setLineDash([stampH * 0.16, stampH * 0.1]);
+    stampRect(-stampW / 2 + 9, -stampH / 2 + 9, stampW - 18, stampH - 18, 9);
+    ctx.stroke();
+    ctx.setLineDash([]);
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(stampText, 0, 2);
