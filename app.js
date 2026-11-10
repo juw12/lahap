@@ -31,6 +31,7 @@
     query: "",
     sourceFilter: "all",
     tasteFilter: [],
+    tastesOpen: false,
     period: 7,
     lab: { text: "", have: [], goal: null, status: "" },
   };
@@ -670,9 +671,12 @@
 
   function renderDiary() {
     const root = $("#view-diary");
+    // on a phone the six taste chips sit behind one "Taste" chip so the row never runs off the edge mid-word
+    const tastesOpen = state.tastesOpen || state.tasteFilter.length > 0;
     const filters = `
-      <div class="chips filters" role="group" aria-label="Filter meals">
-        ${["all", "out", "home", "delivery"].map((key) => `<button type="button" class="chip" data-source="${key}" aria-pressed="${state.sourceFilter === key}">${key === "all" ? "All" : esc(SOURCES[key])}</button>`).join("")}
+      <div class="chips filters${tastesOpen ? " tastes-open" : ""}" role="group" aria-label="Filter meals">
+        ${["all", "out", "home", "delivery"].map((key) => `<button type="button" class="chip" data-source="${key}" aria-pressed="${state.sourceFilter === key}">${key === "all" ? "All" : key === "home" ? '<span class="lbl-long">Home-cooked</span><span class="lbl-short">Home</span>' : esc(SOURCES[key])}</button>`).join("")}
+        <button type="button" class="chip taste-toggle" data-taste-toggle aria-expanded="${tastesOpen}">Taste${state.tasteFilter.length ? ` · ${state.tasteFilter.length}` : ""} <span aria-hidden="true">${tastesOpen ? "▴" : "▾"}</span></button>
         <span class="filter-break" aria-hidden="true"></span>
         ${TASTES.map((taste) => `<button type="button" class="chip" data-taste="${taste}" aria-pressed="${state.tasteFilter.includes(taste)}">${taste}</button>`).join("")}
       </div>`;
@@ -747,20 +751,6 @@
       const input = $("#q");
       input.focus();
       input.setSelectionRange(caret, caret);
-    }
-
-    // scroll-aware edge fade: only hint "more" on sides that actually overflow
-    const filterRow = $(".filters");
-    if (filterRow) {
-      const syncFilterFade = () => {
-        const over = filterRow.scrollWidth > filterRow.clientWidth + 4;
-        const canL = filterRow.scrollLeft > 8;
-        const canR = filterRow.scrollLeft < filterRow.scrollWidth - filterRow.clientWidth - 8;
-        filterRow.style.setProperty("--fade-l", over && canL ? "48px" : "0px");
-        filterRow.style.setProperty("--fade-r", over && canR ? "48px" : "0px");
-      };
-      filterRow.addEventListener("scroll", syncFilterFade, { passive: true });
-      syncFilterFade();
     }
   }
 
@@ -879,8 +869,8 @@
         <section class="panel">
           <p class="eyebrow">Last 7 days</p>
           <h2>Plate score by day</h2>
+          <p class="score-rule">How it's scored: veg and protein add points; deep-fried, sugary and processed take points off. 75+ Balanced, 50+ Okay, under 50 Heavy. A nudge, not medical advice.</p>
           ${strip}
-          <p class="notice">Plate score is a simple rule: veg and protein add points, deep-fried, sugary and processed take points off. It is a nudge, not medical advice.</p>
         </section>
         <section class="panel">
           <h2>Taste profile</h2>
@@ -1033,12 +1023,17 @@
   }
 
   // a one-tap next step: pick the bud closest to their next level and surface it
-  function nextLevelCardHtml(friends) {
-    if (!friends.length) return "";
-    const closest = friends
+  // the bud closest to their next level; the Next level card features them
+  function closestToNextLevel(friends) {
+    return friends
       .map((person) => ({ person, level: L.levelFor(state.points[person.id] || 0) }))
       .filter((item) => item.level.next)
-      .sort((a, b) => b.level.progress - a.level.progress)[0];
+      .sort((a, b) => b.level.progress - a.level.progress)[0] || null;
+  }
+
+  function nextLevelCardHtml(friends) {
+    if (!friends.length) return "";
+    const closest = closestToNextLevel(friends);
     if (!closest) return "";
     const { person, level } = closest;
     return `
@@ -1076,6 +1071,9 @@
       .map((person) => ({ person, match: matchFor(person) }))
       .sort((a, b) => b.match - a.match);
     // header total must equal the rows shown below it: only current buds count
+    // the featured bud's progress already sits in the Next level card, so their row doesn't repeat it
+    const featured = closestToNextLevel(friends);
+    const featuredId = featured ? featured.person.id : null;
     const totalPoints = friends.reduce((sum, person) => sum + (state.points[person.id] || 0), 0);
     const invites = state.invites.slice().sort((a, b) => new Date(a.when) - new Date(b.when));
 
@@ -1093,7 +1091,7 @@
             ${friends.length ? friends.map((person) => {
               const points = state.points[person.id] || 0;
               const level = L.levelFor(points);
-              return `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(matchFor(person))}</span></div><div class="why">${esc(level.name)} · ${points} pts · ${esc(lastTogether(person.id))}</div>${spotFor(person) ? `<div class="spot">${esc(spotFor(person))}</div>` : ""}${pendingPlanHtml(person.id)}${level.next ? `<div class="next-step">${esc(nextStep(level))}</div>` : ""}<div class="level"><div class="track"><div class="fill" style="width:${Math.round(level.progress * 100)}%"></div></div></div></div><div class="person-actions"><button type="button" class="btn" data-hangout="${person.id}">Plan makan</button><button type="button" class="person-remove" data-remove="${person.id}" aria-label="Remove ${esc(person.name)}" title="Remove ${esc(person.name)}">Remove</button></div></div>`;
+              return `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(matchFor(person))}</span></div><div class="why">${esc(level.name)} · ${points} pts · ${esc(lastTogether(person.id))}</div>${spotFor(person) ? `<div class="spot">${esc(spotFor(person))}</div>` : ""}${pendingPlanHtml(person.id)}${person.id === featuredId ? `<div class="featured-note">Next level shown above</div>` : `${level.next ? `<div class="next-step">${esc(nextStep(level))}</div>` : ""}<div class="level"><div class="track"><div class="fill" style="width:${Math.round(level.progress * 100)}%"></div></div></div>`}</div><div class="person-actions"><button type="button" class="btn" data-hangout="${person.id}">Plan makan</button><button type="button" class="person-remove" data-remove="${person.id}" aria-label="Remove ${esc(person.name)}" title="Remove ${esc(person.name)}">Remove</button></div></div>`;
             }).join("") : '<p class="muted">No buds yet. Invite a friend, or add an example profile below to try tagging and hangouts.</p>'}
           </section>
           ${inviteHtml()}
@@ -2871,6 +2869,12 @@
     const source = target.closest("[data-source]");
     if (source) {
       state.sourceFilter = source.dataset.source;
+      render();
+      return;
+    }
+    if (target.closest("[data-taste-toggle]")) {
+      state.tastesOpen = !(state.tastesOpen || state.tasteFilter.length > 0);
+      if (!state.tastesOpen) state.tasteFilter = [];
       render();
       return;
     }

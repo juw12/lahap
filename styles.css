@@ -1571,18 +1571,35 @@ dialog.sheet::backdrop {
     gap: var(--s2);
     margin-top: var(--s2);
   }
+  /* r15: the row fits instead of scrolling off mid-word - sources + one Taste chip; tastes wrap below when opened */
   .filters {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    margin: 0 calc(-1 * var(--s4)) var(--s4);
-    padding: 2px var(--s4);
-    scrollbar-width: none;
-  }
-  .filters::-webkit-scrollbar {
-    display: none;
+    flex-wrap: wrap;
+    margin: 0 0 var(--s4);
+    padding: 0;
+    gap: 6px;
+    -webkit-mask-image: none;
+    mask-image: none;
   }
   .filters .chip {
     flex: none;
+    padding-left: 10px;
+    padding-right: 10px;
+    font-size: 14px;
+  }
+  .filters .lbl-long {
+    display: none;
+  }
+  .filters .lbl-short {
+    display: inline;
+  }
+  .filters .taste-toggle {
+    display: inline-flex;
+  }
+  .filters [data-taste] {
+    display: none;
+  }
+  .filters.tastes-open [data-taste] {
+    display: inline-flex;
   }
   .weekline {
     gap: var(--s2);
@@ -2058,19 +2075,6 @@ label.chip input {
   white-space: nowrap;
 }
 
-/* phone filter row scrolls sideways: scroll-aware edge fade. --fade-l/--fade-r
-   are set from scroll position (app.js) so the edge only reads as "more to
-   scroll" when there actually is more on that side */
-@media (max-width: 760px) {
-  .filters {
-    --fade-l: 0px;
-    --fade-r: 48px;
-    -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--fade-l), #000 calc(100% - var(--fade-r)), transparent);
-    mask-image: linear-gradient(to right, transparent, #000 var(--fade-l), #000 calc(100% - var(--fade-r)), transparent);
-    padding-right: 48px;
-  }
-}
-
 /* desktop: where-chips and taste-chips sit on their own rows, so no chip is orphaned */
 .filter-break {
   flex-basis: 100%;
@@ -2100,39 +2104,44 @@ label.chip input {
 .ticket-wrap > .ticket {
   margin-bottom: 0;
 }
+/* r15: the button box is the full 44px target; the 30px disc is drawn by ::before */
 .ticket-share {
   position: absolute;
-  left: 63px;
-  top: calc(50% + 14px);
-  width: 30px;
-  height: 30px;
+  left: 56px;
+  top: calc(50% + 7px);
+  width: 44px;
+  height: 44px;
   display: grid;
   place-items: center;
   padding: 0;
+  border: 0;
   border-radius: 50%;
-  background: var(--card);
+  background: transparent;
   color: var(--ink);
-  border: 1px solid var(--line-strong);
-  box-shadow: 0 1px 2px rgba(29, 24, 19, 0.18);
   cursor: pointer;
 }
-.ticket-share::after {
+.ticket-share::before {
   content: "";
   position: absolute;
-  inset: -7px;
+  inset: 7px;
+  border-radius: 50%;
+  background: var(--card);
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 1px 2px rgba(29, 24, 19, 0.18);
 }
 .ticket-share svg {
+  position: relative;
   width: 16px;
   height: 16px;
 }
-.ticket-share:hover,
-.ticket-share:focus-visible {
+.ticket-share:hover::before,
+.ticket-share:focus-visible::before {
   border-color: var(--ink);
 }
 @media (max-width: 420px) {
   .ticket-share {
-    left: 45px;
-    top: calc(50% + 8px);
+    left: 38px;
+    top: calc(50% + 1px);
   }
 }
 
@@ -2411,4 +2420,23 @@ label.chip input {
 .pday b {
   font-size: 14px;
   padding: 2px 7px;
+}
+
+/* r15: desktop shows every taste chip, so the phone-only toggle and short label stay hidden */
+@media (min-width: 761px) {
+  .filters .taste-toggle,
+  .filters .lbl-short {
+    display: none;
+  }
+}
+.score-rule {
+  margin: 2px 0 var(--s3);
+  font-size: 14px;
+  color: var(--muted);
+}
+.person .featured-note {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--leaf);
+  font-weight: 600;
 }

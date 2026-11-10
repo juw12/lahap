@@ -440,26 +440,49 @@ def main():
         check("r8b stamp: plate badge fully inside the photo frame", photo_in, p)
         check("r8b stamp: badge centre is the red plate score", stamp["px"] and stamp["px"][0] >= 0xB4 - 12 and stamp["px"][1] < 0x50, stamp["px"])
 
-        # ---- r8b: filter row edge fade only hints where there is more to scroll ----
+        # ---- r15: phone filter row fits (no chip cut off mid-word); tastes sit behind one Taste chip ----
         page.goto(base + "#diary")
         page.wait_for_selector("html[data-ready='1']")
         page.wait_for_timeout(300)
-        fade_start = page.evaluate(
+        row_fit = page.evaluate(
             """() => {
               const row = document.querySelector(".filters");
-              return { over: row.scrollWidth > row.clientWidth + 4, l: row.style.getPropertyValue("--fade-l"), r: row.style.getPropertyValue("--fade-r") };
+              const box = row.getBoundingClientRect();
+              const visible = [...row.querySelectorAll(".chip")].filter((chip) => chip.offsetParent !== null);
+              const clipped = visible.filter((chip) => chip.getBoundingClientRect().right > box.right + 1).map((chip) => chip.textContent.trim());
+              return {
+                over: row.scrollWidth > row.clientWidth + 1,
+                clipped,
+                labels: visible.map((chip) => chip.textContent.trim()),
+                tastesShown: [...row.querySelectorAll("[data-taste]")].some((chip) => chip.offsetParent !== null),
+                rows: new Set(visible.map((chip) => Math.round(chip.getBoundingClientRect().top))).size,
+              };
             }"""
         )
-        check("r8b filters: chip row overflows at 390px", fade_start["over"], fade_start)
-        check("r8b filters: at rest only the right edge fades", fade_start["l"] == "0px" and fade_start["r"] == "48px", fade_start)
-        page.evaluate("() => { const row = document.querySelector('.filters'); row.scrollLeft = 200; row.dispatchEvent(new Event('scroll')); }")
+        check("r15 filters: at 390px no chip runs past the row edge", not row_fit["over"] and not row_fit["clipped"], row_fit)
+        check("r15 filters: one row of sources plus a Taste chip, tastes folded away", row_fit["rows"] == 1 and not row_fit["tastesShown"] and any(l.startswith("Taste") for l in row_fit["labels"]), row_fit)
+        page.locator(".filters [data-taste-toggle]").click()
         page.wait_for_timeout(150)
-        fade_mid = page.evaluate("() => { const row = document.querySelector('.filters'); return { l: row.style.getPropertyValue('--fade-l'), r: row.style.getPropertyValue('--fade-r') }; }")
-        check("r8b filters: mid-scroll both edges fade", fade_mid == {"l": "48px", "r": "48px"}, fade_mid)
-        page.evaluate("() => { const row = document.querySelector('.filters'); row.scrollLeft = row.scrollWidth; row.dispatchEvent(new Event('scroll')); }")
+        opened = page.evaluate(
+            """() => {
+              const row = document.querySelector(".filters");
+              const box = row.getBoundingClientRect();
+              const tastes = [...row.querySelectorAll("[data-taste]")].filter((chip) => chip.offsetParent !== null);
+              return {
+                count: tastes.length,
+                clipped: tastes.filter((chip) => chip.getBoundingClientRect().right > box.right + 1).length,
+                expanded: row.querySelector("[data-taste-toggle]").getAttribute("aria-expanded"),
+              };
+            }"""
+        )
+        check("r15 filters: Taste opens all six taste chips, wrapped inside the row", opened["count"] == 6 and opened["clipped"] == 0 and opened["expanded"] == "true", opened)
+        page.locator(".filters [data-taste='Spicy']").click()
         page.wait_for_timeout(150)
-        fade_end = page.evaluate("() => { const row = document.querySelector('.filters'); return { l: row.style.getPropertyValue('--fade-l'), r: row.style.getPropertyValue('--fade-r') }; }")
-        check("r8b filters: at the end only the left edge fades", fade_end == {"l": "48px", "r": "0px"}, fade_end)
+        toggle_label = page.evaluate("() => document.querySelector('.filters [data-taste-toggle]').textContent")
+        check("r15 filters: an active taste keeps the row open and counts on the Taste chip", "· 1" in toggle_label and page.evaluate("() => window.Lahap.state.tasteFilter.join()") == "Spicy", toggle_label)
+        page.locator(".filters [data-taste-toggle]").click()
+        page.wait_for_timeout(150)
+        check("r15 filters: closing Taste clears the taste filter", page.evaluate("() => window.Lahap.state.tasteFilter.length") == 0)
 
         # ---- r8b: early-state buds card is the next step when there are no buds yet ----
         fresh = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=1)
@@ -805,6 +828,43 @@ def main():
             any(s.startswith("Try ") and " together · they like " in s for s in spots["suggested"]),
             spots["suggested"],
         )
+
+        # ---- r15: the featured bud's progress lives only in the Next level card; the plate-score rule leads its panel ----
+        page.evaluate("() => location.hash = 'buds'")
+        page.wait_for_timeout(200)
+        dedupe = page.evaluate(
+            """() => {
+              const view = document.querySelector('[data-view=buds]');
+              const card = view.querySelector('.next-level-card');
+              const name = card ? (card.querySelector('[data-tag-meal]') || {}).dataset.tagMeal : null;
+              const rows = [...view.querySelectorAll('.panel .person')].filter((row) => row.querySelector('[data-remove]'));
+              const featured = rows.find((row) => row.querySelector('[data-remove]').dataset.remove === name);
+              const others = rows.filter((row) => row !== featured);
+              return {
+                name,
+                featuredBars: featured ? featured.querySelectorAll('.level').length : -1,
+                featuredNote: featured ? !!featured.querySelector('.featured-note') : false,
+                othersBars: others.map((row) => row.querySelectorAll('.level').length),
+              };
+            }"""
+        )
+        check(
+            "r15 buds: the bud featured in Next level has no second progress bar in their row",
+            dedupe["name"] and dedupe["featuredBars"] == 0 and dedupe["featuredNote"] and all(n == 1 for n in dedupe["othersBars"]),
+            dedupe,
+        )
+        page.evaluate("() => location.hash = 'insights'")
+        page.wait_for_timeout(200)
+        rule = page.evaluate(
+            """() => {
+              const panel = [...document.querySelectorAll('[data-view=insights] .panel')].find((p) => /Plate score by day/.test(p.textContent));
+              if (!panel) return null;
+              const ruleEl = panel.querySelector('.score-rule');
+              const h2 = panel.querySelector('h2');
+              return { has: !!ruleEl, text: ruleEl ? ruleEl.textContent : '', afterHeading: !!(ruleEl && h2 && h2.nextElementSibling === ruleEl) };
+            }"""
+        )
+        check("r15 insights: the plate-score rule sits right under its heading, with the bands", rule and rule["has"] and rule["afterHeading"] and "75+" in rule["text"], rule)
 
         # ---- first run: quiz, lab, cutout, OCR in a clean browser profile ----
         fresh = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=1, permissions=["clipboard-read", "clipboard-write"])
