@@ -570,7 +570,7 @@
         <div class="answer-head">
           <img class="answer-thumb${last.cutout ? " cut" : ""}" src="${imageFor(last)}" alt="${last.photo ? "Photo of " + esc(last.name) : "Plate drawing of " + esc(last.name)}" width="64" height="64">
           <div>
-            <p class="eyebrow">${eyebrow === "On repeat" ? "On repeat · your most-eaten" : eyebrow}</p>
+            <p class="eyebrow">${eyebrow === "On repeat" ? "On repeat · most-eaten, all time" : eyebrow}</p>
             <h2>${eyebrow === "On repeat" ? `<span class="answer-dish">${esc(last.name)}</span>` : ""}Yes, ${summary.count} ${summary.count === 1 ? "time" : "times"}. Last ${esc(relative(last.ts))}${last.place ? " at " + esc(last.place) : ""}.</h2>
           </div>
         </div>
@@ -598,7 +598,7 @@
         <div class="answer-hero">
           <img class="answer-thumb${last.cutout ? " cut" : ""}" src="${imageFor(last)}" alt="${last.photo ? "Photo of " + esc(last.name) : "Plate drawing of " + esc(last.name)}" width="144" height="144">
           <div class="answer-hero-body">
-            <p class="eyebrow">On repeat · your most-eaten</p>
+            <p class="eyebrow">On repeat · most-eaten, all time</p>
             <h2 class="answer-hero-name"><span class="answer-dish">${esc(last.name)}</span></h2>
             <p class="answer-repeat"><span class="repeat-badge" title="Eaten ${summary.count} times">×${summary.count}</span>Yes, ${summary.count} ${summary.count === 1 ? "time" : "times"}. Last ${esc(relative(last.ts))}${where}.</p>
           </div>
@@ -619,11 +619,11 @@
         <h2 id="week-title">Your week on a plate</h2>
         <div class="stat-grid">
           <div class="stat"><div class="label">Meals</div><div class="value">${week.length}</div></div>
-          <div class="stat"><div class="label">Variety</div><div class="value">${L.varietyScore(week)}</div></div>
+          <div class="stat"><div class="label">Variety</div><div class="value">${L.varietyScore(week)}</div><div class="note">out of 100 · 0 = same meal</div></div>
           <div class="stat"><div class="label">Plate score</div><div class="value">${avg}</div><div class="note">${esc(L.healthLabel(avg))}</div></div>
           <div class="stat"><div class="label">Spent</div><div class="value money">${esc(money(spend.total))}</div></div>
         </div>
-        ${onRepeat.length ? `<p class="notice">On repeat: ${onRepeat.map((item) => `${esc(item.name)} ×${item.count}`).join(", ")}.</p>` : ""}
+        ${onRepeat.length ? `<p class="notice">On repeat this week: ${onRepeat.map((item) => `${esc(item.name)} ×${item.count}`).join(", ")}.</p>` : ""}
         <div class="btn-row" style="margin-top:16px">
           <button type="button" class="btn primary" data-share-week>Share my week</button>
           <a class="btn" href="#insights">All insights</a>
@@ -682,8 +682,8 @@
     return `
       <a class="week-strip" href="#insights" aria-label="${esc(label)}">
         <span><span class="ws-label">7 days</span><span class="ws-value">${week.length} ${week.length === 1 ? "meal" : "meals"}</span></span>
-        <span><span class="ws-label">Variety</span><span class="ws-value">${variety}</span></span>
-        <span><span class="ws-label">Plate</span><span class="ws-value">${avg}</span></span>
+        <span><span class="ws-label">Variety <i class="ws-scale">/100</i></span><span class="ws-value">${variety}</span></span>
+        <span><span class="ws-label">Plate <i class="ws-scale">/100</i></span><span class="ws-value">${avg}</span></span>
         <span><span class="ws-label">Spent</span><span class="ws-value">${esc(compactMoney(spend.total))}</span></span>
       </a>`;
   }
@@ -961,7 +961,7 @@
         <section class="panel">
           <h2>Cuisines</h2>
           ${cuisines.length ? barsHtml(cuisines, cuisines[0].count) : '<p class="muted">No meals in this period.</p>'}
-          ${onRepeat.length ? `<h3 style="margin-top:20px">On repeat</h3><p>${onRepeat.map((item) => `${esc(item.name)} <span class="mono">×${item.count}</span>`).join(" · ")}</p>` : ""}
+          ${onRepeat.length ? `<h3 style="margin-top:20px">On repeat · ${period ? `last ${period} days` : "all time"}</h3><p>${onRepeat.map((item) => `${esc(item.name)} <span class="mono">×${item.count}</span>`).join(" · ")}</p>` : ""}
         </section>
         <section class="panel">
           <h2>Top places</h2>
@@ -1179,7 +1179,7 @@
           </section>
           <section class="panel suggested-panel">
             <h2>${hasTasteProfile() ? "Suggested by taste" : "Example buds to try"}</h2>
-            ${others.length ? others.map(({ person, match }) => `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(match)}</span></div><div class="why">${esc(hasTasteProfile() ? reasonsFor(person) : "Log a few meals to see what you share")} · ${esc(person.area)}</div>${hasTasteProfile() && spotFor(person) ? `<div class="spot">${esc(spotFor(person))}</div>` : ""}</div><button type="button" class="btn" data-add="${person.id}">Add</button></div>`).join("") : '<p class="muted">You added everyone. Nice.</p>'}
+            ${others.length ? others.map(({ person, match }) => `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(match)}</span></div><div class="why">${esc(hasTasteProfile() ? reasonsFor(person) : "Log a few meals to see what you share")} · ${esc(person.area)}</div>${hasTasteProfile() && spotFor(person) ? `<div class="spot">${esc(spotFor(person))}</div>` : ""}</div><button type="button" class="btn" data-add="${person.id}" aria-label="Add ${esc(person.name)} as a bud on this device">Add bud</button></div>`).join("") : '<p class="muted">You added everyone. Nice.</p>'}
             <p class="notice">These are example profiles so you can try matching, tagging and hangouts. Lahap has no server yet: buds and points stay on this device, and invites go out through WhatsApp or your phone's share sheet.</p>
           </section>
         </div>

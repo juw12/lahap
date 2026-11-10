@@ -1311,6 +1311,10 @@ def main():
         page.goto(base + "#diary")
         page.wait_for_selector("html[data-ready='1']")
         page.wait_for_timeout(250)
+        strip23 = page.evaluate(
+            """() => [...document.querySelectorAll('#view-diary .week-strip .ws-label')].map((l) => l.textContent.trim())"""
+        )
+        check("r23 diary: the phone week strip says Variety and Plate are out of 100", any(s.startswith("Variety") and "/100" in s for s in strip23) and any(s.startswith("Plate") and "/100" in s for s in strip23), strip23)
         scroll22 = page.evaluate(
             """async () => {
               window.scrollTo(0, 1400);
@@ -1484,6 +1488,64 @@ def main():
                 fold: window.innerHeight,
               };
             }"""
+        )
+        # ---- r23: Taste buds / Insights cards are receipt slips, Add says what it does, On repeat is compact ----
+        buds23 = desk21_page.evaluate(
+            """() => {
+              const panel = document.querySelector('#view-buds .suggested-panel');
+              const add = panel ? panel.querySelector('[data-add]') : null;
+              const cs = panel ? getComputedStyle(panel) : null;
+              const mask = cs ? (cs.maskImage || cs.webkitMaskImage || '') : '';
+              return {
+                addText: add ? add.textContent.trim() : '',
+                addLabel: add ? add.getAttribute('aria-label') || '' : '',
+                torn: mask.includes('radial-gradient'),
+              };
+            }"""
+        )
+        check(
+            "r23 buds: Suggested 'Add bud' says what it does, and the cards have a torn receipt edge",
+            buds23["addText"] == "Add bud" and "as a bud" in buds23["addLabel"] and buds23["torn"],
+            buds23,
+        )
+        desk21_page.goto(base + "?demo=1&nosw=1#insights")
+        desk21_page.wait_for_selector("html[data-ready='1']")
+        desk21_page.wait_for_timeout(300)
+        ins23 = desk21_page.evaluate(
+            """() => {
+              const panels = [...document.querySelectorAll('#view-insights .panel')];
+              const torn = panels.filter((p) => {
+                const cs = getComputedStyle(p);
+                return (cs.maskImage || cs.webkitMaskImage || '').includes('radial-gradient');
+              }).length;
+              const rep = [...document.querySelectorAll('#view-insights h3')].find((h) => h.textContent.startsWith('On repeat'));
+              return { panels: panels.length, torn, repeat: rep ? rep.textContent : '' };
+            }"""
+        )
+        check(
+            "r23 insights: every card is a torn receipt slip and On repeat names its period",
+            ins23["panels"] >= 4 and ins23["torn"] == ins23["panels"] and ("last 7 days" in ins23["repeat"] or "all time" in ins23["repeat"] or ins23["repeat"] == ""),
+            ins23,
+        )
+        desk21_page.goto(base + "?demo=1&nosw=1#diary")
+        desk21_page.wait_for_selector("html[data-ready='1']")
+        desk21_page.wait_for_timeout(300)
+        feat23 = desk21_page.evaluate(
+            """() => {
+              const f = document.querySelector('#view-diary .answer.featured');
+              const today = document.querySelector('#view-diary .lead-day');
+              return f ? {
+                height: Math.round(f.getBoundingClientRect().height),
+                eyebrow: (f.querySelector('.eyebrow') || {}).textContent || '',
+                todayTop: today ? Math.round(today.getBoundingClientRect().top) : 9999,
+                note: (document.querySelector('#view-diary aside .notice') || {}).textContent || '',
+              } : null;
+            }"""
+        )
+        check(
+            "r23 diary: the desktop On repeat card is compact, says 'all time', and the week aside says 'this week'",
+            feat23 and feat23["height"] <= 330 and "all time" in feat23["eyebrow"] and feat23["todayTop"] < 900 and (feat23["note"] == "" or "this week" in feat23["note"]),
+            feat23,
         )
         desk21_page.goto(base + "?demo=1&nosw=1#diary")
         desk21_page.wait_for_selector("html[data-ready='1']")

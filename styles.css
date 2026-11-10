@@ -3210,3 +3210,53 @@ label.chip input {
   padding: var(--s3) 0 max(var(--s3), env(safe-area-inset-bottom));
   background: linear-gradient(to bottom, rgba(245, 239, 227, 0), var(--paper) 30%);
 }
+
+/* ---------------- r23 ---------------- */
+/* the 7-day numbers carry their scale so "89" reads as a score, not a count */
+.ws-scale {
+  font-style: normal;
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+/* Insights and Taste buds cards are slips of the same receipt paper: a ruled head
+   and a torn, scalloped foot */
+#view-insights .panel,
+#view-buds .panel {
+  --tear: 7px;
+  padding-bottom: calc(var(--s4) + var(--tear));
+  border-bottom: 0;
+  border-radius: var(--radius) var(--radius) 0 0;
+  -webkit-mask:
+    radial-gradient(circle at 50% 100%, transparent 4.5px, #000 5px) bottom / 13px var(--tear) repeat-x,
+    linear-gradient(#000, #000) top / 100% calc(100% - var(--tear) + 1px) no-repeat;
+  mask:
+    radial-gradient(circle at 50% 100%, transparent 4.5px, #000 5px) bottom / 13px var(--tear) repeat-x,
+    linear-gradient(#000, #000) top / 100% calc(100% - var(--tear) + 1px) no-repeat;
+}
+#view-insights .panel > h2,
+#view-buds .panel > h2 {
+  padding-bottom: var(--s2);
+  border-bottom: 1px dashed var(--line-strong);
+}
+
+/* desktop: the On repeat card is a compact slip so the diary feed comes sooner */
+@media (min-width: 761px) {
+  .answer.featured {
+    padding: var(--s4);
+  }
+  .answer.featured .answer-hero {
+    grid-template-columns: 104px minmax(0, 1fr);
+    gap: var(--s4);
+  }
+  .answer.featured .answer-hero .answer-thumb {
+    width: 104px;
+    height: 104px;
+  }
+  .answer.featured .answer-dish {
+    font-size: 28px;
+  }
+  .answer.featured dl {
+    margin-top: var(--s3);
+  }
+}
