@@ -682,12 +682,50 @@
       </div>`;
   }
 
+  // r18: a first-time user sees what one logged meal looks like before committing to log their own
+  function sampleTicketHtml() {
+    const sample = {
+      name: "Nasi lemak ayam",
+      place: "Warung Kak Ros",
+      source: "out",
+      price: 18000,
+      tastes: ["Spicy", "Rich"],
+      plate: { veg: 1, protein: 2, carbs: 1, fried: true, sugary: false, processed: false },
+      portion: "m",
+    };
+    const score = L.healthScore(sample.plate);
+    let kcal = "";
+    try {
+      kcal = `${N.estimate(sample).kcal} kcal`;
+    } catch (error) {
+      kcal = "";
+    }
+    return `
+      <figure class="sample-ticket" aria-label="Example of a logged meal: ${esc(sample.name)} at ${esc(sample.place)}, ${esc(money(sample.price))}, plate score ${score}, eaten with Rina">
+        <figcaption class="eyebrow">Example · what one logged meal looks like</figcaption>
+        <div class="ticket" aria-hidden="true">
+          <img class="thumb" src="${plateThumb(sample, 144)}" alt="" width="72" height="72">
+          <span>
+            <span class="title">${esc(sample.name)}</span>
+            <span class="meta"><span class="seg">12:30</span> · <span class="seg">${esc(sample.place)}</span> · <span class="seg">${esc(SOURCES[sample.source])}</span></span>
+            <span class="tags">${sample.tastes.map((taste) => `<span class="tag">${esc(taste)}</span>`).join("")}<span class="tag">with Rina</span></span>
+          </span>
+          <span class="stub">
+            <span class="price">${esc(money(sample.price))}</span>
+            ${kcal ? `<span class="kcal mono">${esc(kcal)}</span>` : ""}
+            ${scoreBadge(score)}
+          </span>
+        </div>
+      </figure>`;
+  }
+
   function emptyHtml() {
     return `
       <div class="empty">
         <canvas id="empty-plate" width="240" height="240" aria-hidden="true"></canvas>
         <h2>Your plate is empty</h2>
         <p>Log a meal in about 15 seconds: dish, place, price, and how the plate looked. Everything stays on this device.</p>
+        ${sampleTicketHtml()}
         <div class="btn-row">
           <button type="button" class="btn primary" data-action="log">Log your first meal</button>
           <button type="button" class="btn" data-sample>Try with a sample fortnight</button>
@@ -1109,7 +1147,7 @@
         <div><h1>Taste buds</h1><p>Friends ranked by how close their taste is to yours. Tag them in meals and eat together to grow the connection.</p></div>
         <button type="button" class="btn primary view-head-cta" data-invite>Invite a friend</button>
       </div>
-      <div class="split">
+      <div class="split buds-split">
         <div>
           ${incomingInviteHtml()}
           ${friends.length ? nextLevelCardHtml(friends) : earlyBudsCardHtml()}
@@ -1129,8 +1167,8 @@
           </section>
         </div>
         <aside>
-          <section class="panel">
-            <h2>Plans</h2>
+          <section class="panel plans-panel">
+            <h2>Plan makan</h2>
             ${invites.length ? invites.map((invite) => {
               const person = personById(invite.friend) || { name: "?" };
               const when = new Date(invite.when).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -1579,15 +1617,15 @@
           <span class="mono small">${recipe.minutes} min · ${recipe.nutrition.kcal} kcal · ${recipe.nutrition.p} g protein</span>
         </div>
         ${fit || need ? `<p class="small">${esc(fit + need)}</p>` : ""}
+        <div class="btn-row recipe-actions">
+          <button type="button" class="btn small primary" data-lab-log="${esc(recipe.id)}">Cooked it? Log to Diary</button>
+          ${recipe.missing.length ? `<button type="button" class="btn small" data-lab-shop="${esc(recipe.id)}">Copy shopping list</button>` : ""}
+        </div>
         <details${index === 0 ? " open" : ""}>
           <summary>Ingredients and steps</summary>
           <ul class="ingredients">${recipe.items.map((item) => `<li class="${recipe.have.includes(item.id) ? "got" : ""}">${esc(R.amountLabel(item))}</li>`).join("")}</ul>
           <ol class="steps">${recipe.steps.map((stepText) => `<li>${esc(stepText)}</li>`).join("")}</ol>
         </details>
-        <div class="btn-row">
-          <button type="button" class="btn small primary" data-lab-log="${esc(recipe.id)}">Cooked it, log the meal</button>
-          ${recipe.missing.length ? `<button type="button" class="btn small" data-lab-shop="${esc(recipe.id)}">Copy shopping list</button>` : ""}
-        </div>
       </article>`;
   }
 
@@ -1603,7 +1641,7 @@
     const quick = QUICK_ADD.filter((id) => R.INGREDIENTS[id] && !have.includes(id)).slice(0, 12);
     const defaultStatus = speech ? "Type, speak (English or Bahasa Indonesia) or scan a written list or receipt." : "Type or scan a written list or receipt. Voice input is not available in this browser.";
     root.innerHTML = `
-      <div class="view-head"><div><h1>Recipes</h1><p>Tell Lahap what is in your kitchen and get home recipes sized for your goal, with the calories and protein worked out.</p></div></div>
+      <div class="view-head"><div><h1>Recipes</h1><p>Tell Lahap what is in your kitchen and get home recipes sized for your goal. Cooked one? Log it to your Diary in one tap, plate and calories already filled in.</p></div></div>
       <div class="lab-grid">
         <section class="panel lab-input">
           <h2>What do you have?</h2>
@@ -1761,7 +1799,7 @@
     const places = Array.from(new Set(sortedEntries().map((entry) => entry.place).filter(Boolean)));
     const buds = PEOPLE.filter((person) => state.friends.includes(person.id));
     // r16: a quick log shows only what it needs; editing, or anything already set below, opens the rest
-    const openMore = !!editing || draft.tastes.length > 0 || draft.friends.length > 0 || !!draft.notes || draft.rating > 0;
+    const openMore = !!editing || draft.tastes.length > 0 || !!draft.notes || draft.rating > 0;
     dialog.innerHTML = `
       <form id="log-form" novalidate>
         <div class="sheet-head"><h2 id="log-title">${editing ? "Edit meal" : "Log a meal"}</h2><button type="button" class="icon-btn" data-close aria-label="Close">${ICON_CLOSE}</button></div>
@@ -1784,6 +1822,10 @@
             <label class="field"><span>Cuisine</span><input type="text" name="cuisine" list="cuisine-list" value="${esc(draft.cuisine)}" placeholder="Indonesian"></label>
           </div>
           <datalist id="place-list">${places.map((place) => `<option value="${esc(place)}">`).join("")}</datalist>
+          <!-- r18: who you ate with sits next to Place, outside the fold - tagging is the social loop -->
+          <fieldset class="field ate-with"><legend>Ate with <span class="hint">${esc(closestBudNudge() || `+${L.POINTS.tag} connection points each`)}</span></legend>
+            ${buds.length ? `<div class="chips">${buds.map((person) => `<label class="chip"><input type="checkbox" name="friend" value="${person.id}" ${draft.friends.includes(person.id) ? "checked" : ""}><span>${esc(person.name)}</span></label>`).join("")}</div>` : '<p class="muted small">Add buds on the Taste buds tab to tag them here.</p>'}
+          </fieldset>
           <datalist id="cuisine-list">${CUISINES.map((cuisine) => `<option value="${esc(cuisine)}">`).join("")}</datalist>
           <div class="row">
             <label class="field"><span>Price (${esc(state.settings.currency)})</span><input type="number" name="price" inputmode="decimal" min="0" step="any" value="${esc(draft.price)}"></label>
@@ -1811,9 +1853,6 @@
             <summary><span>More details</span><span class="more-sum" id="log-more-sum"></span></summary>
             <fieldset class="field"><legend>Taste</legend><div class="chips">${TASTES.map((taste) => `<label class="chip"><input type="checkbox" name="taste" value="${taste}" ${draft.tastes.includes(taste) ? "checked" : ""}><span>${taste}</span></label>`).join("")}</div></fieldset>
             <div class="field"><span>Rating</span>${segHtml("rating", [[1, "1"], [2, "2"], [3, "3"], [4, "4"], [5, "5"]], draft.rating)}</div>
-            <fieldset class="field"><legend>Ate with <span class="hint">${esc(closestBudNudge() || `+${L.POINTS.tag} connection points each`)}</span></legend>
-              ${buds.length ? `<div class="chips">${buds.map((person) => `<label class="chip"><input type="checkbox" name="friend" value="${person.id}" ${draft.friends.includes(person.id) ? "checked" : ""}><span>${esc(person.name)}</span></label>`).join("")}</div>` : '<p class="muted small">Add buds on the Taste buds tab to tag them here.</p>'}
-            </fieldset>
             <label class="field"><span>Notes</span><textarea name="notes" placeholder="Less sambal next time, ask for extra lime">${esc(draft.notes)}</textarea></label>
           </details>
         </div>
@@ -1832,13 +1871,11 @@
       if (!summary) return;
       const tastes = Array.from(form.querySelectorAll("input[name=taste]:checked")).map((input) => input.value);
       const rated = form.querySelector("[data-seg=rating][aria-pressed=true]");
-      const friends = Array.from(form.querySelectorAll("input[name=friend]:checked")).map((input) => (personById(input.value) || {}).name).filter(Boolean);
       const parts = [];
       if (tastes.length) parts.push(tastes.join(", "));
       if (rated) parts.push(`★${rated.dataset.value}`);
-      if (friends.length) parts.push(`with ${friends.join(", ")}`);
       if (form.notes && form.notes.value.trim()) parts.push("note");
-      summary.textContent = parts.length ? parts.join(" · ") : "Taste, rating, who you ate with, notes";
+      summary.textContent = parts.length ? parts.join(" · ") : "Taste, rating, notes";
     }
     updateMoreSummary();
     form.addEventListener("change", updateMoreSummary);
@@ -2348,12 +2385,37 @@
       ctx.fillStyle = ink;
       ctx.font = serif(story ? 168 : 104);
       const scoreY = ringY + ringR + (story ? 190 : 118);
-      ctx.fillText(String(score), W / 2, scoreY);
+      // r18: the number carries its scale ("/100") so it reads as a score, not a count
+      const scoreText = String(score);
+      const scoreW = ctx.measureText(scoreText).width;
+      ctx.font = serif(story ? 60 : 40);
+      const outOfW = ctx.measureText("/100").width;
+      const scoreX = W / 2 - outOfW / 2;
+      ctx.font = serif(story ? 168 : 104);
+      ctx.fillText(scoreText, scoreX, scoreY);
+      ctx.textAlign = "left";
       ctx.fillStyle = sub;
-      ctx.font = mono(story ? 32 : 26, 600);
-      // the date says which meal (or which week) this score belongs to, so a posted card is never ambiguous
+      ctx.font = serif(story ? 60 : 40);
+      ctx.fillText("/100", scoreX + scoreW / 2 + (story ? 8 : 6), scoreY);
+      ctx.textAlign = "center";
+      // r18: the label is ink and bold so the metric is understood at feed size; the date follows quieter
       const when = isWeek ? "LAST 7 DAYS" : new Date(entry.ts).toLocaleDateString(undefined, { day: "numeric", month: "short" }).toUpperCase();
-      ctx.fillText(`PLATE SCORE · ${L.healthLabel(score).toUpperCase()} · ${when}`, W / 2, scoreY + (story ? 58 : 44));
+      const labelText = `PLATE SCORE · ${L.healthLabel(score).toUpperCase()}`;
+      const whenText = `  ·  ${when}`;
+      ctx.font = mono(story ? 38 : 30, 700);
+      const labelW = ctx.measureText(labelText).width;
+      ctx.font = mono(story ? 30 : 24, 600);
+      const whenW = ctx.measureText(whenText).width;
+      const labelX = W / 2 - (labelW + whenW) / 2;
+      const labelY = scoreY + (story ? 58 : 44);
+      ctx.textAlign = "left";
+      ctx.fillStyle = ink;
+      ctx.font = mono(story ? 38 : 30, 700);
+      ctx.fillText(labelText, labelX, labelY);
+      ctx.fillStyle = sub;
+      ctx.font = mono(story ? 30 : 24, 600);
+      ctx.fillText(whenText, labelX + labelW, labelY);
+      ctx.textAlign = "center";
 
       // stat grid anchored to the bottom, dish title fills the gap above it
       const rowStep = story ? 210 : 0;

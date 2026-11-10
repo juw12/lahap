@@ -635,6 +635,114 @@ def main():
         page.wait_for_selector("html[data-ready='1']")
         page.wait_for_timeout(200)
 
+        # ---- r18: Ate with outside the fold, recipe log first, Plan makan up top on phone, sample ticket, soft tear ----
+        page.goto(base + "#diary")
+        page.wait_for_selector("html[data-ready='1']")
+        page.wait_for_timeout(200)
+        page.locator(".fab").click()
+        page.wait_for_selector("#log-form")
+        page.wait_for_timeout(300)
+        ate_with = page.evaluate(
+            """() => {
+              const field = document.querySelector("#log-form .ate-with");
+              const place = document.querySelector("#log-form input[name=place]");
+              return {
+                exists: !!field,
+                folded: !!(field && field.closest("#log-more")),
+                moreOpen: document.getElementById("log-more").open,
+                visible: !!(field && field.checkVisibility()),
+                afterPlace: !!(field && place && (place.compareDocumentPosition(field) & Node.DOCUMENT_POSITION_FOLLOWING)),
+                sum: document.getElementById("log-more-sum").textContent,
+              };
+            }"""
+        )
+        check("r18 log: Ate with sits after Place, outside More details, visible on a fresh log", ate_with["exists"] and not ate_with["folded"] and not ate_with["moreOpen"] and ate_with["visible"] and ate_with["afterPlace"], ate_with)
+        check("r18 log: the folded summary no longer promises who you ate with", "ate with" not in ate_with["sum"].lower(), ate_with["sum"])
+        page.locator("#dlg-log [data-close]").first.click()
+        page.wait_for_timeout(150)
+
+        page.goto(base + "#lab")
+        page.wait_for_selector("html[data-ready='1']")
+        page.wait_for_timeout(300)
+        recipe = page.evaluate(
+            """() => {
+              const card = document.querySelector("#view-lab .recipe");
+              if (!card) return null;
+              const log = card.querySelector("[data-lab-log]");
+              const details = card.querySelector("details");
+              return {
+                label: log ? log.textContent.trim() : "",
+                beforeSteps: !!(log && details && (log.compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING)),
+                intro: document.querySelector("#view-lab .view-head p").textContent,
+              };
+            }"""
+        )
+        check("r18 recipes: the log button comes before the steps and says it goes to the Diary", recipe and recipe["beforeSteps"] and "Diary" in recipe["label"], recipe)
+        check("r18 recipes: the intro says a cooked recipe logs to the Diary", recipe and "Diary" in recipe["intro"], recipe and recipe["intro"])
+
+        page.goto(base + "#buds")
+        page.wait_for_selector("html[data-ready='1']")
+        page.wait_for_timeout(300)
+        buds_order = page.evaluate(
+            """() => {
+              const top = (selector) => {
+                const node = document.querySelector(selector);
+                return node ? node.getBoundingClientRect().top : null;
+              };
+              const plans = document.querySelector("#view-buds .plans-panel");
+              const buds = [...document.querySelectorAll("#view-buds .panel h2")].find((h) => h.textContent.trim() === "Your buds");
+              return {
+                plans: top("#view-buds .plans-panel"),
+                next: top("#view-buds .next-level-card"),
+                buds: buds ? buds.getBoundingClientRect().top : null,
+                tinted: plans ? getComputedStyle(plans).backgroundImage.includes("gradient") : false,
+                heading: plans ? plans.querySelector("h2").textContent.trim() : "",
+              };
+            }"""
+        )
+        check("r18 buds: on a phone Plan makan sits right under the Next level card, above Your buds", buds_order["plans"] is not None and buds_order["next"] is not None and buds_order["buds"] is not None and buds_order["next"] < buds_order["plans"] < buds_order["buds"], buds_order)
+        check("r18 buds: the Plan makan panel is tinted and named for the action", buds_order["tinted"] and buds_order["heading"] == "Plan makan", buds_order)
+
+        page.goto(base + "#diary")
+        page.wait_for_selector("html[data-ready='1']")
+        page.wait_for_timeout(200)
+        tear = page.evaluate(
+            """() => {
+              const today = document.querySelector("#view-diary .today");
+              if (!today) return null;
+              const edge = getComputedStyle(today, "::after");
+              return { scallop: edge.backgroundImage.includes("radial-gradient"), zigzag: edge.backgroundImage.includes("45deg") };
+            }"""
+        )
+        check("r18 today: the torn edge is a soft scallop, not a zigzag", tear and tear["scallop"] and not tear["zigzag"], tear)
+
+        empty_ctx = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=1)
+        empty_page = empty_ctx.new_page()
+        empty_page.goto(base + "?nosw=1&noquiz=1#diary")
+        empty_page.wait_for_selector("html[data-ready='1']")
+        empty_page.wait_for_timeout(300)
+        sample = empty_page.evaluate(
+            """() => {
+              const figure = document.querySelector("#view-diary .empty .sample-ticket");
+              if (!figure) return null;
+              const box = figure.getBoundingClientRect();
+              return {
+                caption: figure.querySelector("figcaption").textContent,
+                label: figure.getAttribute("aria-label") || "",
+                interactive: figure.querySelectorAll("button, a, [data-open], [data-share]").length,
+                price: figure.querySelector(".price").textContent,
+                fits: box.right <= window.innerWidth && box.left >= 0,
+                entries: window.Lahap.state.entries.length,
+              };
+            }"""
+        )
+        check("r18 empty: a clearly-labelled example ticket shows what a logged meal looks like", sample and "Example" in sample["caption"] and "Example" in sample["label"] and sample["price"].strip() != "", sample)
+        check("r18 empty: the example is not clickable, fits the phone and adds no data", sample and sample["interactive"] == 0 and sample["fits"] and sample["entries"] == 0, sample)
+        empty_ctx.close()
+        page.goto(base + "#diary")
+        page.wait_for_selector("html[data-ready='1']")
+        page.wait_for_timeout(200)
+
         # ---- r8b: early-state buds card is the next step when there are no buds yet ----
         fresh = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=1)
         fresh_page = fresh.new_page()
@@ -695,8 +803,16 @@ def main():
         after = page.evaluate("() => window.Lahap.state.points.rina || 0")
         check("hangout done adds 25 points", after - before == 25, f"{before} -> {after}")
         check("hangout done opens log with bud tagged", page.locator("#log-form input[value=rina]:checked").count() == 1)
-        hangout_more = page.evaluate("() => ({ open: document.getElementById('log-more').open, sum: document.getElementById('log-more-sum').textContent })")
-        check("r16 log: a prefilled bud opens More details and the summary names them", hangout_more["open"] and "with Rina" in hangout_more["sum"], hangout_more)
+        hangout_more = page.evaluate(
+            """() => {
+              const rina = document.querySelector("#log-form input[value=rina]");
+              return {
+                outsideFold: !rina.closest("#log-more"),
+                visible: rina.closest("label").checkVisibility(),
+              };
+            }"""
+        )
+        check("r18 log: a prefilled bud is ticked in the Ate with row you can see, not inside More details", hangout_more["outsideFold"] and hangout_more["visible"], hangout_more)
         page.locator("#dlg-log [data-close]").first.click()
 
         # ---- next-level card: appears when a bud is close to the next tier ----

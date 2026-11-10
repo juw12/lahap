@@ -2553,16 +2553,15 @@ label.chip input {
   margin-bottom: calc(var(--s4) + 8px);
   filter: drop-shadow(0 1px 0 var(--line));
 }
+/* r18: a soft scalloped tear (round bites, not a zigzag) so it reads as paper, never as a render glitch */
 .today::after {
   content: "";
   position: absolute;
-  left: -1px;
-  right: -1px;
-  bottom: -7px;
-  height: 8px;
-  background:
-    linear-gradient(-45deg, transparent 5px, var(--card) 0) 0 0 / 10px 8px repeat-x,
-    linear-gradient(45deg, transparent 5px, var(--card) 0) 0 0 / 10px 8px repeat-x;
+  left: 0;
+  right: 0;
+  bottom: -5px;
+  height: 6px;
+  background: radial-gradient(circle at 6px 0, var(--card) 5px, transparent 5.5px) 0 0 / 12px 6px repeat-x;
 }
 .today-row > span:first-child {
   font-family: var(--font-mono);
@@ -2616,5 +2615,104 @@ label.chip input {
     max-width: 100%;
     max-height: 84px;
     margin: 0 auto;
+  }
+}
+
+/* r18: who you ate with lives next to Place (outside More details) - tagging is the social loop */
+.ate-with .chips {
+  margin-top: var(--s1);
+}
+
+/* r18: Plan makan is the strongest social action on Taste buds - warm tint, full-width call to action */
+.plans-panel {
+  background: linear-gradient(180deg, var(--amber-soft), var(--card) 70%);
+  border-color: #e4c98f;
+}
+.plans-panel h2 {
+  font-size: 22px;
+}
+.plans-panel .invite.suggested {
+  border: 0;
+  padding: 0;
+}
+.plans-panel .invite.suggested .btn-row .btn {
+  width: 100%;
+  justify-content: center;
+  min-height: 48px;
+  font-size: 16px;
+}
+
+/* r18: on phone and tablet the plan sits right under the Next level card instead of after every bud */
+@media (max-width: 999px) {
+  .buds-split {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s4);
+  }
+  .buds-split > div,
+  .buds-split > aside {
+    display: contents;
+  }
+  .buds-split > div > *,
+  .buds-split > aside > * {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+  .buds-split .invite-in {
+    order: -3;
+  }
+  .buds-split .next-level-card {
+    order: -2;
+  }
+  .buds-split .plans-panel {
+    order: -1;
+  }
+}
+
+/* r18: an example ticket on the empty Diary so a first-timer sees what a logged meal looks like */
+.sample-ticket {
+  max-width: 460px;
+  margin: 0 auto var(--s5);
+  text-align: left;
+}
+.sample-ticket .eyebrow {
+  display: block;
+  margin-bottom: var(--s2);
+  text-align: center;
+}
+.sample-ticket .ticket {
+  margin: 0;
+  cursor: default;
+  transform: rotate(-1deg);
+  box-shadow: 0 10px 24px -14px rgba(29, 24, 19, 0.45);
+}
+.sample-ticket .ticket:hover {
+  border-color: var(--line);
+}
+
+/* r18: recipe card leads with the one action that feeds the Diary */
+.recipe .recipe-actions {
+  margin: var(--s2) 0 var(--s3);
+}
+
+/* r18: phone tickets get a little more air between dish, meta and tags */
+@media (max-width: 420px) {
+  .ticket-wrap {
+    --tpad: 12px;
+    margin-bottom: var(--s4);
+  }
+  .ticket-wrap > .ticket {
+    padding: 12px;
+    row-gap: var(--s2);
+  }
+  .ticket .meta {
+    margin-top: 4px;
+    line-height: 1.45;
+  }
+  .ticket .tags {
+    margin-top: 8px;
+  }
+  .ticket .stub {
+    gap: 8px;
   }
 }
