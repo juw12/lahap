@@ -1668,6 +1668,31 @@ def main():
             buds23["addText"] == "Add bud" and "as a bud" in buds23["addLabel"] and buds23["torn"],
             buds23,
         )
+        # ---- r21: desktop folds the "suggested by taste" panel closed so your real buds hold the page; a phone leaves it open ----
+        fold_desk = desk21_page.evaluate(
+            """() => {
+              const panel = document.querySelector('#view-buds .suggested-panel');
+              return panel ? { tag: panel.tagName.toLowerCase(), open: panel.open } : null;
+            }"""
+        )
+        ph_fold = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=1)
+        ph_fold_page = ph_fold.new_page()
+        ph_fold_page.goto(base + "?demo=1&nosw=1#buds")
+        ph_fold_page.wait_for_selector("html[data-ready='1']")
+        ph_fold_page.wait_for_timeout(300)
+        fold_phone = ph_fold_page.evaluate(
+            """() => {
+              const panel = document.querySelector('#view-buds .suggested-panel');
+              return panel ? { tag: panel.tagName.toLowerCase(), open: panel.open } : null;
+            }"""
+        )
+        check(
+            "r21 buds desk: the suggested-by-taste panel folds closed on a desktop and stays open on a phone",
+            fold_desk and fold_desk["tag"] == "details" and not fold_desk["open"]
+            and fold_phone and fold_phone["tag"] == "details" and fold_phone["open"],
+            {"desk": fold_desk, "phone": fold_phone},
+        )
+        ph_fold.close()
         desk21_page.goto(base + "?demo=1&nosw=1#insights")
         desk21_page.wait_for_selector("html[data-ready='1']")
         desk21_page.wait_for_timeout(300)

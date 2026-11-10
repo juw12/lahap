@@ -3240,6 +3240,24 @@ label.chip input {
   border-bottom: 1px dashed var(--line-strong);
 }
 
+/* r21: on a desktop the Taste-buds "suggested by taste" panel folds closed so your real buds hold the page; open by default on a phone. The summary keeps the receipt-slip header line. */
+.suggested-panel.suggested-fold > summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s2);
+  cursor: pointer;
+  list-style: none;
+  padding-bottom: var(--s3);
+  border-bottom: 1px dashed var(--line-strong);
+  margin-bottom: var(--s3);
+}
+.suggested-panel.suggested-fold > summary h2 { margin: 0; }
+.suggested-panel.suggested-fold > summary::-webkit-details-marker { display: none; }
+.suggested-panel.suggested-fold > summary::after { content: "▾"; font-size: 0.8rem; color: var(--muted); }
+.suggested-panel.suggested-fold[open] > summary { margin-bottom: var(--s2); }
+.suggested-panel.suggested-fold[open] > summary::after { content: "▴"; }
+
 /* desktop: the On repeat card is a compact slip so the diary feed comes sooner */
 @media (min-width: 761px) {
   .answer.featured {

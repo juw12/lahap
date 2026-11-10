@@ -1,6 +1,6 @@
 // Offline cache. App shell: network first so updates land. Heavy vendor files (cutout model, OCR):
 // cache first, fetched only when a feature needs them. Meals and photos live in IndexedDB, not here.
-const CACHE = "lahap-v41";
+const CACHE = "lahap-v42";
 const VENDOR = "lahap-vendor-v1";
 const SHELL = ["./", "index.html", "styles.css", "logic.js", "nutrition.js", "recipes.js", "vision.js", "app.js", "icon.svg", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png", "manifest.webmanifest", "assets/dish/noodle.jpg", "assets/dish/salad.jpg", "assets/dish/pizza.jpg"];
 
