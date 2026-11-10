@@ -2336,8 +2336,43 @@
     // as a photo poster rather than the Paper card recoloured; the card layout lays its own scrim band
     const photoBleed = template === "card" && !isWeek;
     let backdrop = null;
+    // never stretch a photo past 1.5x: phone photos are saved at 1080px on the long side, so a
+    // landscape shot can't fill a story card sharply - it then runs edge to edge across the top
+    // and fades into the ink band instead of being blown up
+    const MAX_UPSCALE = 1.5;
+    let heroFit = "cover";
+    let heroH = H;
+    let heroUpscale = 1;
     const paintBackdrop = (img) => {
-      cover(ctx, img, 0, 0, W, H);
+      const coverScale = Math.max(W / img.width, H / img.height);
+      if (!photoBleed || coverScale <= MAX_UPSCALE) {
+        heroUpscale = coverScale;
+        cover(ctx, img, 0, 0, W, H);
+        return;
+      }
+      // letterbox: ink ground now, the photo itself is laid once the text block's height is known
+      heroFit = "top";
+      heroH = Math.round(Math.min(H * 0.68, Math.max(img.height * MAX_UPSCALE, (img.height * W) / img.width)));
+      heroUpscale = Math.max(W / img.width, heroH / img.height);
+      ctx.fillStyle = "#1d1813";
+      ctx.fillRect(0, 0, W, H);
+    };
+    // a full-width photo strip centred in the space above the title, fading into the ink at both edges
+    const paintLetterbox = (img, spaceBottom) => {
+      const heroTop = Math.max(0, Math.round((spaceBottom - heroH) / 2));
+      cover(ctx, img, 0, heroTop, W, heroH);
+      const edge = Math.min(240, heroH * 0.3);
+      const topFade = ctx.createLinearGradient(0, heroTop, 0, heroTop + edge);
+      topFade.addColorStop(0, "rgba(29,24,19,1)");
+      topFade.addColorStop(1, "rgba(29,24,19,0)");
+      ctx.fillStyle = topFade;
+      ctx.fillRect(0, heroTop, W, edge);
+      const bottomFade = ctx.createLinearGradient(0, heroTop + heroH - edge, 0, heroTop + heroH);
+      bottomFade.addColorStop(0, "rgba(29,24,19,0)");
+      bottomFade.addColorStop(1, "rgba(29,24,19,1)");
+      ctx.fillStyle = bottomFade;
+      ctx.fillRect(0, heroTop + heroH - edge, W, edge);
+      return heroTop;
     };
     if (bg === "paper") {
       ctx.fillStyle = "#f5efe3";
@@ -2638,7 +2673,9 @@
     const box = Math.min(square ? 440 : 860, room);
     const boxX = (W - box) / 2;
     const boxY = top + (room - box) / 2;
-    if (bleed) {
+    let heroTop = 0;
+    if (bleed && heroFit === "top") heroTop = paintLetterbox(backdrop, baseY - 40);
+    if (bleed && heroFit === "cover") {
       // scrim band: clear over the food, deepening to a solid strip under the title and stats
       const bandTop = baseY - (square ? 300 : 420);
       const band = ctx.createLinearGradient(0, bandTop, 0, baseY + 40);
@@ -2649,8 +2686,8 @@
       ctx.fillRect(0, bandTop, W, baseY + 40 - bandTop);
       ctx.fillStyle = "rgba(20,14,10,0.86)";
       ctx.fillRect(0, baseY + 40, W, H - baseY - 40);
-      if (!preview) drawShare.photoHero = { mode: "bleed", x: 0, y: 0, width: W, height: H, textTop: baseY - 34 };
     }
+    if (bleed && !preview) drawShare.photoHero = { mode: "bleed", fit: heroFit, x: 0, y: heroTop, width: W, height: heroH, upscale: heroUpscale, textTop: baseY - 34 };
     brand(pad + 20);
     if (bg !== "photo") {
       if (cutout) {

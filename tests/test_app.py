@@ -260,7 +260,7 @@ def main():
               const minisOf = () => [...document.querySelectorAll('#dlg-share .tp-canvas')];
               const dimsOf = () => minisOf().map((c) => [c.width, c.height]);
               const varianceOf = (c) => {
-                const d = c.getContext('2d').getImageData(0, 0, c.width, Math.floor(c.height * 0.15)).data;
+                const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;  // r26: whole canvas - the Card letterboxes a small photo mid-frame
                 const seen = new Set();
                 for (let i = 0; i < d.length; i += 4 * 137) seen.add((d[i] << 16) | (d[i + 1] << 8) | d[i + 2]);
                 return seen.size;
@@ -1550,11 +1550,16 @@ def main():
             h21
             and h21.get("mode") == "bleed"
             and h21["width"] == 1080
-            and h21["height"] == 1920
+            and h21["height"] > 600
             and s21
             and s21["x"] + s21["r"] <= 1080
             and s21["y"] + s21["r"] <= h21["textTop"],
             photo21,
+        )
+        check(
+            "r26 share: the Photo card never stretches the photo past 1.5x (a small landscape photo runs across the top instead)",
+            h21 and h21.get("upscale", 9) <= 1.5 + 1e-6 and (h21.get("fit") == "top" or h21["height"] == 1920),
+            h21,
         )
         check(
             "r26 share: the full-bleed Photo card keeps three hero stats (price, rating, taste)",
