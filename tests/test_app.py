@@ -1535,21 +1535,72 @@ def main():
                 if (hero) break;
               }
               const stamp = window.Lahap.drawShare.stamp;
+              const stats = (window.Lahap.drawShare.statLabels || []).slice();
               const note = document.querySelector('#dlg-share .share-note');
               const noteText = note ? note.textContent : '';
               document.getElementById('dlg-share').close();
               entry.photo = keep;
-              return { hero, stamp, noteText };
+              return { hero, stamp, stats, noteText };
             }"""
         )
         h21 = photo21["hero"]
         s21 = photo21["stamp"]
         check(
-            "r21 share: the Photo card shows the meal sharp on a round plate over its own blurred copy, stamp on the rim",
-            h21 and h21["r"] > 200 and s21 and abs(math.hypot(s21["x"] - h21["x"], s21["y"] - h21["y"]) - h21["r"]) < 8,
+            "r26 share: the Photo card runs the meal full-bleed, stamp inside the frame and above the title band",
+            h21
+            and h21.get("mode") == "bleed"
+            and h21["width"] == 1080
+            and h21["height"] == 1920
+            and s21
+            and s21["x"] + s21["r"] <= 1080
+            and s21["y"] + s21["r"] <= h21["textTop"],
             photo21,
         )
+        check(
+            "r26 share: the full-bleed Photo card keeps three hero stats (price, rating, taste)",
+            photo21.get("stats") == ["PRICE", "RATING", "TASTE"],
+            photo21.get("stats"),
+        )
         check("r21 share: the sheet footnote is one short line", 0 < len(photo21["noteText"]) <= 90, photo21["noteText"])
+        # ---- r26: insights money split + two-column places, empty-state unlocks ----
+        page.goto(base + "#insights")
+        page.wait_for_selector("html[data-ready='1']")
+        page.wait_for_timeout(300)
+        ins26 = page.evaluate(
+            """() => {
+              const split = [...document.querySelectorAll('#view-insights .spend-split span')];
+              const pct = [...document.querySelectorAll('#view-insights .spend-split-key b')].map((b) => parseInt(b.textContent, 10));
+              const lead = document.querySelector('#view-insights .spend-split-lead');
+              const list = document.querySelector('#view-insights .place-list');
+              const cols = list ? getComputedStyle(list).gridTemplateColumns.split(' ').length : 0;
+              return { bars: split.length, pct, lead: lead ? lead.textContent : '', cols, width: innerWidth };
+            }"""
+        )
+        check(
+            "r26 insights: the money card has a stacked split whose shares add to ~100%",
+            ins26["bars"] >= 1 and len(ins26["pct"]) == ins26["bars"] and 98 <= sum(ins26["pct"]) <= 102 and "% of your food money" in ins26["lead"],
+            ins26,
+        )
+        check(
+            "r26 insights: Top places runs in two columns on wide screens",
+            ins26["cols"] == (2 if ins26["width"] >= 1100 else 1),
+            ins26,
+        )
+        empty26 = page.evaluate(
+            """() => {
+              const keep = window.Lahap.state.entries;
+              window.Lahap.state.entries = [];
+              const box = document.createElement('div');
+              box.innerHTML = window.Lahap.emptyHtml ? window.Lahap.emptyHtml() : '';
+              window.Lahap.state.entries = keep;
+              return [...box.querySelectorAll('.unlocks li')].map((li) => li.textContent.trim());
+            }"""
+        )
+        check(
+            "r26 empty: the empty diary lists what logging unlocks, ending with taste twins",
+            len(empty26) == 3 and "taste twins" in empty26[-1],
+            empty26,
+        )
         page.goto(base + "#lab")
         page.wait_for_selector("html[data-ready='1']")
         page.wait_for_timeout(300)

@@ -2540,7 +2540,7 @@ label.chip input {
 /* r20: the bands stay visible, the method folds away so the plates sit higher on a phone */
 .score-rule {
   margin: 2px 0 var(--s3);
-  font-size: 14px;
+  font-size: 15px;
   color: var(--muted);
 }
 .score-rule summary {
@@ -3333,4 +3333,110 @@ label.chip input {
 #view-diary aside.panel > h2 {
   padding-bottom: var(--s2);
   border-bottom: 1px dashed var(--line-strong);
+}
+
+/* r26: Top places runs in two columns on wide screens so it sits level with the money card */
+@media (min-width: 1100px) {
+  #view-insights .place-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--s5);
+  }
+  #view-insights .place-list .person:last-child {
+    border-bottom: 1px solid var(--line);
+  }
+  #view-insights .place-list .person:nth-last-child(-n + 2):nth-child(odd),
+  #view-insights .place-list .person:nth-last-child(-n + 2):nth-child(odd) ~ .person {
+    border-bottom: 0;
+  }
+  #view-insights .plate-week .pday b {
+    font-size: 16px;
+  }
+  #view-insights .plate-week .pday span {
+    font-size: 14px;
+  }
+}
+
+/* r26: share of spend by source as one stacked, receipt-ink bar */
+.spend-split {
+  display: flex;
+  gap: 3px;
+  height: 18px;
+  margin: var(--s4) 0 var(--s2);
+}
+.spend-split span {
+  border-radius: 3px;
+  min-width: 6px;
+}
+.split-out {
+  background: var(--accent);
+}
+.split-home {
+  background: var(--good, #4f8a3c);
+}
+.split-delivery {
+  background: #e0b25a;
+}
+.spend-split-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px var(--s4);
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+.spend-split-key i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border-radius: 2px;
+  vertical-align: baseline;
+}
+.spend-split-lead {
+  margin: var(--s3) 0 0;
+  font-family: var(--font-display);
+  font-size: 20px;
+}
+.spend-split-lead b {
+  color: var(--accent);
+}
+
+/* r26: the empty diary says what logging unlocks, ending with finding your taste twins */
+.unlocks {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s3);
+  max-width: 620px;
+  margin: var(--s4) auto;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+.unlocks li {
+  display: grid;
+  gap: 2px;
+  padding: var(--s2) var(--s3);
+  border-top: 2px solid var(--ink);
+  font-size: 14px;
+  color: var(--muted);
+}
+.unlocks li b {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.unlocks li:last-child {
+  border-top-color: var(--accent);
+}
+.unlocks li:last-child span {
+  color: var(--ink);
+  font-weight: 600;
+}
+@media (max-width: 520px) {
+  .unlocks {
+    grid-template-columns: 1fr;
+    gap: var(--s1, 4px);
+  }
 }

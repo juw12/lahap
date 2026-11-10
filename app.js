@@ -748,6 +748,11 @@
         <h2>Your plate is empty</h2>
         <p>Log a meal in about 15 seconds: dish, place, price, and how the plate looked. Everything stays on this device.</p>
         ${sampleTicketHtml()}
+        <ol class="unlocks" aria-label="What logging unlocks">
+          <li><b class="mono">1 meal</b><span>Your first shareable card</span></li>
+          <li><b class="mono">5 meals</b><span>Your taste profile and plate score</span></li>
+          <li><b class="mono">10 meals</b><span>Find your taste twins among friends</span></li>
+        </ol>
         <div class="btn-row">
           <button type="button" class="btn primary" data-action="log">Log your first meal</button>
           <button type="button" class="btn" data-sample>Try with a sample fortnight</button>
@@ -965,14 +970,30 @@
         </section>
         <section class="panel">
           <h2>Top places</h2>
-          ${places.length ? places.map((place) => `<div class="person" style="grid-template-columns:minmax(0,1fr) auto"><div><div class="name">${esc(place.name)}</div><div class="why">${place.count} ${place.count === 1 ? "visit" : "visits"} · ${esc(place.cuisines.join(", "))}</div></div><span class="mono">${esc(money(place.spend))}</span></div>`).join("") : '<p class="muted">No places yet.</p>'}
+          ${places.length ? `<div class="place-list">${places.map((place) => `<div class="person" style="grid-template-columns:minmax(0,1fr) auto"><div><div class="name">${esc(place.name)}</div><div class="why">${place.count} ${place.count === 1 ? "visit" : "visits"} · ${esc(place.cuisines.join(", "))}</div></div><span class="mono">${esc(money(place.spend))}</span></div>`).join("")}</div>` : '<p class="muted">No places yet.</p>'}
         </section>
         <section class="panel">
           <h2>Where the money went</h2>
           ${barsHtml(Object.keys(SOURCES).map((key) => ({ name: SOURCES[key], count: Math.round(spend[key] / 1000) })), Math.max(1, Math.round(Math.max(spend.out, spend.home, spend.delivery) / 1000)))}
+          ${spendSplitHtml(spend)}
           <p class="notice">Bars in thousands of ${esc(state.settings.currency)}. Out ${esc(money(spend.out))}, home ${esc(money(spend.home))}, delivery ${esc(money(spend.delivery))}.</p>
         </section>
       </div>`;
+  }
+
+  // r26: one stacked bar for the share of spend by source, so the money card reads at a glance
+  function spendSplitHtml(spend) {
+    const total = spend.out + spend.home + spend.delivery;
+    if (!total) return "";
+    const parts = Object.keys(SOURCES)
+      .map((key) => ({ key, name: SOURCES[key], pct: Math.round((spend[key] / total) * 100) }))
+      .filter((part) => part.pct > 0);
+    const lead = parts.slice().sort((a, b) => b.pct - a.pct)[0];
+    return `<div class="spend-split" role="img" aria-label="${parts.map((part) => `${esc(part.name)} ${part.pct}%`).join(", ")}">
+        ${parts.map((part) => `<span class="split-${part.key}" style="flex:${part.pct}"></span>`).join("")}
+      </div>
+      <p class="spend-split-key">${parts.map((part) => `<span><i class="split-${part.key}"></i>${esc(part.name)} <b class="mono">${part.pct}%</b></span>`).join("")}</p>
+      <p class="spend-split-lead"><b>${lead.pct}%</b> of your food money went to ${esc(lead.name.toLowerCase())}.</p>`;
   }
 
   /* ---------------- taste buds ---------------- */
@@ -2288,6 +2309,7 @@
     const preview = !!(opts && opts.preview);
     const H = size === "story" ? 1920 : 1080;
     if (!preview) drawShare.boxes = [];
+    if (!preview) drawShare.statLabels = [];
     if (!preview) drawShare.stamp = null;
     if (!preview) drawShare.photoHero = null;
     canvas.width = Math.round(W * scale);
@@ -2310,19 +2332,12 @@
     const sans = (size, weight) => `${weight || 600} ${size}px system-ui, "Segoe UI", Roboto, Arial, sans-serif`;
 
     // background
-    // r21: on the single-meal Card the photo is shown twice - blurred and dimmed as a calm backdrop,
-    // then sharp inside a round plate - so the dish, the stamp and the title each get a clean field
-    const photoFocus = template === "card" && !isWeek;
+    // r26: on the single-meal Card the photo runs sharp and full-bleed, edge to edge, so Photo reads
+    // as a photo poster rather than the Paper card recoloured; the card layout lays its own scrim band
+    const photoBleed = template === "card" && !isWeek;
     let backdrop = null;
     const paintBackdrop = (img) => {
-      if (!photoFocus) {
-        cover(ctx, img, 0, 0, W, H);
-        return;
-      }
-      ctx.save();
-      ctx.filter = "blur(34px) brightness(0.72) saturate(1.08)";
-      cover(ctx, img, -80, -80, W + 160, H + 160);
-      ctx.restore();
+      cover(ctx, img, 0, 0, W, H);
     };
     if (bg === "paper") {
       ctx.fillStyle = "#f5efe3";
@@ -2349,14 +2364,16 @@
         }
       }
       // scrim: clear over the food, then a solid dark band behind the title and stats so
-      // white text stays readable over pale plates and busy photos
-      const shade = ctx.createLinearGradient(0, H * 0.22, 0, H);
-      shade.addColorStop(0, "rgba(20,14,10,0)");
-      shade.addColorStop(0.36, "rgba(20,14,10,0.62)");
-      shade.addColorStop(0.55, "rgba(20,14,10,0.8)");
-      shade.addColorStop(1, "rgba(20,14,10,0.88)");
-      ctx.fillStyle = shade;
-      ctx.fillRect(0, 0, W, H);
+      // white text stays readable over pale plates and busy photos (the full-bleed Card lays its own)
+      if (!photoBleed || !backdrop) {
+        const shade = ctx.createLinearGradient(0, H * 0.22, 0, H);
+        shade.addColorStop(0, "rgba(20,14,10,0)");
+        shade.addColorStop(0.36, "rgba(20,14,10,0.62)");
+        shade.addColorStop(0.55, "rgba(20,14,10,0.8)");
+        shade.addColorStop(1, "rgba(20,14,10,0.88)");
+        ctx.fillStyle = shade;
+        ctx.fillRect(0, 0, W, H);
+      }
       // top scrim so the brand row reads over bright photos too
       const topShade = ctx.createLinearGradient(0, 0, 0, H * 0.14);
       topShade.addColorStop(0, "rgba(20,14,10,0.5)");
@@ -2436,7 +2453,10 @@
       ctx.fillText(value, x, y + (size || 84) + 8);
       const valueWidth = ctx.measureText(value).width;
       ctx.font = mono(28, 600);
-      if (!preview) drawShare.boxes.push({ x, y, width: Math.max(valueWidth, ctx.measureText(label.toUpperCase()).width) });
+      if (!preview) {
+        drawShare.boxes.push({ x, y, width: Math.max(valueWidth, ctx.measureText(label.toUpperCase()).width) });
+        drawShare.statLabels.push(label.toUpperCase());
+      }
     }
 
     if (template === "receipt") {
@@ -2603,13 +2623,14 @@
     }
 
     // single meal card: text block anchored to the bottom, the plate fills what is left above it
-    brand(pad + 20);
     const square = size === "square";
+    const bleed = bg === "photo" && !!backdrop;
     const titleSize = square ? 76 : 104;
     const titleStep = square ? 90 : 120;
     ctx.font = serif(titleSize);
     const titleLines = wrapText(ctx, entry.name, W - pad * 2, 2);
-    const rowGap = square ? 0 : 200;
+    // the full-bleed photo keeps one row of three hero stats so the food has the frame
+    const rowGap = square || bleed ? 0 : 200;
     const blockHeight = titleStep * titleLines.length + (square ? 36 : 56) + (square ? 62 : 84) + rowGap + (square ? 76 : 84);
     const baseY = H - (square ? 70 : 150) - blockHeight;
     const top = square ? 100 : 150;
@@ -2617,6 +2638,20 @@
     const box = Math.min(square ? 440 : 860, room);
     const boxX = (W - box) / 2;
     const boxY = top + (room - box) / 2;
+    if (bleed) {
+      // scrim band: clear over the food, deepening to a solid strip under the title and stats
+      const bandTop = baseY - (square ? 300 : 420);
+      const band = ctx.createLinearGradient(0, bandTop, 0, baseY + 40);
+      band.addColorStop(0, "rgba(20,14,10,0)");
+      band.addColorStop(0.55, "rgba(20,14,10,0.62)");
+      band.addColorStop(1, "rgba(20,14,10,0.86)");
+      ctx.fillStyle = band;
+      ctx.fillRect(0, bandTop, W, baseY + 40 - bandTop);
+      ctx.fillStyle = "rgba(20,14,10,0.86)";
+      ctx.fillRect(0, baseY + 40, W, H - baseY - 40);
+      if (!preview) drawShare.photoHero = { mode: "bleed", x: 0, y: 0, width: W, height: H, textTop: baseY - 34 };
+    }
+    brand(pad + 20);
     if (bg !== "photo") {
       if (cutout) {
         // food-only cutout sits on the card like a sticker, no box around it
@@ -2639,33 +2674,13 @@
       } else {
         drawPlate(ctx, W / 2, boxY + box / 2, box * 0.46, entry.plate, entry.name);
       }
-    } else if (backdrop) {
-      // the sharp photo on a round plate with a white rim, floating over its own blurred copy
-      const heroR = box * 0.46;
-      const cx = W / 2;
-      const cy = boxY + box / 2;
-      ctx.save();
-      ctx.shadowColor = "rgba(0,0,0,0.45)";
-      ctx.shadowBlur = 48;
-      ctx.shadowOffsetY = 20;
-      ctx.beginPath();
-      ctx.arc(cx, cy, heroR + 18, 0, Math.PI * 2);
-      ctx.fillStyle = "#fbf7ef";
-      ctx.fill();
-      ctx.restore();
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(cx, cy, heroR, 0, Math.PI * 2);
-      ctx.clip();
-      cover(ctx, backdrop, cx - heroR, cy - heroR, heroR * 2, heroR * 2);
-      ctx.restore();
-      if (!preview) drawShare.photoHero = { x: cx, y: cy, r: heroR };
     }
-    // plate score as a tilted stamp on the top-right rim, the one sticker-like flourish
+    // plate score as a tilted stamp on the top-right rim, the one sticker-like flourish;
+    // on the full-bleed photo it sits just above the title band, clear of the food's centre
     const score = L.healthScore(entry.plate);
     const stampR = square ? 92 : 124;
     const plateR = box * 0.46;
-    const onRim = bg !== "photo" || !!backdrop;
+    const onRim = bg !== "photo";
     const stampX = onRim ? W / 2 + plateR * Math.SQRT1_2 : W - pad - stampR;
     const stampY = onRim ? boxY + box / 2 - plateR * Math.SQRT1_2 : baseY - stampR - 40;
     if (!preview) drawShare.stamp = { x: stampX, y: stampY, r: stampR, ink: bandInk(score) };
@@ -2689,6 +2704,10 @@
     const smallW = (W - pad * 2 - priceW) / 2;
     statBlock(pad, statsY, "Price", money(entry.price), square ? 56 : 68, priceW - gutter);
     statBlock(pad + priceW, statsY, "Rating", entry.rating ? `${entry.rating}/5` : "–", square ? 56 : 68, smallW - gutter);
+    if (bleed) {
+      statBlock(pad + priceW + smallW, statsY, "Taste", (entry.tastes || [])[0] || entry.cuisine || "–", square ? 56 : 68, smallW - gutter);
+      return;
+    }
     statBlock(pad + priceW + smallW, statsY, "Eaten", eaten, square ? 56 : 68, smallW - gutter);
     if (!square) {
       // second row: what makes this meal yours (taste, cuisine, who with)
@@ -3339,7 +3358,7 @@
   }
 
   // test hook
-  window.Lahap = { state, render, inviteLink, openLog, openShare, openHangout, openQuiz, drawShare, loadSample, sampleEntries, renderLab, nutritionFor, readListPhoto, removeFriend };
+  window.Lahap = { state, render, inviteLink, openLog, openShare, openHangout, openQuiz, drawShare, loadSample, sampleEntries, renderLab, nutritionFor, readListPhoto, removeFriend, emptyHtml };
 
   init();
 })();
