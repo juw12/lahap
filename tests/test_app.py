@@ -856,7 +856,7 @@ def main():
         pending = page.evaluate("() => (document.querySelector('#view-buds .plan-pending') || {}).textContent || ''")
         check("buds: a saved plan shows on the bud row with the We went step", "Planned:" in pending and "We went" in pending, pending)
         before = page.evaluate("() => window.Lahap.state.points.rina || 0")
-        page.locator("[data-done]").first.click()
+        page.locator("#view-buds [data-done]").first.click()
         page.wait_for_timeout(300)
         after = page.evaluate("() => window.Lahap.state.points.rina || 0")
         check("hangout done adds 25 points", after - before == 25, f"{before} -> {after}")
@@ -1454,6 +1454,55 @@ def main():
             pulse22 and pulse22["height"] <= 80 and pulse22["oneRow"] and pulse22["shareW"] <= 48 and pulse22["shareName"].startswith("Share"),
             pulse22,
         )
+        # ---- r27: a pending plan leads the pulse with We went; phone unlocks in one row; demo matches look like demos ----
+        r27 = page.evaluate(
+            """async () => {
+              const S = window.Lahap.state;
+              const bud = S.friends[0];
+              const id = 'r27-plan';
+              S.invites.push({ id, friend: bud, place: 'Menya Kiri', when: new Date(Date.now() + 86400000).toISOString(), done: false });
+              window.Lahap.render();
+              await new Promise(r => setTimeout(r, 150));
+              const p = document.querySelector('#view-diary .lead-day .day-pulse');
+              const went = p ? p.querySelector('[data-done]') : null;
+              const share = p ? p.querySelector('[data-share]') : null;
+              const out = {
+                plan: !!(p && p.classList.contains('pulse-plan')),
+                went: went ? went.textContent.trim() : '',
+                wentId: went ? went.dataset.done : '',
+                share: !!share,
+                text: p ? p.textContent : '',
+                height: p ? Math.round(p.getBoundingClientRect().height) : 0,
+              };
+              S.invites = S.invites.filter((invite) => invite.id !== id);
+              window.Lahap.render();
+              await new Promise(r => setTimeout(r, 150));
+              out.backToTag = !!document.querySelector('#view-diary .lead-day .day-pulse [data-tag-meal]');
+              const box = document.createElement('div');
+              box.innerHTML = window.Lahap.emptyHtml();
+              document.querySelector('main').appendChild(box);
+              const items = [...box.querySelectorAll('.unlocks li')];
+              const tops = items.map((li) => Math.round(li.getBoundingClientRect().top));
+              out.unlockRow = tops.length === 3 && Math.max(...tops) - Math.min(...tops) <= 2;
+              out.shortShown = items.every((li) => getComputedStyle(li.querySelector('.u-short')).display !== 'none' && getComputedStyle(li.querySelector('.u-long')).display === 'none');
+              box.remove();
+              location.hash = '#buds';
+              await new Promise(r => setTimeout(r, 300));
+              const sug = document.querySelector('#view-buds .suggested-panel');
+              out.dashed = sug ? getComputedStyle(sug).borderTopStyle : '';
+              out.badge = sug ? (sug.querySelector('.demo-badge') || {}).textContent || '' : '';
+              location.hash = '#diary';
+              await new Promise(r => setTimeout(r, 300));
+              return out;
+            }"""
+        )
+        check(
+            "r27 diary: a planned makan leads the pulse with one-tap We went (and Share), and the pulse goes back to Tag once it's done",
+            r27["plan"] and r27["went"] == "We went" and r27["wentId"] == "r27-plan" and r27["share"] and "Menya Kiri" in r27["text"] and r27["height"] <= 80 and r27["backToTag"],
+            r27,
+        )
+        check("r27 empty: on a phone the three unlocks sit in one row with short labels", r27["unlockRow"] and r27["shortShown"], r27)
+        check("r27 buds: demo matches are a dashed panel with a Demo badge", r27["dashed"] == "dashed" and r27["badge"].strip().lower() == "demo", r27)
         actions22 = page.evaluate(
             """async () => {
               window.Lahap.openShare(window.Lahap.state.entries.find(e => e.name === 'Tom yum seafood'));

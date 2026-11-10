@@ -654,6 +654,15 @@
       .map((person) => ({ person, level: L.levelFor(state.points[person.id] || 0) }))
       .filter((item) => item.level.next)
       .sort((a, b) => a.level.toNext - b.level.toNext);
+    // r27: a planned makan that hasn't been marked yet comes first - one tap closes the loop (+points, log the meal)
+    const plan = state.invites
+      .filter((invite) => !invite.done && buds.some((person) => person.id === invite.friend))
+      .sort((a, b) => new Date(a.when) - new Date(b.when))[0];
+    if (plan) {
+      const friend = personById(plan.friend);
+      const when = new Date(plan.when).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+      return `<div class="day-pulse pulse-plan">${avatar(friend)}<span class="pulse-text"><strong>Makan with ${esc(friend.name)}</strong><span class="muted small">${esc(plan.place || "somewhere new")} · ${esc(when)}<span class="pulse-extra"> · +${L.POINTS.hangout} pts</span></span></span><button type="button" class="btn small primary" data-done="${esc(plan.id)}">We went</button>${shareButton}</div>`;
+    }
     if (!ranked.length) {
       return `<div class="day-pulse"><span class="pulse-text"><strong>Eat with a friend?</strong><span class="muted small">Add a bud on Taste buds and tag them in meals.</span></span><a class="btn small" href="#buds">Find buds</a>${shareButton}</div>`;
     }
@@ -749,9 +758,9 @@
         <p>Log a meal in about 15 seconds: dish, place, price, and how the plate looked. Everything stays on this device.</p>
         ${sampleTicketHtml()}
         <ol class="unlocks" aria-label="What logging unlocks">
-          <li><b class="mono">1 meal</b><span>Your first shareable card</span></li>
-          <li><b class="mono">5 meals</b><span>Your taste profile and plate score</span></li>
-          <li><b class="mono">10 meals</b><span>Find your taste twins among friends</span></li>
+          <li><b class="mono">1 meal</b><span><span class="u-long">Your first shareable card</span><span class="u-short">Share card</span></span></li>
+          <li><b class="mono">5 meals</b><span><span class="u-long">Your taste profile and plate score</span><span class="u-short">Taste profile</span></span></li>
+          <li><b class="mono">10 meals</b><span><span class="u-long">Find your taste twins among friends</span><span class="u-short">Taste twins</span></span></li>
         </ol>
         <div class="btn-row">
           <button type="button" class="btn primary" data-action="log">Log your first meal</button>
@@ -1211,7 +1220,7 @@
             }).join("") : '<p class="muted">No buds yet. Invite a friend, or add an example profile below to try tagging and hangouts.</p>'}
           </section>
           <details class="panel suggested-panel suggested-fold"${isPhone() ? " open" : ""}>
-            <summary><h2>${hasTasteProfile() ? "Demo matches · suggested by taste" : "Example buds to try"}</h2></summary>
+            <summary><h2>${hasTasteProfile() ? "Demo matches · suggested by taste" : "Example buds to try"}</h2><span class="demo-badge" aria-hidden="true">Demo</span></summary>
             <p class="muted small panel-sub suggested-why">${hasTasteProfile() ? "Example profiles, ranked by how close their tastes are to the meals you logged. Worked out on this phone; nothing is uploaded. Real friends join through your invite link." : "Example profiles to try tagging and hangouts. Log a few meals and they get ranked by taste."}</p>
             ${others.length ? others.map(({ person, match }) => `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(match)}</span></div><div class="why">${esc(hasTasteProfile() ? reasonsFor(person) : "Log a few meals to see what you share")} · ${esc(person.area)}</div>${hasTasteProfile() && spotFor(person) ? `<div class="spot">${esc(spotFor(person))}</div>` : ""}</div><button type="button" class="btn" data-add="${person.id}" aria-label="Add ${esc(person.name)} as a bud on this device">Add bud</button></div>`).join("") : '<p class="muted">You added everyone. Nice.</p>'}
             <p class="notice">These are example profiles so you can try matching, tagging and hangouts. Lahap has no server yet: buds and points stay on this device, and invites go out through WhatsApp or your phone's share sheet.</p>

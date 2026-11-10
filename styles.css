@@ -3452,9 +3452,67 @@ label.chip input {
   color: var(--ink);
   font-weight: 600;
 }
+.u-short {
+  display: none;
+}
 @media (max-width: 520px) {
+  /* r27: on a phone the three unlocks sit in one compact row so 'Taste twins' is above the fold */
   .unlocks {
-    grid-template-columns: 1fr;
-    gap: var(--s1, 4px);
+    gap: var(--s2);
+    margin: var(--s3) auto;
   }
+  .unlocks li {
+    padding: 6px 4px 0;
+    font-size: 13px;
+  }
+  .unlocks li b {
+    font-size: 11px;
+  }
+  .u-long {
+    display: none;
+  }
+  .u-short {
+    display: inline;
+  }
+  .empty canvas {
+    width: 72px;
+    height: 72px;
+  }
+}
+
+/* r27: demo matches are visibly not your buds - dashed outline, no paper fill, a small Demo badge */
+#view-buds .suggested-panel {
+  position: relative;
+  background: transparent;
+  border: 1.5px dashed var(--line-strong);
+  box-shadow: none;
+}
+.demo-badge {
+  position: absolute;
+  top: var(--s3);
+  right: var(--s3);
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* r27: a little air between the day header and the pulse, and the pending-plan pulse reads as a ticket stub */
+.day > .day-pulse {
+  margin-top: var(--s2);
+}
+.pulse-plan {
+  border-style: solid;
+  border-color: var(--accent);
+}
+
+/* r27 + fold: inside the folded summary the Demo badge sits inline before the arrow instead of floating */
+.suggested-panel.suggested-fold > summary .demo-badge {
+  position: static;
+  margin-left: auto;
+  flex: none;
 }
