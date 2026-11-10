@@ -902,13 +902,6 @@
       <div class="bar-row"><span>${esc(item.name)}</span><span class="track"><span class="fill" style="display:block;width:${Math.round((item.count / max) * 100)}%"></span></span><span class="n">${esc(label ? label(item) : String(item.count))}</span></div>`).join("")}</div>`;
   }
 
-  // r29: spend bars say what they count - "IDR 404k", not a bare 404
-  function compactMoney(thousands) {
-    const currency = state.settings.currency;
-    if (!thousands) return `${currency} 0`;
-    return thousands >= 1000 ? `${currency} ${(thousands / 1000).toFixed(1).replace(/\.0$/, "")}M` : `${currency} ${thousands}k`;
-  }
-
   // the day's plate: average portions of everything eaten that day
   function averagePlate(meals) {
     if (!meals.length) return {};
@@ -1000,7 +993,7 @@
         </section>
         <section class="panel">
           <h2>Where the money went</h2>
-          ${barsHtml(Object.keys(SOURCES).map((key) => ({ name: SOURCES[key], count: Math.round(spend[key] / 1000) })), Math.max(1, Math.round(Math.max(spend.out, spend.home, spend.delivery) / 1000)), (item) => compactMoney(item.count))}
+          ${barsHtml(Object.keys(SOURCES).map((key) => ({ name: SOURCES[key], count: Math.round(spend[key] / 1000) })), Math.max(1, Math.round(Math.max(spend.out, spend.home, spend.delivery) / 1000)), (item) => compactMoney(item.count * 1000))}
           ${spendSplitHtml(spend)}
           <p class="notice">Exact: out ${esc(money(spend.out))}, home ${esc(money(spend.home))}, delivery ${esc(money(spend.delivery))}.</p>
         </section>
@@ -1758,7 +1751,7 @@
           <p class="hint small" id="lab-status" role="status" aria-live="polite">${esc(state.lab.status || defaultStatus)}</p>
           ${have.length ? `<h3 class="small-head">In your kitchen</h3><div class="chips">${have.map((id) => `<button type="button" class="chip on" data-lab-remove="${id}" aria-label="Remove ${esc(ingredientLabel(id))}"><span>${esc(ingredientLabel(id))}</span>${ICON_X}</button>`).join("")}</div>` : ""}
           <h3 class="small-head">Quick add</h3>
-          <div class="chips">${quick.map((id) => `<button type="button" class="chip" data-lab-add="${id}">+ ${esc(ingredientLabel(id))}</button>`).join("")}</div>
+          <div class="chips">${quick.map((id) => `<button type="button" class="chip quick-tag" data-lab-add="${id}">+ ${esc(ingredientLabel(id))}</button>`).join("")}</div>
         </section>
         <section class="lab-results" aria-label="Recipe ideas">
           <div class="goal-pick"><span class="small muted">Cooking for</span>${segHtml("labgoal", Object.entries(N.GOALS).map(([key, value]) => [key, value.label]), goal)}</div>
@@ -1920,16 +1913,16 @@
           <div id="seen-before"></div>
           <div class="field"><span>Where from</span>${segHtml("source", Object.entries(SOURCES), draft.source)}</div>
           <label class="field"><span>Place</span><input type="text" name="place" list="place-list" value="${esc(draft.place)}" placeholder="Warung or Home"></label>
-          <!-- r24: price sits with cuisine so the quick log is one row shorter; the time moved into More details -->
-          <div class="row">
-            <label class="field"><span>Cuisine</span><input type="text" name="cuisine" list="cuisine-list" value="${esc(draft.cuisine)}" placeholder="Indonesian"></label>
-            <label class="field"><span>Price (${esc(state.settings.currency)})</span><input type="number" name="price" inputmode="decimal" min="0" step="any" value="${esc(draft.price)}"></label>
-          </div>
           <datalist id="place-list">${places.map((place) => `<option value="${esc(place)}">`).join("")}</datalist>
           <!-- r18: who you ate with sits next to Place, outside the fold - tagging is the social loop -->
           <fieldset class="field ate-with"><legend>Ate with <span class="hint">${esc(closestBudNudge() || `+${L.POINTS.tag} connection points each`)}</span></legend>
             ${buds.length ? `<div class="chips">${buds.map((person) => `<label class="chip"><input type="checkbox" name="friend" value="${person.id}" ${draft.friends.includes(person.id) ? "checked" : ""}><span>${esc(person.name)}${hasTasteProfile() ? `<span class="chip-match">${matchFor(person)}%</span>` : ""}</span></label>`).join("")}</div>` : '<p class="muted small">Add buds on the Taste buds tab to tag them here.</p>'}
           </fieldset>
+          <!-- r24: price sits with cuisine; r30: below Ate with, so tagging a bud is on the first screen -->
+          <div class="row">
+            <label class="field"><span>Cuisine</span><input type="text" name="cuisine" list="cuisine-list" value="${esc(draft.cuisine)}" placeholder="Indonesian"></label>
+            <label class="field"><span>Price (${esc(state.settings.currency)})</span><input type="number" name="price" inputmode="decimal" min="0" step="any" value="${esc(draft.price)}"></label>
+          </div>
           <datalist id="cuisine-list">${CUISINES.map((cuisine) => `<option value="${esc(cuisine)}">`).join("")}</datalist>
           <fieldset class="field"><legend>How did the plate look? <span class="hint">sets the plate score</span></legend>
             <div class="plate-step">
@@ -3065,7 +3058,7 @@
     dialog.innerHTML = `
       <div class="sheet-head"><h2 id="share-title">${isWeek ? "Share my week" : "Share " + esc(subject.name)}</h2><button type="button" class="icon-btn" data-close aria-label="Close">${ICON_CLOSE}</button></div>
       <div class="sheet-body share-grid">
-        <div class="canvas-stage"><canvas id="share-canvas" role="img" aria-label="Share card preview"></canvas></div>
+        <div class="canvas-stage"><canvas id="share-canvas" role="img" aria-label="Share card preview"></canvas><button type="button" class="stage-zoom" id="share-zoom" aria-pressed="false" aria-label="See the card full size"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Full size</span></button></div>
         <div>
           <div class="control"><span>Template</span>
             <div class="template-prev" role="group" aria-label="Template preview">
@@ -3111,7 +3104,30 @@
         sendButton.disabled = false;
       }, "image/png");
     };
+    // r30: the preview opens full size on a tap, so the card can be read before it is posted
+    const stage = dialog.querySelector(".canvas-stage");
+    const zoomButton = $("#share-zoom");
+    const setZoom = (on) => {
+      stage.classList.toggle("zoomed", on);
+      zoomButton.setAttribute("aria-pressed", String(on));
+      zoomButton.querySelector("span").textContent = on ? "Close" : "Full size";
+      zoomButton.setAttribute("aria-label", on ? "Close the full-size card" : "See the card full size");
+    };
+    dialog.addEventListener("cancel", (event) => {
+      if (stage.classList.contains("zoomed")) {
+        event.preventDefault();
+        setZoom(false);
+      }
+    });
     dialog.onclick = (event) => {
+      if (event.target.closest("#share-zoom") || event.target === canvas) {
+        setZoom(!stage.classList.contains("zoomed"));
+        return;
+      }
+      if (stage.classList.contains("zoomed") && event.target === stage) {
+        setZoom(false);
+        return;
+      }
       const button = event.target.closest("[data-seg]");
       if (!button) return;
       if (button.dataset.seg === "background" && button.dataset.value === "photo" && !isWeek && !subject.photo) {

@@ -1618,6 +1618,91 @@ def main():
             week29 and week29["canvas"] and week29["inked"] > 500 and 40 <= week29["w"] <= 80 and (week29["note"] is None or week29["note"].startswith("On repeat this week (last 7 days)")),
             week29,
         )
+        # ---- r30: one money formatter (533k, never 533M), Ate with on the first screen, share preview full size, ticket Quick add ----
+        page.goto(base + "#diary")
+        page.wait_for_selector("html[data-ready='1']")
+        page.wait_for_timeout(250)
+        strip30 = page.evaluate(
+            """() => {
+              const toAmount = (text) => {
+                const m = String(text || '').replace(/,/g, '').match(/([0-9.]+)\\s*([kM]?)/);
+                if (!m) return null;
+                return parseFloat(m[1]) * (m[2] === 'M' ? 1e6 : m[2] === 'k' ? 1e3 : 1);
+              };
+              const el = [...document.querySelectorAll('.week-strip .ws-value[title]')].find((v) => /[0-9]/.test(v.title));
+              if (!el) return null;
+              return { shown: el.textContent.trim(), exact: el.title, shownAmount: toAmount(el.textContent), exactAmount: toAmount(el.title) };
+            }"""
+        )
+        check(
+            "r30 diary phone: the week strip's short spend agrees with the exact figure (IDR 533k for IDR 533,000, never 533M)",
+            strip30 and strip30["exactAmount"] and abs(strip30["shownAmount"] - strip30["exactAmount"]) <= 0.06 * strip30["exactAmount"],
+            strip30,
+        )
+        page.locator(".fab").click()
+        page.wait_for_selector("#log-form")
+        page.wait_for_timeout(300)
+        log30 = page.evaluate(
+            """() => {
+              const field = document.querySelector('#log-form .ate-with');
+              const foot = document.querySelector('#dlg-log .sheet-foot');
+              const cuisine = document.querySelector('#log-form input[name=cuisine]');
+              const r = field.getBoundingClientRect();
+              return {
+                bottom: Math.round(r.bottom),
+                footTop: Math.round(foot.getBoundingClientRect().top),
+                beforeCuisine: !!(cuisine && (field.compareDocumentPosition(cuisine) & Node.DOCUMENT_POSITION_FOLLOWING)),
+                chips: field.querySelectorAll('.chip').length,
+              };
+            }"""
+        )
+        page.locator("#dlg-log [data-close]").first.click()
+        check(
+            "r30 log phone: Ate with (and its bud chips) sits above the sheet's buttons on a fresh log, before Cuisine and Price",
+            log30["bottom"] <= log30["footTop"] and log30["beforeCuisine"] and log30["chips"] > 0,
+            log30,
+        )
+        zoom30 = page.evaluate(
+            """async () => {
+              window.Lahap.openShare(window.Lahap.state.entries.find(e => e.name === 'Tom yum seafood'));
+              await new Promise(r => setTimeout(r, 500));
+              const d = document.getElementById('dlg-share');
+              const stage = d.querySelector('.canvas-stage');
+              const canvas = document.getElementById('share-canvas');
+              const before = Math.round(canvas.getBoundingClientRect().height);
+              document.getElementById('share-zoom').click();
+              await new Promise(r => setTimeout(r, 150));
+              const after = Math.round(canvas.getBoundingClientRect().height);
+              const fixed = getComputedStyle(stage).position === 'fixed';
+              const pressed = document.getElementById('share-zoom').getAttribute('aria-pressed');
+              d.dispatchEvent(new Event('cancel', { cancelable: true }));
+              await new Promise(r => setTimeout(r, 50));
+              const out = { before, after, vh: window.innerHeight, fixed, pressed, closedZoom: !stage.classList.contains('zoomed'), stillOpen: d.open };
+              d.close();
+              return out;
+            }"""
+        )
+        check(
+            "r30 share phone: tapping Full size shows the card at least 70% of the screen tall, and Back/Escape closes only the zoom",
+            zoom30["fixed"] and zoom30["pressed"] == "true" and zoom30["after"] >= 0.7 * zoom30["vh"] and zoom30["after"] > zoom30["before"] and zoom30["closedZoom"] and zoom30["stillOpen"],
+            zoom30,
+        )
+        page.goto(base + "#recipes")
+        page.wait_for_selector("html[data-ready='1']")
+        page.wait_for_timeout(250)
+        quick30 = page.evaluate(
+            """() => {
+              const chips = [...document.querySelectorAll('[data-lab-add]')];
+              if (!chips.length) return null;
+              const cs = getComputedStyle(chips[0]);
+              return { n: chips.length, tagged: chips.every((c) => c.classList.contains('quick-tag')), border: cs.borderTopStyle, font: cs.fontFamily };
+            }"""
+        )
+        check(
+            "r30 recipes: Quick add chips are dashed receipt tear-offs in till type, like the slip they sit on",
+            quick30 and quick30["tagged"] and quick30["border"] == "dashed" and "mono" in quick30["font"].lower(),
+            quick30,
+        )
         actions22 = page.evaluate(
             """async () => {
               window.Lahap.openShare(window.Lahap.state.entries.find(e => e.name === 'Tom yum seafood'));
