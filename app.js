@@ -501,6 +501,7 @@
   }
 
   const ICON_SEARCH = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+  const ICON_SHARE_SMALL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4m0 0L8 8m4-4 4 4M6 12v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   const ICON_CLOSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
 
   /* ---------------- diary ---------------- */
@@ -638,6 +639,24 @@
       ? `<button type="button" class="btn" data-hangout="${best.person.id}">Plan makan</button>`
       : `<button type="button" class="btn" data-add="${best.person.id}">Add bud</button>`;
     return `<div class="bud-nudge"><span class="avatar" style="background:${best.person.color || "var(--accent)"}">${esc(best.person.name[0])}</span><span><strong>${esc(best.person.name)} · ${best.match}% match</strong><span class="muted small">${esc(reasonsFor(best.person))}</span></span>${action}</div>`;
+  }
+
+  // r21: the social loop and the share action on the Diary's first screen, under the latest day's header:
+  // the bud closest to their next level (one tap tags them in a new meal) and a share of that day's plate
+  function dayPulseHtml(group) {
+    const latest = group.entries[0];
+    const shareButton = `<button type="button" class="btn small" data-share="${esc(latest.id)}" aria-label="Share a card of ${esc(latest.name)}">${ICON_SHARE_SMALL}<span>Share</span></button>`;
+    const buds = PEOPLE.filter((person) => state.friends.includes(person.id));
+    const ranked = buds
+      .map((person) => ({ person, level: L.levelFor(state.points[person.id] || 0) }))
+      .filter((item) => item.level.next)
+      .sort((a, b) => a.level.toNext - b.level.toNext);
+    if (!ranked.length) {
+      return `<div class="day-pulse"><span class="pulse-text"><strong>Eat with a friend?</strong><span class="muted small">Add a bud on Taste buds and tag them in meals.</span></span><a class="btn small" href="#buds">Find buds</a>${shareButton}</div>`;
+    }
+    const { person, level } = ranked[0];
+    const match = hasTasteProfile() ? ` · ${matchFor(person)}% match` : "";
+    return `<div class="day-pulse">${avatar(person)}<span class="pulse-text"><strong>${esc(person.name)}${match}</strong><span class="muted small">${level.toNext} pts to ${esc(level.next)} · +${L.POINTS.tag} a tag</span></span><button type="button" class="btn small primary" data-tag-meal="${esc(person.id)}">Tag ${esc(person.name)}</button>${shareButton}</div>`;
   }
 
   // r16: short money for the phone week strip - "IDR 533k", "IDR 1.2M"
@@ -784,6 +803,7 @@
             <span class="mono day-sum"><span class="day-chip">${plural(group.entries.length, "meal")}</span> <span class="day-chip">${esc(money(spend))}</span> <span class="day-chip score ${scoreClass(avg)}">plate ${avg} ${L.healthLabel(avg)}</span></span>
           </div>
           ${groupIndex === 0 ? plateKey : ""}
+          ${groupIndex === 0 && !state.query ? dayPulseHtml(group) : ""}
           ${group.entries.map(ticketHtml).join("")}
         </section>`;
     });
@@ -1154,8 +1174,7 @@
               return `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(matchFor(person))}</span></div><div class="why">${esc(level.name)} · ${points} pts · ${esc(lastTogether(person.id))}</div>${spotFor(person) ? `<div class="spot">${esc(spotFor(person))}</div>` : ""}${pendingPlanHtml(person.id)}${person.id === featuredId ? `<div class="featured-note">Next level shown above</div>` : `${level.next ? `<div class="next-step">${esc(nextStep(level))}</div>` : ""}<div class="level"><div class="track"><div class="fill" style="width:${Math.round(level.progress * 100)}%"></div></div></div>`}</div><div class="person-actions"><button type="button" class="btn small" data-hangout="${person.id}" aria-label="Plan makan with ${esc(person.name)}">Plan makan</button><button type="button" class="person-remove" data-remove="${person.id}" aria-label="Remove ${esc(person.name)}" title="Remove ${esc(person.name)}">Remove</button></div></div>`;
             }).join("") : '<p class="muted">No buds yet. Invite a friend, or add an example profile below to try tagging and hangouts.</p>'}
           </section>
-          ${inviteHtml()}
-          <section class="panel">
+          <section class="panel suggested-panel">
             <h2>${hasTasteProfile() ? "Suggested by taste" : "Example buds to try"}</h2>
             ${others.length ? others.map(({ person, match }) => `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(match)}</span></div><div class="why">${esc(hasTasteProfile() ? reasonsFor(person) : "Log a few meals to see what you share")} · ${esc(person.area)}</div>${hasTasteProfile() && spotFor(person) ? `<div class="spot">${esc(spotFor(person))}</div>` : ""}</div><button type="button" class="btn" data-add="${person.id}">Add</button></div>`).join("") : '<p class="muted">You added everyone. Nice.</p>'}
             <p class="notice">These are example profiles so you can try matching, tagging and hangouts. Lahap has no server yet: buds and points stay on this device, and invites go out through WhatsApp or your phone's share sheet.</p>
@@ -1178,6 +1197,7 @@
               ${L.LEVELS.slice(1).map((level) => `<tr><td>${esc(level.name)}</td><td>${level.min} pts</td></tr>`).join("")}
             </table>
           </section>
+          ${inviteHtml()}
         </aside>
       </div>`;
   }
@@ -1616,13 +1636,26 @@
     const have = state.lab.have;
     const fit = have.length ? `You have ${recipe.have.length} of ${recipe.items.length}.` : "";
     const need = recipe.missingCore.length ? ` Still need ${recipe.missingCore.map((label) => label.toLowerCase()).join(", ")}.` : "";
+    // r21: a recipe is a kitchen ticket like a diary meal - its plate on the left, the numbers on a
+    // perforated stub on the right, the ingredients as a till slip (ticked when you have them)
+    const plate = R.plateFor(recipe);
+    const score = L.healthScore(plate);
     return `
-      <article class="recipe">
-        <div class="recipe-head">
-          <h3>${esc(recipe.name)}</h3>
-          <span class="mono small">${recipe.minutes} min · ${recipe.nutrition.kcal} kcal · ${recipe.nutrition.p} g protein</span>
+      <article class="recipe recipe-ticket">
+        <div class="recipe-top">
+          <img class="recipe-plate" src="${plateThumb({ plate, name: recipe.name }, 144)}" alt="Plate drawing of ${esc(recipe.name)}" width="64" height="64">
+          <div class="recipe-head">
+            <span class="eyebrow">Resep no. ${String(index + 1).padStart(2, "0")} · ${esc(recipe.cuisine || "Home-cooked")}</span>
+            <h3>${esc(recipe.name)}</h3>
+            ${fit || need ? `<p class="small">${esc(fit + need)}</p>` : ""}
+          </div>
+          <div class="recipe-stub mono" aria-label="${recipe.minutes} minutes, ${recipe.nutrition.kcal} kcal, ${recipe.nutrition.p} grams protein">
+            <span><b>${recipe.minutes}</b> min</span>
+            <span><b>${recipe.nutrition.kcal}</b> kcal</span>
+            <span><b>${recipe.nutrition.p}</b> g prot</span>
+            ${scoreBadge(score)}
+          </div>
         </div>
-        ${fit || need ? `<p class="small">${esc(fit + need)}</p>` : ""}
         <div class="btn-row recipe-actions">
           <button type="button" class="btn small primary" data-lab-log="${esc(recipe.id)}">Cooked it? Log to Diary</button>
           ${recipe.missing.length ? `<button type="button" class="btn small" data-lab-shop="${esc(recipe.id)}">Copy shopping list</button>` : ""}
@@ -1830,7 +1863,7 @@
           <datalist id="place-list">${places.map((place) => `<option value="${esc(place)}">`).join("")}</datalist>
           <!-- r18: who you ate with sits next to Place, outside the fold - tagging is the social loop -->
           <fieldset class="field ate-with"><legend>Ate with <span class="hint">${esc(closestBudNudge() || `+${L.POINTS.tag} connection points each`)}</span></legend>
-            ${buds.length ? `<div class="chips">${buds.map((person) => `<label class="chip"><input type="checkbox" name="friend" value="${person.id}" ${draft.friends.includes(person.id) ? "checked" : ""}><span>${esc(person.name)}</span></label>`).join("")}</div>` : '<p class="muted small">Add buds on the Taste buds tab to tag them here.</p>'}
+            ${buds.length ? `<div class="chips">${buds.map((person) => `<label class="chip"><input type="checkbox" name="friend" value="${person.id}" ${draft.friends.includes(person.id) ? "checked" : ""}><span>${esc(person.name)}${hasTasteProfile() ? `<span class="chip-match">${matchFor(person)}%</span>` : ""}</span></label>`).join("")}</div>` : '<p class="muted small">Add buds on the Taste buds tab to tag them here.</p>'}
           </fieldset>
           <datalist id="cuisine-list">${CUISINES.map((cuisine) => `<option value="${esc(cuisine)}">`).join("")}</datalist>
           <div class="row">
@@ -2238,6 +2271,7 @@
     const H = size === "story" ? 1920 : 1080;
     if (!preview) drawShare.boxes = [];
     if (!preview) drawShare.stamp = null;
+    if (!preview) drawShare.photoHero = null;
     canvas.width = Math.round(W * scale);
     canvas.height = Math.round(H * scale);
     const ctx = canvas.getContext("2d");
@@ -2258,6 +2292,20 @@
     const sans = (size, weight) => `${weight || 600} ${size}px system-ui, "Segoe UI", Roboto, Arial, sans-serif`;
 
     // background
+    // r21: on the single-meal Card the photo is shown twice - blurred and dimmed as a calm backdrop,
+    // then sharp inside a round plate - so the dish, the stamp and the title each get a clean field
+    const photoFocus = template === "card" && !isWeek;
+    let backdrop = null;
+    const paintBackdrop = (img) => {
+      if (!photoFocus) {
+        cover(ctx, img, 0, 0, W, H);
+        return;
+      }
+      ctx.save();
+      ctx.filter = "blur(34px) brightness(0.72) saturate(1.08)";
+      cover(ctx, img, -80, -80, W + 160, H + 160);
+      ctx.restore();
+    };
     if (bg === "paper") {
       ctx.fillStyle = "#f5efe3";
       ctx.fillRect(0, 0, W, H);
@@ -2266,14 +2314,16 @@
       ctx.fillRect(0, 0, W, H);
     } else if (bg === "photo") {
       if (photo) {
-        cover(ctx, photo, 0, 0, W, H);
+        backdrop = photo;
+        paintBackdrop(photo);
       } else {
         // r16: no photo of this meal - use a bundled real dish photo (rotates per meal), cover-cropped.
         // The scrim below keeps the white text readable. Falls back to the plate glyph only if the
         // image can't load (e.g. offline before the first precache).
         const dish = await loadImage(dishPhotoFor(entry));
         if (dish) {
-          cover(ctx, dish, 0, 0, W, H);
+          backdrop = dish;
+          paintBackdrop(dish);
         } else {
           ctx.fillStyle = "#3b2a1e";
           ctx.fillRect(0, 0, W, H);
@@ -2571,14 +2621,36 @@
       } else {
         drawPlate(ctx, W / 2, boxY + box / 2, box * 0.46, entry.plate, entry.name);
       }
+    } else if (backdrop) {
+      // the sharp photo on a round plate with a white rim, floating over its own blurred copy
+      const heroR = box * 0.46;
+      const cx = W / 2;
+      const cy = boxY + box / 2;
+      ctx.save();
+      ctx.shadowColor = "rgba(0,0,0,0.45)";
+      ctx.shadowBlur = 48;
+      ctx.shadowOffsetY = 20;
+      ctx.beginPath();
+      ctx.arc(cx, cy, heroR + 18, 0, Math.PI * 2);
+      ctx.fillStyle = "#fbf7ef";
+      ctx.fill();
+      ctx.restore();
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, heroR, 0, Math.PI * 2);
+      ctx.clip();
+      cover(ctx, backdrop, cx - heroR, cy - heroR, heroR * 2, heroR * 2);
+      ctx.restore();
+      if (!preview) drawShare.photoHero = { x: cx, y: cy, r: heroR };
     }
     // plate score as a tilted stamp on the top-right rim, the one sticker-like flourish
     const score = L.healthScore(entry.plate);
     const stampR = square ? 92 : 124;
     const plateR = box * 0.46;
-    const stampX = bg === "photo" ? W - pad - stampR : W / 2 + plateR * Math.SQRT1_2;
-    const stampY = bg === "photo" ? baseY - stampR - 40 : boxY + box / 2 - plateR * Math.SQRT1_2;
-    if (!preview) drawShare.stamp = { x: stampX, y: stampY, r: stampR };
+    const onRim = bg !== "photo" || !!backdrop;
+    const stampX = onRim ? W / 2 + plateR * Math.SQRT1_2 : W - pad - stampR;
+    const stampY = onRim ? boxY + box / 2 - plateR * Math.SQRT1_2 : baseY - stampR - 40;
+    if (!preview) drawShare.stamp = { x: stampX, y: stampY, r: stampR, ink: bandInk(score) };
     drawScoreStamp(ctx, stampX, stampY, stampR, score, L.healthLabel(score), serif, mono);
 
     ctx.fillStyle = sub;
@@ -2610,6 +2682,11 @@
     }
   }
 
+  // r21: every stamp inks in its band colour, the same green / amber / red as the app's score chips
+  function bandInk(score) {
+    return score >= 75 ? "#3f7a2f" : score >= 50 ? "#a5761c" : "#b4380f";
+  }
+
   // round rubber-stamp badge: score in the middle, label underneath, slightly rotated
   function drawScoreStamp(ctx, x, y, r, score, label, serif, mono) {
     ctx.save();
@@ -2620,7 +2697,7 @@
     ctx.rotate(-0.21);
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, Math.PI * 2);
-    ctx.fillStyle = "#b4380f";
+    ctx.fillStyle = bandInk(score);
     ctx.fill();
     ctx.shadowColor = "transparent";
     ctx.beginPath();
@@ -2800,7 +2877,7 @@
     }
 
     // the plate score is rubber-stamped, slightly crooked, in the band's ink
-    const stampColor = avg >= 75 ? "#3f7a2f" : avg >= 50 ? "#a5761c" : "#b4380f";
+    const stampColor = bandInk(avg);
     const stampText = `PLATE ${avg} · ${L.healthLabel(avg).toUpperCase()}`;
     ctx.save();
     ctx.font = mono(34, 800);
@@ -2872,10 +2949,9 @@
               ${templates.map(([value, label]) => `<button type="button" class="tp-btn" data-seg="template" data-value="${value}" aria-pressed="${String(share.template === value)}"><canvas class="tp-canvas" data-tpl="${value}" width="108" height="192" role="img" aria-label="${esc(label)} template preview"></canvas><span>${esc(label)}</span></button>`).join("")}
             </div>
           </div>
-          <div class="control"><span>Background</span>${segHtml("background", backgrounds, share.background)}</div>
+          <div class="control"><span>Background <small class="share-note">· Transparent = a sticker PNG for your own photo</small></span>${segHtml("background", backgrounds, share.background)}</div>
           <div class="control"><span>Size</span>${segHtml("size", [["story", "Story 9:16"], ["square", "Post 1:1"]], share.size)}</div>
           <input type="file" id="share-photo" accept="image/*" hidden>
-          <p class="notice">Transparent saves a PNG with no background: drop it on your own photo in Instagram or WhatsApp stories, like a Strava sticker.${!isWeek && !subject.photo ? " + Photo picks a picture of this meal and keeps it with the meal." : ""}</p>
           <div class="btn-row" style="margin-top:16px">
             <button type="button" class="btn primary" id="share-save">Save PNG</button>
             <button type="button" class="btn" id="share-send">Share…</button>

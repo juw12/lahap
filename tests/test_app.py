@@ -6,6 +6,7 @@ Serves the app folder on 127.0.0.1, drives Chromium, prints PASS/FAIL per check,
 """
 import re
 import functools
+import math
 import http.server
 import os
 import socketserver
@@ -442,7 +443,14 @@ def main():
         p = stamp["photo"]
         photo_in = p and 0 <= p["x"] - p["r"] and p["x"] + p["r"] <= 1080 and 0 <= p["y"] - p["r"] and p["y"] + p["r"] <= 1920
         check("r8b stamp: plate badge fully inside the photo frame", photo_in, p)
-        check("r8b stamp: badge centre is the red plate score", stamp["px"] and stamp["px"][0] >= 0xB4 - 12 and stamp["px"][1] < 0x50, stamp["px"])
+        # r21: the stamp inks in its band colour (Tom yum is Balanced, so green like the app's score chips)
+        ink = (s or {}).get("ink") or "#000000"
+        ink_rgb = [int(ink[i:i + 2], 16) for i in (1, 3, 5)]
+        check(
+            "r21 stamp: the Card stamp is inked in the plate's band colour, not always red",
+            ink == "#3f7a2f" and stamp["px"] and all(abs(stamp["px"][i] - ink_rgb[i]) <= 24 for i in range(3)),
+            (ink, stamp["px"]),
+        )
 
         # ---- r15: phone filter row fits (no chip cut off mid-word); tastes sit behind one Taste chip ----
         page.goto(base + "#diary")
@@ -1297,6 +1305,149 @@ def main():
             "r20 share: the Receipt card rubber-stamps the plate score with its band",
             bool(re.fullmatch(r"PLATE \d+ · (BALANCED|OKAY|HEAVY)", hero["stamp"] or "")),
             hero["stamp"],
+        )
+
+        # ---- r21: diary pulse (tag a bud, share the day), match % on Ate with, photo card hero, recipe tickets, desk buds order ----
+        page.goto(base + "#diary")
+        page.wait_for_selector("html[data-ready='1']")
+        page.wait_for_timeout(250)
+        pulse = page.evaluate(
+            """() => {
+              const day = document.querySelector('#view-diary .lead-day .day');
+              const p = day ? day.querySelector('.day-pulse') : null;
+              if (!p) return null;
+              const r = p.getBoundingClientRect();
+              const tag = p.querySelector('[data-tag-meal]');
+              const share = p.querySelector('[data-share]');
+              return {
+                inFold: r.top >= 0 && r.bottom <= window.innerHeight,
+                tag: tag ? tag.dataset.tagMeal : null,
+                tagLabel: tag ? tag.textContent.trim() : '',
+                share: share ? share.dataset.share : null,
+                firstMeal: day.querySelector('.ticket').dataset.open,
+                text: p.textContent,
+                tapOk: [...p.querySelectorAll('.btn')].every((b) => b.getBoundingClientRect().height >= 44),
+              };
+            }"""
+        )
+        check(
+            "r21 diary: the first screen on a phone has a buds pulse with a Tag button and a Share button for the day",
+            pulse and pulse["inFold"] and pulse["tag"] and pulse["tagLabel"].startswith("Tag ") and pulse["share"] == pulse["firstMeal"] and "pts to" in pulse["text"] and pulse["tapOk"],
+            pulse,
+        )
+        page.locator("#view-diary .day-pulse [data-tag-meal]").click()
+        page.wait_for_selector("#log-form")
+        page.wait_for_timeout(300)
+        tagged = page.evaluate(
+            """() => {
+              const boxes = [...document.querySelectorAll('#log-form input[name=friend]')];
+              return {
+                checked: boxes.filter((b) => b.checked).map((b) => b.value),
+                matches: [...document.querySelectorAll('#log-form .ate-with .chip-match')].map((m) => m.textContent),
+                chips: boxes.length,
+              };
+            }"""
+        )
+        check("r21 diary: Tag in the pulse opens Log a meal with that bud already ticked", pulse and tagged["checked"] == [pulse["tag"]], tagged)
+        check(
+            "r21 log: every Ate with chip shows its taste match %",
+            tagged["chips"] > 0 and len(tagged["matches"]) == tagged["chips"] and all(re.fullmatch(r"\d{1,3}%", m) for m in tagged["matches"]),
+            tagged,
+        )
+        page.locator("#dlg-log [data-close]").first.click()
+        page.wait_for_timeout(150)
+        photo21 = page.evaluate(
+            """async () => {
+              const entry = window.Lahap.state.entries.find(e => e.name === 'Tom yum seafood');
+              const keep = entry.photo;
+              entry.photo = 'tests/fixtures/plate.jpg';
+              window.Lahap.openShare(entry);
+              document.querySelector('[data-seg=template][data-value=card]').click();
+              document.querySelector('[data-seg=size][data-value=story]').click();
+              document.querySelector('[data-seg=background][data-value=photo]').click();
+              let hero = null;
+              for (let i = 0; i < 40; i++) {
+                await new Promise(r => setTimeout(r, 100));
+                hero = window.Lahap.drawShare.photoHero;
+                if (hero) break;
+              }
+              const stamp = window.Lahap.drawShare.stamp;
+              const note = document.querySelector('#dlg-share .share-note');
+              const noteText = note ? note.textContent : '';
+              document.getElementById('dlg-share').close();
+              entry.photo = keep;
+              return { hero, stamp, noteText };
+            }"""
+        )
+        h21 = photo21["hero"]
+        s21 = photo21["stamp"]
+        check(
+            "r21 share: the Photo card shows the meal sharp on a round plate over its own blurred copy, stamp on the rim",
+            h21 and h21["r"] > 200 and s21 and abs(math.hypot(s21["x"] - h21["x"], s21["y"] - h21["y"]) - h21["r"]) < 8,
+            photo21,
+        )
+        check("r21 share: the sheet footnote is one short line", 0 < len(photo21["noteText"]) <= 90, photo21["noteText"])
+        page.goto(base + "#lab")
+        page.wait_for_selector("html[data-ready='1']")
+        page.wait_for_timeout(300)
+        rx = page.evaluate(
+            """() => {
+              const card = document.querySelector('#view-lab .recipe');
+              if (!card) return null;
+              const stub = card.querySelector('.recipe-stub');
+              const plate = card.querySelector('img.recipe-plate');
+              const lis = [...card.querySelectorAll('.ingredients li')];
+              return {
+                ticket: card.classList.contains('recipe-ticket'),
+                plate: !!(plate && plate.naturalWidth > 0),
+                stub: stub ? stub.textContent.replace(/\s+/g, ' ').trim() : '',
+                score: !!(stub && stub.querySelector('.score')),
+                eyebrow: (card.querySelector('.recipe-head .eyebrow') || {}).textContent || '',
+                slip: lis.length ? getComputedStyle(lis[0], '::before').content : '',
+                overflow: card.scrollWidth > card.clientWidth + 1,
+              };
+            }"""
+        )
+        check(
+            "r21 recipes: each recipe is a ticket with its plate, a stub (min, kcal, protein, plate score) and a numbered eyebrow",
+            rx and rx["ticket"] and rx["plate"] and re.search(r"\d+ min", rx["stub"]) and "kcal" in rx["stub"] and "prot" in rx["stub"] and rx["score"] and rx["eyebrow"].startswith("Resep no. 01") and not rx["overflow"],
+            rx,
+        )
+        check("r21 recipes: ingredients read as a tick-box slip", rx and rx["slip"] in ('"\u2610"', '"\u2611"', '"☐"', '"☑"'), rx and rx["slip"])
+        desk21 = browser.new_context(viewport={"width": 1440, "height": 900}, device_scale_factor=1)
+        desk21_page = desk21.new_page()
+        desk21_page.goto(base + "?demo=1&nosw=1#buds")
+        desk21_page.wait_for_selector("html[data-ready='1']")
+        desk21_page.wait_for_timeout(300)
+        buds21 = desk21_page.evaluate(
+            """() => {
+              const sug = document.querySelector('#view-buds .suggested-panel');
+              const inv = document.querySelector('#view-buds .invite-card');
+              return {
+                inAside: !!(inv && inv.closest('aside')),
+                sugTop: sug ? sug.getBoundingClientRect().top : 9999,
+                fold: window.innerHeight,
+              };
+            }"""
+        )
+        desk21_page.goto(base + "?demo=1&nosw=1#diary")
+        desk21_page.wait_for_selector("html[data-ready='1']")
+        desk21_page.wait_for_timeout(300)
+        pair21 = desk21_page.evaluate(
+            """() => {
+              const day = document.querySelector('#view-diary .lead-day .day');
+              const t = day ? [...day.querySelectorAll(':scope > .ticket-wrap > .ticket')] : [];
+              const tops = t.map((x) => Math.round(x.getBoundingClientRect().top));
+              const hs = t.map((x) => Math.round(x.getBoundingClientRect().height));
+              return { n: t.length, tops, hs };
+            }"""
+        )
+        desk21.close()
+        check("r21 buds desk: Bring a real friend moves to the side rail so Suggested by taste comes up the page", buds21["inAside"] and buds21["sugTop"] < 1400, buds21)
+        check(
+            "r21 diary desk: two tickets side by side are the same height",
+            pair21["n"] < 2 or (pair21["tops"][0] != pair21["tops"][1]) or abs(pair21["hs"][0] - pair21["hs"][1]) <= 1,
+            pair21,
         )
 
         # ---- first run: quiz, lab, cutout, OCR in a clean browser profile ----
