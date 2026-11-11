@@ -1476,6 +1476,28 @@ def main():
             pulse22 and pulse22["height"] <= 80 and pulse22["oneRow"] and pulse22["shareW"] <= 48 and pulse22["shareName"].startswith("Share"),
             pulse22,
         )
+        pulse33 = page.evaluate(
+            """() => {
+              const day = document.querySelector('#view-diary .lead-day .day');
+              const p = day ? day.querySelector('.day-pulse') : null;
+              const first = day ? day.querySelector('.ticket-wrap') : null;
+              if (!p || !first) return null;
+              const tag = p.querySelector('[data-tag-meal]');
+              const log = document.querySelector('.tabbar .tab-log, .fab, [data-open-log]');
+              const bg = tag ? getComputedStyle(tag).backgroundColor : '';
+              return {
+                belowFirstMeal: p.getBoundingClientRect().top >= first.getBoundingClientRect().bottom - 1,
+                inFold: p.getBoundingClientRect().bottom <= window.innerHeight,
+                tagBg: bg,
+                tagOutline: bg === 'transparent' || /rgba\(.*,\s*0\)$/.test(bg),
+              };
+            }"""
+        )
+        check(
+            "r33 diary phone: the newest meal leads and the buds pulse follows it, with an outline Tag so Log stays the one filled action",
+            pulse33 and pulse33["belowFirstMeal"] and pulse33["inFold"] and pulse33["tagOutline"],
+            pulse33,
+        )
         # ---- r27: a pending plan leads the pulse with We went; phone unlocks in one row; demo matches look like demos ----
         r27 = page.evaluate(
             """async () => {
@@ -1785,7 +1807,21 @@ def main():
               return note ? note.textContent : null;
             }"""
         )
+        desk33 = page.evaluate(
+            """() => {
+              const day = document.querySelector('#view-diary .lead-day .day');
+              const p = day ? day.querySelector('.day-pulse') : null;
+              const first = day ? day.querySelector('.ticket-wrap') : null;
+              if (!p || !first) return null;
+              return { above: p.getBoundingClientRect().bottom <= first.getBoundingClientRect().top + 1 };
+            }"""
+        )
         page.set_viewport_size(size_before31)
+        check(
+            "r33 diary desk: on a desk the buds pulse still sits above the tickets, unchanged",
+            bool(desk33) and desk33["above"],
+            desk33,
+        )
         check(
             "r31 diary desk: each repeat count is glued to its dish with a no-break space, so a lone 'x3.' never wraps",
             repeat31 is None or ("\u00a0\u00d7" in repeat31 and not re.search(r" \u00d7\d", repeat31)),

@@ -3733,3 +3733,27 @@ label.chip input {
     color: var(--muted);
   }
 }
+
+/* r33: the phone Diary leads with the plate verdict and the newest meal; the buds pulse is a
+   secondary row under it, and Tag is an outline button so the filled Log stays the one primary */
+@media (min-width: 1000px) {
+  .day > .day-head,
+  .day > .plate-key {
+    order: -2;
+  }
+  .day > .day-pulse {
+    order: -1;
+  }
+}
+@media (max-width: 599px) {
+  .day > .day-pulse {
+    margin-top: 0;
+    background: var(--card);
+  }
+  .day-pulse [data-tag-meal].primary {
+    background: transparent;
+    color: var(--accent);
+    border: 1.5px solid var(--accent);
+    box-shadow: none;
+  }
+}

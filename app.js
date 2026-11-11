@@ -656,6 +656,14 @@
 
   // r21: the social loop and the share action on the Diary's first screen, under the latest day's header:
   // the bud closest to their next level (one tap tags them in a new meal) and a share of that day's plate
+  // r33: the day's newest meal comes first; the buds pulse follows it as a secondary row
+  // (desktop pulls the pulse back above the tickets with grid order, so its layout is unchanged)
+  function dayTicketsHtml(group, withPulse) {
+    const tickets = group.entries.map(ticketHtml);
+    if (!withPulse) return tickets.join("");
+    return tickets[0] + dayPulseHtml(group) + tickets.slice(1).join("");
+  }
+
   function dayPulseHtml(group) {
     const latest = group.entries[0];
     const shareButton = `<button type="button" class="btn small" data-share="${esc(latest.id)}" aria-label="Share a card of ${esc(latest.name)}">${ICON_SHARE_SMALL}<span class="pulse-share-label">Share</span></button>`;
@@ -831,8 +839,7 @@
             <span class="mono day-sum"><span class="day-chip">${plural(group.entries.length, "meal")}</span> <span class="day-chip">${esc(money(spend))}</span> <span class="day-chip score ${scoreClass(avg)}" title="Plate score out of 100 · 75+ Balanced · 50+ Okay · under 50 Heavy">plate ${avg} <strong class="verdict">${L.healthLabel(avg)}</strong></span></span>
           </div>
           ${groupIndex === 0 ? plateKey : ""}
-          ${groupIndex === 0 && !state.query ? dayPulseHtml(group) : ""}
-          ${group.entries.map(ticketHtml).join("")}
+          ${dayTicketsHtml(group, groupIndex === 0 && !state.query)}
         </section>`;
     });
     // meals lead; today's targets and the week line follow the first day, the bud nudge the second
