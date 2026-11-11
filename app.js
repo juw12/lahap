@@ -27,6 +27,7 @@
     friends: [],
     points: {},
     invites: [],
+    deleted: {},
     view: "diary",
     query: "",
     sourceFilter: "all",
@@ -36,13 +37,24 @@
     lab: { text: "", have: [], goal: null, status: "" },
   };
 
-  /* ---------------- storage: IndexedDB, in-memory fallback ---------------- */
+  /* ---------------- storage: IndexedDB, localStorage fallback ---------------- */
+  // r37: phones drop the IndexedDB connection while the app sleeps (iOS: "connection is closing"), which used to make
+  // saves fail silently. Every transaction now reopens the database and retries once. If IndexedDB cannot open at all
+  // (private tab, locked-down browser), meals go to localStorage instead of vanishing on reload, and the app says so.
   const store = (function () {
     let db = null;
+    let mode = "idb";
     const memory = { entries: new Map(), kv: new Map() };
+    const LOCAL_KEY = "lahap:data";
 
-    function open() {
+    function openDb() {
       return new Promise((resolve) => {
+        let settled = false;
+        const finish = (value) => {
+          if (settled) return;
+          settled = true;
+          resolve(value);
+        };
         try {
           const request = indexedDB.open("lahap", 1);
           request.onupgradeneeded = () => {
@@ -51,43 +63,116 @@
             database.createObjectStore("kv", { keyPath: "key" });
           };
           request.onsuccess = () => {
-            db = request.result;
-            resolve(true);
+            const database = request.result;
+            database.onversionchange = () => database.close();
+            database.onclose = () => {
+              if (db === database) db = null;
+            };
+            if (settled) database.close();
+            finish(database);
           };
-          request.onerror = () => resolve(false);
+          request.onerror = () => finish(null);
+          setTimeout(() => finish(null), 5000);
         } catch (error) {
-          resolve(false);
+          finish(null);
         }
       });
     }
 
-    function tx(name, mode, work) {
-      if (!db) return Promise.resolve(work(null));
-      return new Promise((resolve, reject) => {
-        const transaction = db.transaction(name, mode);
-        const objectStore = transaction.objectStore(name);
-        const result = work(objectStore);
-        transaction.oncomplete = () => resolve(result instanceof IDBRequest ? result.result : result);
-        transaction.onerror = () => reject(transaction.error);
-      });
+    function localWorks() {
+      try {
+        localStorage.setItem("lahap:probe", "1");
+        localStorage.removeItem("lahap:probe");
+        return true;
+      } catch (error) {
+        return false;
+      }
     }
 
-    return {
-      open,
+    function loadLocal() {
+      try {
+        const data = JSON.parse(localStorage.getItem(LOCAL_KEY) || "null");
+        if (!data) return;
+        for (const entry of data.entries || []) memory.entries.set(entry.id, entry);
+        for (const [key, value] of Object.entries(data.kv || {})) memory.kv.set(key, value);
+      } catch (error) {
+        /* unreadable backup: start empty */
+      }
+    }
+
+    function saveLocal() {
+      if (mode !== "local") return;
+      const kv = {};
+      for (const [key, value] of memory.kv) kv[key] = value;
+      const entries = Array.from(memory.entries.values());
+      try {
+        localStorage.setItem(LOCAL_KEY, JSON.stringify({ entries, kv }));
+      } catch (error) {
+        // localStorage holds about 5 MB: keep every meal, drop the photos if they do not fit
+        try {
+          const slim = entries.map((entry) => Object.assign({}, entry, { photo: null, cutout: null }));
+          localStorage.setItem(LOCAL_KEY, JSON.stringify({ entries: slim, kv }));
+          api.warning = "photos";
+        } catch (again) {
+          api.warning = "full";
+        }
+      }
+    }
+
+    async function tx(name, access, work) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        if (!db) db = await openDb();
+        if (!db) throw new Error("this browser is not letting Lahap save");
+        try {
+          return await new Promise((resolve, reject) => {
+            const transaction = db.transaction(name, access);
+            const result = work(transaction.objectStore(name));
+            transaction.oncomplete = () => resolve(result instanceof IDBRequest ? result.result : result);
+            transaction.onerror = () => reject(transaction.error);
+            transaction.onabort = () => reject(transaction.error || new Error("save was interrupted"));
+          });
+        } catch (error) {
+          try {
+            if (db) db.close();
+          } catch (closeError) {
+            /* already closed */
+          }
+          db = null;
+          if (attempt) throw error;
+        }
+      }
+    }
+
+    const api = {
+      warning: "",
+      mode: () => mode,
+      async open() {
+        db = await openDb();
+        if (db) {
+          mode = "idb";
+          return true;
+        }
+        mode = localWorks() ? "local" : "memory";
+        if (mode === "local") loadLocal();
+        api.warning = mode;
+        return false;
+      },
       async all() {
-        if (!db) return Array.from(memory.entries.values());
+        if (mode !== "idb") return Array.from(memory.entries.values());
         return tx("entries", "readonly", (objectStore) => objectStore.getAll());
       },
       async put(entry) {
-        if (!db) {
+        if (mode !== "idb") {
           memory.entries.set(entry.id, entry);
+          saveLocal();
           return;
         }
         return tx("entries", "readwrite", (objectStore) => objectStore.put(entry));
       },
       async remove(id) {
-        if (!db) {
+        if (mode !== "idb") {
           memory.entries.delete(id);
+          saveLocal();
           return;
         }
         return tx("entries", "readwrite", (objectStore) => objectStore.delete(id));
@@ -95,30 +180,50 @@
       async clear() {
         memory.entries.clear();
         memory.kv.clear();
-        if (!db) return;
+        if (mode !== "idb") {
+          saveLocal();
+          return;
+        }
         await tx("entries", "readwrite", (objectStore) => objectStore.clear());
         await tx("kv", "readwrite", (objectStore) => objectStore.clear());
       },
       async get(key, fallback) {
-        if (!db) return memory.kv.has(key) ? memory.kv.get(key) : fallback;
+        if (mode !== "idb") return memory.kv.has(key) ? memory.kv.get(key) : fallback;
         const row = await tx("kv", "readonly", (objectStore) => objectStore.get(key));
         return row ? row.value : fallback;
       },
       async set(key, value) {
-        if (!db) {
+        if (mode !== "idb") {
           memory.kv.set(key, value);
+          saveLocal();
           return;
         }
         return tx("kv", "readwrite", (objectStore) => objectStore.put({ key, value }));
       },
+      // test hook: drop the connection the way iOS does when the app sleeps
+      dropConnection() {
+        if (db) db.close();
+      },
     };
+    return api;
   })();
+
+  // ask the browser not to evict Lahap's storage when space runs low (granted silently for installed apps)
+  async function askPersist() {
+    try {
+      if (!navigator.storage || !navigator.storage.persist) return;
+      state.persisted = (await navigator.storage.persisted()) || (await navigator.storage.persist());
+    } catch (error) {
+      /* not supported */
+    }
+  }
 
   async function saveMeta() {
     await store.set("settings", state.settings);
     await store.set("friends", state.friends);
     await store.set("points", state.points);
     await store.set("invites", state.invites);
+    await store.set("deleted", state.deleted);
   }
 
   /* ---------------- helpers ---------------- */
@@ -867,6 +972,7 @@
             <label class="sr" for="q" style="position:absolute;left:-9999px">Search your meals</label>
             <input id="q" type="search" placeholder="Have I eaten this? Try “bakso”" value="${esc(state.query)}" autocomplete="off">
           </form>
+          ${storageWarningHtml()}${sampleNoticeHtml()}
           ${filters}
           ${dayBlocks.length && !state.query ? weekStripHtml() : ""}
           ${ordered}
@@ -1461,17 +1567,24 @@
           <label class="field"><span>Your name <span class="hint">shown on share cards</span></span><input type="text" id="set-name" value="${esc(state.settings.name)}" placeholder="e.g. Juwen" autocomplete="nickname"></label>
           <label class="field"><span>Currency</span><select id="set-currency">${CURRENCIES.map((code) => `<option ${code === state.settings.currency ? "selected" : ""}>${code}</option>`).join("")}</select></label>
         </section>
-        <section class="panel">
-          <h2>Your data</h2>
-          <p class="muted" style="margin-bottom:16px">${state.entries.length} meals, ${photos} photos, ${state.friends.length} buds, ${state.invites.length} plans.</p>
+        <section class="panel data-panel">
+          <h2>Save, sync and share</h2>
+          <p class="muted" style="margin-bottom:8px">${state.entries.length} meals, ${photos} photos, ${state.friends.length} buds, ${state.invites.length} plans.</p>
+          <p class="data-status" id="data-status">${dataStatusHtml()}</p>
           <div class="btn-row">
-            <button type="button" class="btn" id="export">Export backup (JSON)</button>
-            <label class="btn" for="import">Import backup</label>
-            <input type="file" id="import" accept="application/json" hidden>
-            <button type="button" class="btn" data-sample>Load sample fortnight</button>
+            <button type="button" class="btn primary" id="share-backup">Share backup</button>
+            <button type="button" class="btn" id="export">Save backup file</button>
+            <label class="btn" for="import">Restore or merge</label>
+            <input type="file" id="import" accept=".json,.txt,application/json,text/plain" hidden>
+          </div>
+          <p class="notice">Every meal saves on this phone the moment you tap Save. To sync another phone or laptop, share the backup to yourself (WhatsApp, Drive, email) and open it there with <b>Restore or merge</b>. Meals are matched, so nothing doubles; the newest edit wins and deleted meals stay deleted. There is no Lahap server, so nothing syncs on its own.</p>
+          <label class="check-row"><input type="checkbox" id="set-cutout"${autoCutoutOn() ? " checked" : ""}> Cut the food out of new photos automatically <span class="muted small">(downloads a 15 MB model once; turn off if your phone reloads)</span></label>
+          <div class="btn-row data-danger">
+            ${sampleCount() ? `<button type="button" class="btn" data-clear-sample>Remove ${sampleCount()} sample meals</button>` : ""}
+            ${state.entries.length ? "" : '<button type="button" class="btn" data-sample>Load sample fortnight</button>'}
             <button type="button" class="btn danger" id="erase">Erase everything</button>
           </div>
-          <p class="notice">Photos are resized to 1080 px and kept in this browser's storage. They leave your device only when you share a card.</p>
+          <p class="notice">Photos are resized to 1080 px and kept in this browser's storage. They leave your device only when you share a card or a backup.</p>
         </section>
       </div>`;
     $("#set-name").addEventListener("change", async (event) => {
@@ -1484,29 +1597,28 @@
       await saveMeta();
       toast(`Prices now shown in ${state.settings.currency}`);
     });
-    $("#export").addEventListener("click", () => {
-      const data = { app: "lahap", version: 1, exportedAt: new Date().toISOString(), settings: state.settings, friends: state.friends, points: state.points, invites: state.invites, entries: state.entries };
-      download(new Blob([JSON.stringify(data)], { type: "application/json" }), `lahap-backup-${L.dayKey(new Date())}.json`);
+    $("#export").addEventListener("click", async () => {
+      const file = backupFile("application/json");
+      download(file, file.name);
+      await markBackedUp();
     });
+    $("#share-backup").addEventListener("click", shareBackup);
     $("#import").addEventListener("change", async (event) => {
       const file = event.target.files[0];
+      event.target.value = "";
       if (!file) return;
       try {
-        const data = JSON.parse(await file.text());
-        if (data.app !== "lahap" || !Array.isArray(data.entries)) throw new Error("Not a Lahap backup");
-        for (const entry of data.entries) await store.put(entry);
-        const known = new Set(state.entries.map((entry) => entry.id));
-        state.entries = state.entries.concat(data.entries.filter((entry) => !known.has(entry.id)));
-        state.settings = Object.assign(state.settings, data.settings || {});
-        state.friends = Array.from(new Set(state.friends.concat(data.friends || [])));
-        state.points = Object.assign({}, data.points || {}, state.points);
-        state.invites = state.invites.concat((data.invites || []).filter((invite) => !state.invites.some((item) => item.id === invite.id)));
-        await saveMeta();
-        toast(`Imported ${data.entries.length} meals`);
+        const result = await mergeBackup(JSON.parse(await file.text()));
+        toast(`Synced: ${result.added} new, ${result.updated} updated, ${result.removed} removed`);
         render();
       } catch (error) {
-        toast(`Import failed: ${error.message}`);
+        toast(`Restore failed: ${error.message}`);
       }
+    });
+    $("#set-cutout").addEventListener("change", async (event) => {
+      state.settings.autoCutout = event.target.checked;
+      await saveMeta();
+      toast(event.target.checked ? "Photos will be cut out automatically" : "Auto cutout off. Tap Cut out on a photo to run it once.");
     });
     $("#erase").addEventListener("click", async () => {
       if (!confirm("Erase every meal, photo, bud and plan on this device? Export a backup first if you want to keep them.")) return;
@@ -1515,14 +1627,176 @@
       state.friends = [];
       state.points = {};
       state.invites = [];
+      state.deleted = {};
       state.settings.profile = null;
       state.settings.quizSeen = false;
+      state.settings.lastBackup = null;
       await saveMeta();
       toast("Everything erased");
       render();
     });
   }
 
+
+  /* ---------------- r37: save, sync and share ---------------- */
+  function sampleCount() {
+    return state.entries.filter((entry) => entry.sample).length;
+  }
+
+  function ago(iso) {
+    const days = Math.floor((Date.now() - new Date(iso)) / 86400000);
+    if (days <= 0) return "today";
+    if (days === 1) return "yesterday";
+    return `${days} days ago`;
+  }
+
+  function dataStatusHtml() {
+    const where =
+      store.mode() === "idb"
+        ? state.persisted
+          ? "Saved on this phone, protected from clean-up."
+          : "Saved on this phone."
+        : store.mode() === "local"
+          ? "Saved in basic storage on this phone. Back up often; big photos may not fit."
+          : "<b>Not saving:</b> this browser blocks storage (private tab?). Open Lahap in a normal tab.";
+    const last = state.settings.lastBackup;
+    const real = state.entries.filter((entry) => !entry.sample).length;
+    if (!last) return `${where} ${real ? `No backup yet: ${real} meals only live here.` : "No backup yet."}`;
+    const since = Math.max(0, real - (last.count || 0));
+    return `${where} Last backup ${ago(last.at)}${since ? `, ${since} new meals since` : ", nothing new since"}.`;
+  }
+
+  function backupData() {
+    return {
+      app: "lahap",
+      version: 2,
+      exportedAt: new Date().toISOString(),
+      settings: Object.assign({}, state.settings, { lastBackup: undefined, autoCutout: undefined }),
+      friends: state.friends,
+      points: state.points,
+      invites: state.invites,
+      people: PEOPLE.filter((person) => person.invited),
+      deleted: state.deleted,
+      entries: state.entries.filter((entry) => !entry.sample),
+    };
+  }
+
+  function backupFile(type) {
+    const name = `lahap-backup-${L.dayKey(new Date())}.${type === "text/plain" ? "txt" : "json"}`;
+    return new File([JSON.stringify(backupData())], name, { type });
+  }
+
+  async function markBackedUp() {
+    state.settings.lastBackup = { at: new Date().toISOString(), count: state.entries.filter((entry) => !entry.sample).length };
+    await saveMeta();
+    const node = $("#data-status");
+    if (node) node.innerHTML = dataStatusHtml();
+  }
+
+  async function shareBackup() {
+    // Android Chrome only shares some file types, so try JSON first and plain text second
+    const files = [backupFile("application/json"), backupFile("text/plain")];
+    const file = navigator.canShare ? files.find((item) => navigator.canShare({ files: [item] })) : null;
+    if (!file) {
+      download(files[0], files[0].name);
+      toast("Backup saved to Downloads. Send it to your other device and Restore it there.");
+      await markBackedUp();
+      return;
+    }
+    try {
+      await navigator.share({ files: [file], title: "Lahap backup", text: "My Lahap food diary. Open Lahap → Profile → Restore or merge." });
+      await markBackedUp();
+    } catch (error) {
+      if (error && error.name === "AbortError") return;
+      download(files[0], files[0].name);
+      await markBackedUp();
+    }
+  }
+
+  // Merge a backup from another device: match meals by id, newest edit wins, deletions travel with the file.
+  async function mergeBackup(data) {
+    if (!data || data.app !== "lahap" || !Array.isArray(data.entries)) throw new Error("not a Lahap backup");
+    const stamp = (entry) => entry.updatedAt || entry.ts || "";
+    const deleted = Object.assign({}, state.deleted);
+    for (const [id, when] of Object.entries(data.deleted || {})) {
+      if (!deleted[id] || when > deleted[id]) deleted[id] = when;
+    }
+    const byId = new Map(state.entries.map((entry) => [entry.id, entry]));
+    let added = 0;
+    let updated = 0;
+    let removed = 0;
+    for (const entry of data.entries) {
+      if (!entry || !entry.id || entry.sample) continue;
+      if (deleted[entry.id] && deleted[entry.id] >= stamp(entry)) continue;
+      const mine = byId.get(entry.id);
+      if (mine && stamp(mine) >= stamp(entry)) continue;
+      await store.put(entry);
+      byId.set(entry.id, entry);
+      if (mine) updated++;
+      else added++;
+    }
+    for (const [id, when] of Object.entries(deleted)) {
+      const mine = byId.get(id);
+      if (mine && when >= stamp(mine)) {
+        await store.remove(id);
+        byId.delete(id);
+        removed++;
+      }
+    }
+    state.entries = Array.from(byId.values());
+    state.deleted = deleted;
+    for (const [key, value] of Object.entries(data.settings || {})) {
+      if (key === "lastBackup" || key === "autoCutout" || value === null || value === undefined || value === "") continue;
+      if (key === "profile" && state.settings.profile) continue;
+      state.settings[key] = value;
+    }
+    state.friends = Array.from(new Set(state.friends.concat(data.friends || [])));
+    for (const [id, points] of Object.entries(data.points || {})) state.points[id] = Math.max(state.points[id] || 0, points || 0);
+    for (const invite of data.invites || []) {
+      if (!state.invites.some((item) => item.id === invite.id)) state.invites.push(invite);
+    }
+    for (const person of data.people || []) {
+      if (!personById(person.id)) PEOPLE.push(person);
+    }
+    await store.set("people", PEOPLE.filter((item) => item.invited));
+    await saveMeta();
+    return { added, updated, removed };
+  }
+
+  // the sample fortnight should never sit in someone's real diary: one tap takes it out again
+  async function clearSample() {
+    const samples = state.entries.filter((entry) => entry.sample);
+    for (const entry of samples) {
+      await store.remove(entry.id);
+      for (const id of entry.friends || []) state.points[id] = Math.max(0, (state.points[id] || 0) - L.POINTS.tag);
+    }
+    state.entries = state.entries.filter((entry) => !entry.sample);
+    const stillTagged = new Set(state.entries.flatMap((entry) => entry.friends || []));
+    state.friends = state.friends.filter((id) => !["rina", "kevin"].includes(id) || stillTagged.has(id));
+    for (const id of Object.keys(state.points)) {
+      if (!state.points[id]) delete state.points[id];
+    }
+    if (state.settings.profile && JSON.stringify(state.settings.profile) === JSON.stringify(SAMPLE_PROFILE)) state.settings.profile = null;
+    await saveMeta();
+    toast(`Removed ${samples.length} sample meals. The diary is all yours now.`);
+    render();
+  }
+
+  function sampleNoticeHtml() {
+    const samples = sampleCount();
+    const real = state.entries.length - samples;
+    if (!samples || !real) return "";
+    return `<p class="sample-notice" role="note"><span>${samples} sample meals are mixed in with your ${real}.</span> <button type="button" class="btn small" data-clear-sample>Remove samples</button></p>`;
+  }
+
+  function storageWarningHtml() {
+    if (store.mode() === "idb") return "";
+    const text =
+      store.mode() === "local"
+        ? "Saving in basic storage: meals stay, big photos may not. Back up from Profile."
+        : "This browser is blocking storage (private tab?), so meals vanish when you close it. Open Lahap in a normal tab.";
+    return `<p class="sample-notice storage-warn" role="alert"><span>${text}</span></p>`;
+  }
 
   /* ---------------- start quiz ---------------- */
   const DIETS = [["vegetarian", "Vegetarian"], ["noBeef", "No beef"], ["noSeafood", "No seafood"], ["noNuts", "No nuts"], ["noDairy", "No dairy"], ["noEgg", "No egg"], ["noGluten", "No gluten"]];
@@ -1900,6 +2174,24 @@
   }
 
   async function resizePhoto(file) {
+    // r37: decode straight to a small bitmap where the browser can. A 12-50 MP camera photo decoded at full size
+    // can run a phone out of memory, and the browser then reloads the tab (the "keeps restarting" bug).
+    if (window.createImageBitmap && file instanceof Blob) {
+      let bitmap = null;
+      try {
+        bitmap = await createImageBitmap(file, { resizeWidth: 1080, resizeQuality: "high", imageOrientation: "from-image" });
+        const scale = Math.min(1, 1080 / Math.max(bitmap.width, bitmap.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(bitmap.width * scale);
+        canvas.height = Math.round(bitmap.height * scale);
+        canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL("image/jpeg", 0.82);
+      } catch (error) {
+        /* older browser: fall through to the image element path */
+      } finally {
+        if (bitmap && bitmap.close) bitmap.close();
+      }
+    }
     const url = URL.createObjectURL(file);
     try {
       const image = await new Promise((resolve, reject) => {
@@ -1916,6 +2208,32 @@
       return canvas.toDataURL("image/jpeg", 0.82);
     } finally {
       URL.revokeObjectURL(url);
+    }
+  }
+
+  // r37: auto cutout runs a 15 MB model on the phone. Off by default on low-memory phones, and switched off
+  // automatically if a cutout was ever interrupted by a reload.
+  function autoCutoutOn() {
+    if (typeof state.settings.autoCutout === "boolean") return state.settings.autoCutout;
+    return !(navigator.deviceMemory && navigator.deviceMemory < 4);
+  }
+
+  function markCutout(running) {
+    try {
+      if (running) localStorage.setItem("lahap:cutting", "1");
+      else localStorage.removeItem("lahap:cutting");
+    } catch (error) {
+      /* no localStorage: skip the guard */
+    }
+  }
+
+  function cutoutWasInterrupted() {
+    try {
+      const flag = localStorage.getItem("lahap:cutting");
+      localStorage.removeItem("lahap:cutting");
+      return !!flag;
+    } catch (error) {
+      return false;
     }
   }
 
@@ -1944,7 +2262,7 @@
             <img class="preview${draft.cutout ? " cut" : ""}" id="log-preview" alt="Meal photo preview" src="${draft.cutout || draft.photo || plateThumb(draft, 192)}">
             <div>
               <label class="btn" for="log-photo">${draft.photo ? "Change photo" : "Take or pick a photo"}</label>
-              <input type="file" id="log-photo" accept="image/*" capture="environment" hidden>
+              <input type="file" id="log-photo" accept="image/*" hidden>
               <p class="hint small muted photo-status" id="photo-status" role="status" aria-live="polite">Optional. Lahap cuts the food out of the photo on this phone and estimates what is on the plate.</p>
               <div id="cut-toggle"${draft.cutout && draft.photo ? "" : " hidden"}>${segHtml("photoview", [["cut", "Food only"], ["full", "Original"]], "cut")}</div>
             </div>
@@ -2167,24 +2485,58 @@
       autoPlate(null);
       updatePlate();
     });
-    $("#log-photo").addEventListener("change", async (event) => {
-      const file = event.target.files[0];
-      if (!file) return;
-      const status = $("#photo-status");
+    // r37: the open meal is kept as a draft on every change, so a reload (camera app, low memory) never loses it
+    async function saveDraftNow() {
+      clearTimeout(saveDraftNow.timer);
       try {
-        draft.photo = await resizePhoto(file);
-        draft.cutout = null;
-        draft.useCutout = false;
-        $("#cut-toggle").hidden = true;
-        updatePreview();
+        await store.set("logDraft", snapshot());
       } catch (error) {
-        toast("Could not read that photo");
-        return;
+        /* the draft is a safety net; the real save reports its own errors */
       }
-      if (!window.LahapVision) return;
+    }
+    function saveDraftSoon() {
+      clearTimeout(saveDraftNow.timer);
+      saveDraftNow.timer = setTimeout(saveDraftNow, 300);
+    }
+    function snapshot() {
+      return {
+        id: editing ? editing.id : undefined,
+        ts: form.ts.value ? new Date(form.ts.value).toISOString() : draft.ts,
+        name: form.name.value,
+        place: form.place.value,
+        cuisine: form.cuisine.value,
+        price: form.price.value,
+        source: draft.source,
+        tastes: $$('input[name="taste"]:checked', form).map((box) => box.value),
+        plate: readPlate(),
+        rating: draft.rating,
+        friends: $$('input[name="friend"]:checked', form).map((box) => box.value),
+        notes: form.notes.value,
+        photo: draft.photo || null,
+        cutout: draft.cutout || null,
+        portion: draft.portion,
+        nutrition: draft.nutrition,
+        recipe: draft.recipe,
+      };
+    }
+    form.addEventListener("input", saveDraftSoon);
+    form.addEventListener("change", saveDraftSoon);
+    form.addEventListener("click", saveDraftSoon);
+    // the camera app may push this tab out of memory: write the draft before it opens
+    $('label[for="log-photo"]', form).addEventListener("click", saveDraftNow);
+    dialog.onclose = () => {
+      clearTimeout(saveDraftNow.timer);
+      store.set("logDraft", null).catch(() => {});
+    };
+
+    async function runCutout() {
+      if (!window.LahapVision || !draft.photo) return;
+      const status = $("#photo-status");
       const token = (draft.cutToken = (draft.cutToken || 0) + 1);
       status.textContent = "Removing the background…";
       dialog.classList.add("working");
+      // if the phone runs out of memory mid-cutout the page reloads; this flag tells the next start what happened
+      markCutout(true);
       try {
         const result = await window.LahapVision.cutout(draft.photo, {
           onStatus: (text) => {
@@ -2202,11 +2554,37 @@
             ? `Food cut out on this device in ${(result.ms / 1000).toFixed(1)} s. Tap Original to keep the full photo.`
             : "The cutout model could not load (offline?), so this is a soft oval crop. Tap Original to keep the full photo.";
         autoPlate(result.plate);
+        saveDraftNow();
       } catch (error) {
         status.textContent = "Could not cut out the food, so the original photo is kept.";
       } finally {
+        markCutout(false);
         dialog.classList.remove("working");
       }
+    }
+
+    $("#log-photo").addEventListener("change", async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      const status = $("#photo-status");
+      try {
+        draft.photo = await resizePhoto(file);
+        draft.cutout = null;
+        draft.useCutout = false;
+        $("#cut-toggle").hidden = true;
+        updatePreview();
+      } catch (error) {
+        toast("Could not read that photo");
+        return;
+      }
+      await saveDraftNow();
+      if (!window.LahapVision) return;
+      if (!autoCutoutOn()) {
+        status.innerHTML = 'Photo kept. Auto cutout is off on this phone. <button type="button" class="link-btn" id="cut-run">Cut out the food</button>';
+        $("#cut-run").addEventListener("click", runCutout);
+        return;
+      }
+      runCutout();
     });
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -2231,15 +2609,24 @@
         photo: draft.photo || null,
         cutout: draft.useCutout && draft.cutout ? draft.cutout : null,
         portion: draft.portion,
+        updatedAt: new Date().toISOString(),
       };
       if (draft.nutrition) entry.nutrition = draft.nutrition;
       if (draft.recipe) entry.recipe = draft.recipe;
       const before = editing ? editing.friends || [] : [];
       const newlyTagged = entry.friends.filter((id) => !before.includes(id));
+      try {
+        await store.put(entry);
+      } catch (error) {
+        // keep the sheet open with everything typed, so nothing is lost
+        await saveDraftNow();
+        toast(`Not saved: ${error.message || "storage error"}. Try again, or back up from Profile.`);
+        return;
+      }
       for (const id of newlyTagged) state.points[id] = (state.points[id] || 0) + L.POINTS.tag;
-      await store.put(entry);
       state.entries = state.entries.filter((item) => item.id !== entry.id).concat(entry);
       await saveMeta();
+      askPersist();
       dialog.close();
       const bonus = newlyTagged.length ? ` · +${L.POINTS.tag * newlyTagged.length} connection points` : "";
       toast(`${editing ? "Updated" : "Logged"} ${entry.name}${bonus}`);
@@ -2821,7 +3208,7 @@
         entry.cuisine,
         withWho.length ? `with ${withWho.join(", ")}` : "solo",
       ].filter(Boolean);
-      const flavourLine = flavourParts.join("  /  ").toUpperCase();
+      const flavourLine = flavourParts.join("  ·  ").toUpperCase();
       ctx.fillStyle = sub;
       ctx.font = mono(30, 600);
       ctx.fillText(wrapText(ctx, flavourLine, W - pad * 2, 1)[0], pad, rowY + 30);
@@ -3347,8 +3734,15 @@
     const remove = target.closest("[data-delete]");
     if (remove) {
       if (!confirm("Delete this meal?")) return;
-      await store.remove(remove.dataset.delete);
+      try {
+        await store.remove(remove.dataset.delete);
+      } catch (error) {
+        toast(`Not deleted: ${error.message}`);
+        return;
+      }
       state.entries = state.entries.filter((item) => item.id !== remove.dataset.delete);
+      state.deleted[remove.dataset.delete] = new Date().toISOString();
+      await saveMeta();
       $("#dlg-detail").close();
       toast("Meal deleted");
       render();
@@ -3389,6 +3783,11 @@
     }
     if (target.closest("[data-share-week]")) {
       openShare("week");
+      return;
+    }
+    if (target.closest("[data-clear-sample]")) {
+      if (!confirm(`Remove the ${sampleCount()} sample meals? Your own meals stay.`)) return;
+      await clearSample();
       return;
     }
     if (target.closest("[data-sample]")) {
@@ -3501,6 +3900,13 @@
     state.friends = await store.get("friends", []);
     state.points = await store.get("points", {});
     state.invites = await store.get("invites", []);
+    state.deleted = (await store.get("deleted", {})) || {};
+    const interrupted = cutoutWasInterrupted();
+    if (interrupted) {
+      state.settings.autoCutout = false;
+      await saveMeta();
+    }
+    askPersist();
     for (const person of await store.get("people", [])) {
       if (!personById(person.id)) PEOPLE.push(person);
     }
@@ -3517,15 +3923,26 @@
     if (params.has("demo") && !state.settings.profile) state.settings.profile = Object.assign({}, SAMPLE_PROFILE);
     route();
     document.documentElement.dataset.ready = "1";
+    // r37: a meal that was being logged when the page reloaded (camera app, low memory) comes straight back
+    const draft = await store.get("logDraft", null);
+    if (draft && (draft.name || draft.photo || draft.place)) {
+      openLog(draft);
+      toast(interrupted ? "Your phone reloaded during the photo cutout. Meal restored; auto cutout is now off." : "Restored the meal you were logging");
+      return registerWorker(params);
+    }
     // first run: a short quiz to learn the goal (skippable, never in the demo or tests)
     if (!state.settings.quizSeen && !state.settings.profile && !params.has("demo") && !params.has("noquiz")) openQuiz();
+    registerWorker(params);
+  }
+
+  function registerWorker(params) {
     if ("serviceWorker" in navigator && location.protocol.startsWith("http") && !params.has("nosw")) {
       navigator.serviceWorker.register("sw.js").catch(() => {});
     }
   }
 
   // test hook
-  window.Lahap = { state, render, inviteLink, openLog, openShare, openHangout, openQuiz, drawShare, loadSample, sampleEntries, renderLab, nutritionFor, readListPhoto, removeFriend, emptyHtml };
+  window.Lahap = { state, render, inviteLink, openLog, openShare, openHangout, openQuiz, drawShare, loadSample, sampleEntries, renderLab, nutritionFor, readListPhoto, removeFriend, emptyHtml, store, mergeBackup, backupData, clearSample, resizePhoto };
 
   init();
 })();

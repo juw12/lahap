@@ -1,6 +1,6 @@
 // Offline cache. App shell: network first so updates land. Heavy vendor files (cutout model, OCR):
 // cache first, fetched only when a feature needs them. Meals and photos live in IndexedDB, not here.
-const CACHE = "lahap-v56";
+const CACHE = "lahap-v57";
 const VENDOR = "lahap-vendor-v1";
 const SHELL = ["./", "index.html", "styles.css", "logic.js", "nutrition.js", "recipes.js", "vision.js", "app.js", "icon.svg", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png", "manifest.webmanifest", "assets/dish/noodle.jpg", "assets/dish/salad.jpg", "assets/dish/pizza.jpg"];
 
@@ -34,13 +34,22 @@ self.addEventListener("fetch", (event) => {
     );
     return;
   }
+  // r37: never answer with nothing. Offline, a page load falls back to the cached app shell, so the app opens
+  // (with every saved meal) instead of a browser error page; only good responses are cached.
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        const copy = response.clone();
-        caches.open(CACHE).then((cache) => cache.put(event.request, copy));
+        if (response.ok && url.origin === location.origin) {
+          const copy = response.clone();
+          caches.open(CACHE).then((cache) => cache.put(event.request, copy));
+        }
         return response;
       })
-      .catch(() => caches.match(event.request, { ignoreSearch: true }))
+      .catch(() =>
+        caches
+          .match(event.request, { ignoreSearch: true })
+          .then((hit) => hit || (event.request.mode === "navigate" ? caches.match("index.html") : undefined))
+          .then((hit) => hit || Response.error())
+      )
   );
 });

@@ -7,6 +7,7 @@ Live: https://juw12.github.io/lahap/ (add `?demo=1` for a sample fortnight)
 ![Goal quiz](screenshots/quiz-phone.png) ![Share card](screenshots/share-card.png)
 
 Offline-first web app (PWA). No account, no server: meals, photos and your goal stay in the browser (IndexedDB).
+Open https://juw12.github.io/lahap/ (no `?demo`) to start your own diary; it opens empty and saves every meal on the device.
 
 Run locally: serve this folder (e.g. `python -m http.server 8765`) and open http://127.0.0.1:8765/ .
 Add `?demo=1` to load a sample fortnight, `?noquiz=1` to skip the first-run quiz.
@@ -36,7 +37,14 @@ What it does
   mark "We went" (+25), levels New bud, Makan buddy, Regular, Family table.
 - Invite links: "Invite a bud" shares a link that carries only your taste profile (no meals); your friend
   opens it, sees "<name> wants to compare tastes" and adds you with one tap. No account, no server.
-- Backup export/import (JSON), currency setting.
+- Save, sync and share (Profile): Share backup (phone share sheet) or Save backup file, then Restore or merge on another
+  device. Meals are matched by id, the newest edit wins and deleted meals stay deleted, so syncing twice never doubles
+  anything. It is file-based sync, not a cloud: nothing moves until you share the file.
+- Crash-safe logging: the meal you are typing is kept as a draft on every change, so if the phone reloads the tab (camera
+  app, low memory) the sheet reopens with everything you entered. Photos decode straight to 1080 px, auto cutout can be
+  turned off and switches itself off if it ever ran a phone out of memory, and saves retry when a sleeping phone drops the
+  database connection. If the browser blocks storage (private tab) the diary says so instead of losing meals.
+- One tap removes the sample fortnight if it ever got mixed into a real diary. Currency setting.
 
 Limits (honest)
 - Nutrition numbers are estimates from typical portions and recipes, not measurements and not medical advice.
@@ -55,7 +63,7 @@ Limits (honest)
 - Suggested buds are example profiles. Invited buds are real but one-way snapshots: there is no server, so buds,
   matching and points live on each device and do not sync after the invite.
 
-Tests: `python tests/test_app.py` (Playwright, 315 checks, including a real cut-out and OCR run). Design rules: `design.md`.
+Tests: `python tests/test_app.py` (Playwright, 341 checks, including a real cut-out and OCR run). Design rules: `design.md`.
 
 Why another food diary: PlateDiary is a private restaurant photo journal and Mynu is a home-cooking journal.
 Lahap logs both (ate out, home-cooked, delivery), answers "have I eaten this before?", estimates what is on the

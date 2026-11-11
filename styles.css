@@ -3812,3 +3812,68 @@ label.chip input {
   font-weight: 700;
   letter-spacing: 0.02em;
 }
+
+/* r37: save, sync and share */
+.data-status {
+  font-size: 14px;
+  color: var(--ink);
+  margin: 0 0 16px;
+}
+
+.check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 16px 0;
+  font-size: 14px;
+  line-height: 1.4;
+  min-height: 44px;
+}
+
+.check-row input {
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  flex: none;
+  accent-color: var(--accent);
+}
+
+.check-row .small {
+  display: block;
+  font-size: 13px;
+}
+
+.data-danger {
+  margin-top: 8px;
+}
+
+.sample-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 12px;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.sample-notice.storage-warn {
+  border-style: solid;
+  border-color: var(--accent);
+}
+
+.link-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  min-height: 0;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}

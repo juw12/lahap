@@ -873,6 +873,138 @@ def main():
         check("r8b buds: early card goes away once a bud exists", "Add your first bud" not in fresh_buds_text)
         fresh.close()
 
+        # ---- r37: a real phone diary saves, survives reloads, syncs by file and never starts from the demo ----
+        save_ctx = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=1)
+        sp = save_ctx.new_page()
+        save_errors = []
+        sp.on("pageerror", lambda error: save_errors.append(str(error)))
+        sp.on("console", lambda message: save_errors.append(message.text) if message.type == "error" else None)
+        sp.on("dialog", lambda dialog: dialog.accept())
+        sp.goto(base + "?nosw=1&noquiz=1")
+        sp.wait_for_selector("html[data-ready='1']")
+        check("r37 plain start: the diary opens empty, never with the sample", sp.evaluate("() => window.Lahap.state.entries.length") == 0)
+        check("r37 storage: IndexedDB is in use", sp.evaluate("() => window.Lahap.store.mode()") == "idb")
+        sp.evaluate("() => window.Lahap.openLog()")
+        check("r37 log: the photo picker no longer forces the camera", sp.get_attribute("#log-photo", "capture") is None)
+        sp.fill("#log-form [name=name]", "Soto ayam r37")
+        sp.fill("#log-form [name=place]", "Warung Bu Sri")
+        sp.wait_for_timeout(600)
+        # the phone reloads the tab mid-log (camera app, low memory): the meal must come back
+        sp.reload()
+        sp.wait_for_selector("html[data-ready='1']")
+        sp.wait_for_timeout(300)
+        restored = sp.evaluate(
+            """() => {
+              const dialog = document.getElementById('dlg-log');
+              return dialog.open ? [dialog.querySelector('[name=name]').value, dialog.querySelector('[name=place]').value] : null;
+            }"""
+        )
+        check("r37 draft: an unsaved meal comes back after a reload", restored == ["Soto ayam r37", "Warung Bu Sri"], restored)
+        # iOS drops the database connection while the app sleeps; the save must still land
+        sp.evaluate("() => window.Lahap.store.dropConnection()")
+        sp.locator("#log-form button[type=submit]").click()
+        sp.wait_for_function("() => window.Lahap.state.entries.some(e => e.name === 'Soto ayam r37')", timeout=5000)
+        sp.wait_for_timeout(300)
+        check("r37 save: the sheet closes after saving on a dropped connection", not sp.evaluate("() => document.getElementById('dlg-log').open"))
+        sp.reload()
+        sp.wait_for_selector("html[data-ready='1']")
+        sp.wait_for_timeout(300)
+        after = sp.evaluate(
+            """() => ({
+              saved: window.Lahap.state.entries.filter(e => e.name === 'Soto ayam r37').length,
+              stamped: !!(window.Lahap.state.entries.find(e => e.name === 'Soto ayam r37') || {}).updatedAt,
+              sheetOpen: document.getElementById('dlg-log').open,
+            })"""
+        )
+        check("r37 save: the meal is still there after a reload", after["saved"] == 1, after)
+        check("r37 save: a saved meal is stamped for sync", after["stamped"], after)
+        check("r37 draft: the draft is cleared once the meal is saved", not after["sheetOpen"], after)
+        sync = sp.evaluate(
+            """async () => {
+              const app = window.Lahap;
+              const mine = app.state.entries.find(e => e.name === 'Soto ayam r37');
+              const later = new Date(Date.now() + 60000).toISOString();
+              const backup = app.backupData();
+              const other = { id: 'other-device-1', name: 'Nasi padang', ts: later, updatedAt: later, plate: { veg: 1, protein: 1, carbs: 1 },
+                tastes: [], friends: [], cuisine: 'Indonesian', price: 0, source: 'out' };
+              const incoming = JSON.parse(JSON.stringify(backup));
+              incoming.entries = [Object.assign({}, mine, { place: 'Warung Bu Sri 2', updatedAt: later }), other];
+              const first = await app.mergeBackup(incoming);
+              const second = await app.mergeBackup(incoming);
+              const count = app.state.entries.length;
+              const tomb = { app: 'lahap', entries: [], deleted: { 'other-device-1': new Date(Date.now() + 120000).toISOString() } };
+              const third = await app.mergeBackup(tomb);
+              const fourth = await app.mergeBackup(incoming);
+              let bad = '';
+              try {
+                await app.mergeBackup({ hello: 1 });
+              } catch (error) {
+                bad = error.message;
+              }
+              return {
+                version: backup.version, hasDeleted: typeof backup.deleted === 'object', backupNames: backup.entries.map(e => e.name),
+                first, second, count, third, fourth, bad,
+                place: app.state.entries.find(e => e.id === mine.id).place,
+                names: app.state.entries.map(e => e.name),
+              };
+            }"""
+        )
+        check("r37 backup: carries the meals, deletions and a version", sync["version"] == 2 and sync["hasDeleted"] and "Soto ayam r37" in sync["backupNames"], sync)
+        check("r37 sync: a newer edit and a new meal arrive from the other device", sync["first"] == {"added": 1, "updated": 1, "removed": 0} and sync["place"] == "Warung Bu Sri 2", sync)
+        check("r37 sync: merging the same file twice doubles nothing", sync["second"] == {"added": 0, "updated": 0, "removed": 0} and sync["count"] == 2, sync)
+        check("r37 sync: a deletion on the other device removes the meal here", sync["third"]["removed"] == 1, sync)
+        check("r37 sync: an old backup never brings a deleted meal back", sync["fourth"]["added"] == 0 and "Nasi padang" not in sync["names"], sync)
+        check("r37 sync: a file that is not a Lahap backup is refused", "not a Lahap backup" in sync["bad"], sync["bad"])
+        sp.evaluate("async () => { await window.Lahap.loadSample(); window.Lahap.render(); }")
+        sp.wait_for_timeout(200)
+        check("r37 samples: a diary mixing samples and real meals says so", sp.locator("#view-diary .sample-notice [data-clear-sample]").count() == 1)
+        sp.locator("#view-diary .sample-notice [data-clear-sample]").click()
+        sp.wait_for_timeout(400)
+        cleared = sp.evaluate("() => ({ samples: window.Lahap.state.entries.filter(e => e.sample).length, mine: window.Lahap.state.entries.filter(e => e.name === 'Soto ayam r37').length })")
+        check("r37 samples: one tap removes the samples and keeps your meals", cleared == {"samples": 0, "mine": 1}, cleared)
+        check("r37 samples: the notice goes away", sp.locator("#view-diary .sample-notice").count() == 0)
+        sp.evaluate("() => location.hash = 'me'")
+        sp.wait_for_timeout(250)
+        panel = sp.evaluate(
+            """() => ({
+              share: !!document.getElementById('share-backup'),
+              save: !!document.getElementById('export'),
+              restore: !!document.querySelector('label[for=import]'),
+              status: (document.getElementById('data-status') || {}).textContent || '',
+              cutout: !!document.getElementById('set-cutout'),
+              sampleButton: document.querySelectorAll('#view-me [data-sample]').length,
+            })"""
+        )
+        check("r37 profile: Share backup, Save backup file and Restore or merge are there", panel["share"] and panel["save"] and panel["restore"], panel)
+        check("r37 profile: the data line says meals are saved on this phone", "Saved on this phone" in panel["status"] and "No backup yet" in panel["status"], panel["status"])
+        check("r37 profile: auto cutout can be switched off", panel["cutout"], panel)
+        check("r37 profile: no 'load sample' button once you have real meals", panel["sampleButton"] == 0, panel)
+        sp.locator("#export").click()
+        sp.wait_for_timeout(300)
+        check("r37 profile: saving a backup updates the last-backup line", "Last backup today" in sp.inner_text("#data-status"), sp.inner_text("#data-status"))
+        size = sp.evaluate(
+            """async () => {
+              const canvas = document.createElement('canvas');
+              canvas.width = 3000;
+              canvas.height = 2000;
+              canvas.getContext('2d').fillRect(0, 0, 10, 10);
+              const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg'));
+              const url = await window.Lahap.resizePhoto(blob);
+              const image = new Image();
+              image.src = url;
+              await image.decode();
+              return [image.width, image.height];
+            }"""
+        )
+        check("r37 photo: a big camera photo is decoded down to 1080 px", size == [1080, 720], size)
+        sp.evaluate("() => localStorage.setItem('lahap:cutting', '1')")
+        sp.reload()
+        sp.wait_for_selector("html[data-ready='1']")
+        sp.wait_for_timeout(300)
+        check("r37 cutout: a reload during a cutout switches auto cutout off", sp.evaluate("() => window.Lahap.state.settings.autoCutout") is False)
+        check("r37 save flows: no JS errors", not save_errors, "; ".join(save_errors[:3]))
+        save_ctx.close()
+
         # ---- taste buds ----
         page.goto(base + "?nosw=1#buds")
         page.wait_for_selector("html[data-ready='1']")
@@ -1666,6 +1798,7 @@ def main():
             and "WITH " in r28["flavour32"],
             {"labels": r28["labels32"], "flavour": r28["flavour32"]},
         )
+        check("r37 share card: flavour line uses middle dots only", "/" not in r28["flavour32"] and r28["flavour32"].count("·") >= 2, r28["flavour32"])
         # ---- r29: spend bars carry units; the week panel's repeat line says its scope; the desktop week panel has its plate ----
         page.goto(base + "#insights")
         page.wait_for_selector("html[data-ready='1']")
