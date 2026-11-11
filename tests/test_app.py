@@ -842,6 +842,10 @@ def main():
         # ---- taste buds ----
         page.goto(base + "?nosw=1#buds")
         page.wait_for_selector("html[data-ready='1']")
+        # r35: with buds already, demo matches start folded on a phone - open them the way a person would
+        if not page.evaluate("() => { const d = document.querySelector('#view-buds .suggested-fold'); return !d || d.open; }"):
+            page.locator("#view-buds .suggested-fold > summary").click()
+            page.wait_for_timeout(150)
         page.locator("[data-add]").first.click()
         page.wait_for_timeout(200)
         friends = page.evaluate("() => window.Lahap.state.friends.length")
@@ -2129,13 +2133,52 @@ def main():
               return panel ? { tag: panel.tagName.toLowerCase(), open: panel.open } : null;
             }"""
         )
+        # r35: a phone with real buds folds demo matches too; only a brand-new phone (no buds) opens them
+        fold_phone_new = ph_fold_page.evaluate(
+            """async () => {
+              window.Lahap.state.friends = [];
+              window.Lahap.render();
+              await new Promise(r => setTimeout(r, 200));
+              const panel = document.querySelector('#view-buds .suggested-panel');
+              return panel ? { tag: panel.tagName.toLowerCase(), open: panel.open } : null;
+            }"""
+        )
         check(
-            "r21 buds desk: the suggested-by-taste panel folds closed on a desktop and stays open on a phone",
+            "r21/r35 buds: demo matches fold on a desktop and on a phone that has real buds, and open only on a phone with no buds yet",
             fold_desk and fold_desk["tag"] == "details" and not fold_desk["open"]
-            and fold_phone and fold_phone["tag"] == "details" and fold_phone["open"],
-            {"desk": fold_desk, "phone": fold_phone},
+            and fold_phone and fold_phone["tag"] == "details" and not fold_phone["open"]
+            and fold_phone_new and fold_phone_new["open"],
+            {"desk": fold_desk, "phone": fold_phone, "phone_no_buds": fold_phone_new},
         )
         ph_fold.close()
+        invite35 = desk21_page.evaluate(
+            """() => {
+              const card = document.querySelector('#view-buds .invite-card');
+              if (!card) return null;
+              const rows = [...card.querySelectorAll('.invite-carries li')].map((li) => li.textContent.replace(/\\s+/g, ' ').trim());
+              const subs = [...document.querySelectorAll('#view-buds .points-list tr.sub th')].map((th) => th.textContent.trim().toLowerCase());
+              const stub = card.querySelector('.invite-stub');
+              return {
+                rows,
+                stub: stub ? stub.textContent.trim() : '',
+                stubDashed: stub ? getComputedStyle(stub).borderBottomStyle : '',
+                subs,
+                button: !!card.querySelector('[data-invite]'),
+              };
+            }"""
+        )
+        check(
+            "r35 buds: Bring a real friend is an admit-one slip whose ledger says what the link sends (taste weights, cuisines) and never sends (meals, photos)",
+            bool(invite35) and invite35["stubDashed"] == "dashed" and "admit one" in invite35["stub"].lower()
+            and len(invite35["rows"]) == 3 and invite35["rows"][-1].lower().endswith("never")
+            and all(row.lower().endswith("sent") for row in invite35["rows"][:2]) and invite35["button"],
+            invite35,
+        )
+        check(
+            "r35 buds: How points work prints like a price list, Earn then Levels",
+            bool(invite35) and invite35["subs"] == ["earn", "levels"],
+            invite35,
+        )
         desk21_page.goto(base + "?demo=1&nosw=1#insights")
         desk21_page.wait_for_selector("html[data-ready='1']")
         desk21_page.wait_for_timeout(300)

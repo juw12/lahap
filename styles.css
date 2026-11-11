@@ -3758,3 +3758,48 @@ label.chip input {
     box-shadow: none;
   }
 }
+
+/* r35 (GLM): Bring a real friend reads as an admit-one slip - a torn stub line and a ledger of what the link sends */
+.invite-stub {
+  margin: 0 0 var(--s2);
+  padding-bottom: var(--s2);
+  border-bottom: 2px dashed var(--line-strong);
+  color: var(--accent);
+}
+.invite-carries {
+  list-style: none;
+  margin: var(--s2) 0 var(--s3);
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+.invite-carries li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s2);
+  padding: 5px 0;
+  border-bottom: 1px dotted var(--line-strong);
+}
+.invite-carries b {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #2f6b3a;
+}
+.invite-carries li.never b {
+  color: var(--accent);
+}
+/* r35 (GLM): How points work prints like a price list - EARN, then LEVELS */
+.points-list tr.sub th {
+  padding: var(--s3) 0 4px;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1.5px solid var(--ink);
+}
+.points-list tr.sub:first-child th {
+  padding-top: 0;
+}

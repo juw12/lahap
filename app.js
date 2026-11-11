@@ -1099,8 +1099,14 @@
   function inviteHtml() {
     return `
       <section class="panel invite-card">
+        <p class="eyebrow invite-stub">Admit one · taste bud</p>
         <h2>Bring a real friend</h2>
-        <p class="muted">Send a link with your taste profile: six taste weights and your top cuisines, never your meals. When your friend opens it, Lahap adds you as their bud and shows how close your tastes are.</p>
+        <ul class="invite-carries" aria-label="What the invite link sends">
+          <li><span>Your 6 taste weights</span><b>sent</b></li>
+          <li><span>Your top cuisines</span><b>sent</b></li>
+          <li class="never"><span>Your meals and photos</span><b>never</b></li>
+        </ul>
+        <p class="muted small">When your friend opens it, Lahap adds you as each other's bud and shows how close your tastes are.</p>
         <button type="button" class="btn primary" data-invite>Invite a friend</button>
       </section>`;
   }
@@ -1249,7 +1255,7 @@
               return `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(matchFor(person))}</span></div><div class="why">${esc(level.name)} · ${points} pts · ${esc(lastTogether(person.id))}</div>${spotFor(person) ? `<div class="spot">${esc(spotFor(person))}</div>` : ""}${pendingPlanHtml(person.id)}${person.id === featuredId ? `<div class="featured-note">Next level shown above</div>` : `${level.next ? `<div class="next-step">${esc(nextStep(level))}</div>` : ""}<div class="level"><div class="track"><div class="fill" style="width:${Math.round(level.progress * 100)}%"></div></div></div>`}</div><div class="person-actions"><button type="button" class="btn small" data-hangout="${person.id}" aria-label="Plan makan with ${esc(person.name)}">Plan makan</button><button type="button" class="person-remove" data-remove="${person.id}" aria-label="Remove ${esc(person.name)}" title="Remove ${esc(person.name)}">Remove</button></div></div>`;
             }).join("") : '<p class="muted">No buds yet. Invite a friend, or add an example profile below to try tagging and hangouts.</p>'}
           </section>
-          <details class="panel suggested-panel suggested-fold"${isPhone() ? " open" : ""}>
+          <details class="panel suggested-panel suggested-fold"${isPhone() && !friends.length ? " open" : ""}>
             <summary><h2>${hasTasteProfile() ? "Demo matches · suggested by taste" : "Example buds to try"}</h2><span class="demo-badge" aria-hidden="true">Demo</span></summary>
             <p class="muted small panel-sub suggested-why">${hasTasteProfile() ? "Example profiles, ranked by how close their tastes are to the meals you logged. Worked out on this phone; nothing is uploaded. Real friends join through your invite link." : "Example profiles to try tagging and hangouts. Log a few meals and they get ranked by taste."}</p>
             ${others.length ? others.map(({ person, match }) => `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(match)}</span></div><div class="why">${esc(hasTasteProfile() ? reasonsFor(person) : "Log a few meals to see what you share")} · ${esc(person.area)}</div>${hasTasteProfile() && spotFor(person) ? `<div class="spot">${esc(spotFor(person))}</div>` : ""}</div><button type="button" class="btn" data-add="${person.id}" aria-label="Add ${esc(person.name)} as a bud on this device">Add bud</button></div>`).join("") : '<p class="muted">You added everyone. Nice.</p>'}
@@ -1267,9 +1273,11 @@
           </section>
           <section class="panel">
             <h2>How points work</h2>
-            <table class="breakdown">
+            <table class="breakdown points-list">
+              <tr class="sub"><th scope="colgroup" colspan="2">Earn</th></tr>
               <tr><td>Tag a bud in a meal</td><td>+${L.POINTS.tag}</td></tr>
               <tr><td>Plan makan and mark “We went”</td><td>+${L.POINTS.hangout}</td></tr>
+              <tr class="sub"><th scope="colgroup" colspan="2">Levels</th></tr>
               ${L.LEVELS.slice(1).map((level) => `<tr><td>${esc(level.name)}</td><td>${level.min} pts</td></tr>`).join("")}
             </table>
           </section>
