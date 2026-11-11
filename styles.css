@@ -2199,20 +2199,22 @@ label.chip input {
 }
 .ticket-wrap .ticket .tags {
   min-height: 30px;
-  padding-right: 38px;
+  padding-right: 66px;
   align-content: flex-start;
 }
 .ticket-share {
   position: absolute;
   right: calc(var(--tpad) + var(--stub-w) + var(--tgap) - 7px);
   bottom: calc(var(--tpad) - 7px);
-  width: 44px;
+  min-width: 44px;
   height: 44px;
-  display: grid;
-  place-items: center;
-  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 15px 0 13px;
   border: 0;
-  border-radius: 50%;
+  border-radius: 22px;
   background: transparent;
   color: var(--ink);
   cursor: pointer;
@@ -2221,7 +2223,7 @@ label.chip input {
   content: "";
   position: absolute;
   inset: 7px;
-  border-radius: 50%;
+  border-radius: 15px;
   background: var(--card);
   border: 1px solid var(--line-strong);
   box-shadow: 0 1px 2px rgba(29, 24, 19, 0.18);
@@ -3802,4 +3804,11 @@ label.chip input {
 }
 .points-list tr.sub:first-child th {
   padding-top: 0;
+}
+/* r36 (Pega-Thinking, GLM): the ticket share button names what it makes - a 'Card' - so the share cards are findable from the diary */
+.ticket-share-label {
+  position: relative;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }

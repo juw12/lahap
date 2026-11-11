@@ -563,7 +563,41 @@ def main():
             })"""
         )
         check("r16 share: the share disc never sits on the photo, the price stub or a taste chip", share_spot and all(not s["onThumb"] and not s["onStub"] and not s["onTag"] and s["inside"] for s in share_spot), share_spot)
-        check("r16 share: the share button is still a 44px target", share_spot and all(s["size"] == [44, 44] for s in share_spot), share_spot[:2])
+        check("r16 share: the share button is still a 44px target", share_spot and all(s["size"][1] == 44 and s["size"][0] >= 44 for s in share_spot), share_spot[:2])
+        card36 = page.evaluate(
+            """() => [...document.querySelectorAll('#view-diary .ticket-share')].slice(0, 4).map((btn) => {
+              const label = btn.querySelector('.ticket-share-label');
+              return label ? { text: label.textContent.trim(), shown: label.checkVisibility(), size: parseFloat(getComputedStyle(label).fontSize) } : null;
+            })"""
+        )
+        check(
+            "r36 diary: every ticket's share button says what it makes - a 'Card' - in readable 12px text, not a bare icon",
+            card36 and all(c and c["text"] == "Card" and c["shown"] and c["size"] >= 12 for c in card36),
+            card36,
+        )
+        receipt36 = page.evaluate(
+            """async () => {
+              const entry = window.Lahap.state.entries.find(e => e.name === 'Tom yum seafood');
+              window.Lahap.drawShare.receiptRows = null;
+              window.Lahap.openShare(entry);
+              document.querySelector('[data-seg=template][data-value=receipt]').click();
+              for (let i = 0; i < 30; i++) {
+                await new Promise(r => setTimeout(r, 100));
+                if (window.Lahap.drawShare.receiptRows) break;
+              }
+              const rows = window.Lahap.drawShare.receiptRows;
+              document.getElementById('dlg-share').close();
+              return rows;
+            }"""
+        )
+        taste36 = next((row for row in (receipt36 or []) if row.startswith("TASTE")), "")
+        eaten36 = next((row for row in (receipt36 or []) if row.startswith("EATEN")), "")
+        check(
+            "r36 share: the receipt prints counts with a real × and tastes with the app's middle-dot separator, never 2X or SPICY/SOUR",
+            bool(receipt36) and "/" not in taste36 and (" \u00b7 " in taste36 or taste36.count(":") == 1)
+            and not re.search(r"\dX$", eaten36) and ("\u00d7" in eaten36 or "1ST TIME" in eaten36),
+            receipt36,
+        )
         page.locator(".fab").click()
         page.wait_for_selector("#log-form")
         fold = page.evaluate(

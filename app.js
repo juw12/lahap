@@ -546,7 +546,7 @@
           ${scoreBadge(score)}
         </span>
       </button>
-      <button type="button" class="ticket-share" data-share="${esc(entry.id)}" aria-label="Share a card of ${esc(entry.name)}" title="Share card"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4m0 0L8 8m4-4 4 4M6 12v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button type="button" class="ticket-share" data-share="${esc(entry.id)}" aria-label="Share a card of ${esc(entry.name)}" title="Share card"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4m0 0L8 8m4-4 4 4M6 12v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="ticket-share-label" aria-hidden="true">Card</span></button>
       </div>`;
   }
 
@@ -3028,9 +3028,10 @@
     if (isWeek) rows.push(["VARIETY", String(L.varietyScore(items))]);
     else {
       const withWho = (entry.friends || []).map((id) => (personById(id) || {}).name).filter(Boolean);
-      rows.push(["TASTE", (entry.tastes || []).join("/").toUpperCase() || "-"]);
+      rows.push(["TASTE", (entry.tastes || []).join(" · ").toUpperCase() || "-"]);
       rows.push(["PLACE", (entry.place || "-").toUpperCase()]);
-      rows.push(["EATEN", timesEaten(entry) === 1 ? "1ST TIME" : `${timesEaten(entry)}X`]);
+      rows.push(["EATEN", timesEaten(entry) === 1 ? "1ST TIME" : `${timesEaten(entry)}\u00d7`]);
+      if (!preview) drawShare.receiptRows = rows.map((row) => row.join(": "));
       rows.push(["WITH", withWho.length ? withWho.join(", ").toUpperCase() : "SOLO"]);
     }
     ctx.font = mono(36, 700);
