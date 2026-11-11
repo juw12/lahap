@@ -651,7 +651,7 @@
           ${scoreBadge(score)}
         </span>
       </button>
-      <button type="button" class="ticket-share" data-share="${esc(entry.id)}" aria-label="Share a card of ${esc(entry.name)}" title="Share card"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4m0 0L8 8m4-4 4 4M6 12v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="ticket-share-label" aria-hidden="true">Card</span></button>
+      <button type="button" class="ticket-share" data-share="${esc(entry.id)}" aria-label="Share a card of ${esc(entry.name)}" title="Share card"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4m0 0L8 8m4-4 4 4M6 12v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="ticket-share-label" aria-hidden="true">Share card</span></button>
       </div>`;
   }
 
@@ -683,7 +683,7 @@
           <img class="answer-thumb${last.cutout ? " cut" : ""}" src="${imageFor(last)}" alt="${last.photo ? "Photo of " + esc(last.name) : "Plate drawing of " + esc(last.name)}" width="64" height="64">
           <div>
             <p class="eyebrow">${eyebrow === "On repeat" ? "On repeat · most-eaten, all time" : eyebrow}</p>
-            <h2>${eyebrow === "On repeat" ? `<span class="answer-dish">${esc(last.name)}</span>` : ""}Yes, ${summary.count} ${summary.count === 1 ? "time" : "times"}. Last ${esc(relative(last.ts))}${last.place ? " at " + esc(last.place) : ""}.</h2>
+            <h2>${eyebrow === "On repeat" ? `<span class="answer-dish">${esc(last.name)}</span>` : ""}Yes, ${summary.count} ${summary.count === 1 ? "time" : "times"}. Last eaten ${esc(relative(last.ts))}${last.place ? " at " + esc(last.place) : ""}.</h2>
           </div>
         </div>
         ${answerStatsHtml(summary)}
@@ -712,7 +712,7 @@
           <div class="answer-hero-body">
             <p class="eyebrow">On repeat · most-eaten, all time</p>
             <h2 class="answer-hero-name"><span class="answer-dish">${esc(last.name)}</span></h2>
-            <p class="answer-repeat"><span class="repeat-badge" title="Eaten ${summary.count} times">×${summary.count}</span>Yes, ${summary.count} ${summary.count === 1 ? "time" : "times"}. Last ${esc(relative(last.ts))}${where}.</p>
+            <p class="answer-repeat"><span class="repeat-badge" title="Eaten ${summary.count} times">×${summary.count}</span>Yes, ${summary.count} ${summary.count === 1 ? "time" : "times"}. Last eaten ${esc(relative(last.ts))}${where}.</p>
           </div>
         </div>
         ${answerStatsHtml(summary)}
@@ -1083,7 +1083,7 @@
             <div class="stat"><div class="label">Variety score</div><div class="value">${variety}</div><div class="note">0 = same meal every time</div></div>
             <div class="stat"><div class="label">Avg plate score</div><div class="value">${avg}</div><div class="note">${esc(L.healthLabel(avg))}</div></div>
             <div class="stat"><div class="label">Total spend</div><div class="value money">${esc(money(spend.total))}</div><div class="note">${esc(money(spend.perMeal))} per meal</div></div>
-            <div class="stat"><div class="label">Home-cooked</div><div class="value">${entries.filter((entry) => entry.source === "home").length}</div><div class="note">${esc(money(spend.home))} spent at home</div></div>
+            <div class="stat"><div class="label">Home-cooked meals</div><div class="value">${entries.filter((entry) => entry.source === "home").length}</div><div class="note">${esc(money(spend.home))} spent at home</div></div>
           </div>
           ${tip}
         </section>
@@ -1358,7 +1358,7 @@
             ${friends.length ? friends.map((person) => {
               const points = state.points[person.id] || 0;
               const level = L.levelFor(points);
-              return `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(matchFor(person))}</span></div><div class="why">${esc(level.name)} · ${points} pts · ${esc(lastTogether(person.id))}</div>${spotFor(person) ? `<div class="spot">${esc(spotFor(person))}</div>` : ""}${pendingPlanHtml(person.id)}${person.id === featuredId ? `<div class="featured-note">Next level shown above</div>` : `${level.next ? `<div class="next-step">${esc(nextStep(level))}</div>` : ""}<div class="level"><div class="track"><div class="fill" style="width:${Math.round(level.progress * 100)}%"></div></div></div>`}</div><div class="person-actions"><button type="button" class="btn small" data-hangout="${person.id}" aria-label="Plan makan with ${esc(person.name)}">Plan makan</button><button type="button" class="person-remove" data-remove="${person.id}" aria-label="Remove ${esc(person.name)}" title="Remove ${esc(person.name)}">Remove</button></div></div>`;
+              return `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(matchFor(person))}</span></div><div class="why">${esc(level.name)} · ${points} pts · ${esc(lastTogether(person.id))}</div>${spotFor(person) ? `<div class="spot">${esc(spotFor(person))}</div>` : ""}${pendingPlanHtml(person.id)}${person.id === featuredId ? `<div class="featured-note">Next level shown above</div>` : `${level.next ? `<div class="next-step">${esc(nextStep(level))}</div>` : ""}<div class="level"><div class="track"><div class="fill" style="width:${Math.round(level.progress * 100)}%"></div></div></div>`}</div><div class="person-actions"><button type="button" class="btn small" data-hangout="${person.id}" aria-label="Plan makan with ${esc(person.name)}">Plan makan</button><button type="button" class="person-remove" data-remove="${person.id}" aria-label="Remove ${esc(person.name)}" title="Remove ${esc(person.name)}">Remove</button></div></div>`;
             }).join("") : '<p class="muted">No buds yet. Invite a friend, or add an example profile below to try tagging and hangouts.</p>'}
           </section>
           <details class="panel suggested-panel suggested-fold"${isPhone() && !friends.length ? " open" : ""}>
@@ -3194,7 +3194,7 @@
     statBlock(pad, statsY, "Price", money(entry.price), square ? 56 : 68, priceW - gutter);
     statBlock(pad + priceW, statsY, "Rating", entry.rating ? `${entry.rating}/5` : "–", square ? 56 : 68, smallW - gutter);
     if (bleed) {
-      statBlock(pad + priceW + smallW, statsY, "Taste", (entry.tastes || [])[0] || entry.cuisine || "–", square ? 56 : 68, smallW - gutter);
+      statBlock(pad + priceW + smallW, statsY, "Taste", (entry.tastes || []).join(" · ") || entry.cuisine || "–", square ? 56 : 68, smallW - gutter);
       return;
     }
     statBlock(pad + priceW + smallW, statsY, "Eaten", eaten, square ? 56 : 68, smallW - gutter);

@@ -2199,7 +2199,7 @@ label.chip input {
 }
 .ticket-wrap .ticket .tags {
   min-height: 30px;
-  padding-right: 66px;
+  padding-right: 104px;
   align-content: flex-start;
 }
 .ticket-share {
@@ -3876,4 +3876,16 @@ label.chip input {
   font-weight: 600;
   text-decoration: underline;
   cursor: pointer;
+}
+
+/* r38: phone sheets dock to the bottom edge, so their action bar and last field clear the home indicator */
+.sheet-foot,
+.share-actions {
+  padding-bottom: max(var(--s3), env(safe-area-inset-bottom));
+}
+
+@media (max-width: 760px) {
+  dialog.sheet .sheet-body:last-child {
+    padding-bottom: calc(var(--s6) + env(safe-area-inset-bottom));
+  }
 }

@@ -571,8 +571,8 @@ def main():
             })"""
         )
         check(
-            "r36 diary: every ticket's share button says what it makes - a 'Card' - in readable 12px text, not a bare icon",
-            card36 and all(c and c["text"] == "Card" and c["shown"] and c["size"] >= 12 for c in card36),
+            "r36/r38 diary: every ticket's share button says 'Share card' in readable 12px text, not a bare icon",
+            card36 and all(c and c["text"] == "Share card" and c["shown"] and c["size"] >= 12 for c in card36),
             card36,
         )
         receipt36 = page.evaluate(
@@ -1004,6 +1004,38 @@ def main():
         check("r37 cutout: a reload during a cutout switches auto cutout off", sp.evaluate("() => window.Lahap.state.settings.autoCutout") is False)
         check("r37 save flows: no JS errors", not save_errors, "; ".join(save_errors[:3]))
         save_ctx.close()
+
+        copy38 = page.evaluate(
+            """() => ({
+              answer: (document.querySelector('#view-diary .answer, #view-diary .answer-card, #view-diary [class*=answer]') || {}).textContent || '',
+            })"""
+        )
+        check("r38 copy: answers say 'Last eaten', not a bare 'Last'", "Last eaten" in page.content() or "Last eaten" in copy38["answer"], copy38["answer"][:120])
+
+        # ---- r38: phone sheets keep their action bar above the home indicator ----
+        safe = page.evaluate(
+            """() => {
+              const rules = [];
+              for (const sheet of document.styleSheets) {
+                let list = [];
+                try {
+                  list = Array.from(sheet.cssRules);
+                } catch (error) {
+                  continue;
+                }
+                const walk = (items) => {
+                  for (const rule of items) {
+                    if (rule.selectorText) rules.push([rule.selectorText, rule.style ? (rule.style.paddingBottom || '') + ' ' + (rule.style.padding || '') : '']);
+                    if (rule.cssRules && rule.cssRules.length) walk(Array.from(rule.cssRules));
+                  }
+                };
+                walk(list);
+              }
+              const has = (selector) => rules.some(([sel, pad]) => sel.includes(selector) && pad.includes('safe-area-inset-bottom'));
+              return { foot: has('.sheet-foot'), body: has('.sheet-body'), share: has('.share-actions') };
+            }"""
+        )
+        check("r38 sheets: action bars and sheet bodies pad for the phone's home indicator", safe["foot"] and safe["body"] and safe["share"], safe)
 
         # ---- taste buds ----
         page.goto(base + "?nosw=1#buds")
