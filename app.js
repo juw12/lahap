@@ -1003,6 +1003,7 @@
         </section>
         <section class="panel">
           <h2>Where the money went</h2>
+          ${spendLeadHtml(spend)}
           ${barsHtml(Object.keys(SOURCES).map((key) => ({ name: SOURCES[key], count: Math.round(spend[key] / 1000) })), Math.max(1, Math.round(Math.max(spend.out, spend.home, spend.delivery) / 1000)), (item) => compactMoney(item.count * 1000))}
           ${spendSplitHtml(spend)}
           <p class="notice">Exact: out ${esc(money(spend.out))}, home ${esc(money(spend.home))}, delivery ${esc(money(spend.delivery))}.</p>
@@ -1021,8 +1022,17 @@
     return `<div class="spend-split" role="img" aria-label="${parts.map((part) => `${esc(part.name)} ${part.pct}%`).join(", ")}">
         ${parts.map((part) => `<span class="split-${part.key}" style="flex:${part.pct}"></span>`).join("")}
       </div>
-      <p class="spend-split-key">${parts.map((part) => `<span><i class="split-${part.key}"></i>${esc(part.name)} <b class="mono">${part.pct}%</b></span>`).join("")}</p>
-      <p class="spend-split-lead"><b>${lead.pct}%</b> of your food money went to ${esc(lead.name.toLowerCase())}.</p>`;
+      <p class="spend-split-key">${parts.map((part) => `<span><i class="split-${part.key}"></i>${esc(part.name)} <b class="mono">${part.pct}%</b></span>`).join("")}</p>`;
+  }
+
+  // r34 (Pega-Thinking): the money panel opens on its verdict, the way Taste profile opens on "Your plates lean ..."
+  function spendLeadHtml(spend) {
+    const total = spend.out + spend.home + spend.delivery;
+    if (!total) return "";
+    const lead = Object.keys(SOURCES)
+      .map((key) => ({ name: SOURCES[key], pct: Math.round((spend[key] / total) * 100) }))
+      .sort((a, b) => b.pct - a.pct)[0];
+    return `<p class="spend-split-lead"><b>${lead.pct}%</b> of your food money went to ${esc(lead.name.toLowerCase())}.</p>`;
   }
 
   /* ---------------- taste buds ---------------- */
@@ -3062,7 +3072,7 @@
     // barcode only when the slip has room for it above the footer
     const footerY = y + paperH - 44;
     const barH = 54;
-    if (cursor + barH + 34 < footerY - 30) {
+    if (cursor + barH + 40 < footerY - 34) {
       const barW = 420;
       let bx = W / 2 - barW / 2;
       let state = seed || 7;
@@ -3073,16 +3083,19 @@
         ctx.fillRect(bx, cursor, width, barH);
         bx += width + 2 + ((state >> 4) % 3) * 2;
       }
-      ctx.font = mono(20, 500);
-      ctx.fillStyle = faded;
+      // r34 (Pega-Vision): the slip number and sign-off print in full ink so they survive a phone screen
+      ctx.font = mono(26, 600);
+      ctx.fillStyle = ink;
       ctx.textAlign = "center";
-      ctx.fillText(`LHP-${struk}-${String(avg).padStart(3, "0")}`, W / 2, cursor + barH + 26);
+      ctx.fillText(`LHP-${struk}-${String(avg).padStart(3, "0")}`, W / 2, cursor + barH + 32);
+      if (!preview) drawShare.receiptCodeFont = ctx.font;
     }
     ctx.textAlign = "center";
     ctx.textBaseline = "alphabetic";
-    ctx.font = mono(28, 500);
-    ctx.fillStyle = faded;
+    ctx.font = mono(32, 700);
+    ctx.fillStyle = ink;
     ctx.fillText("TERIMA KASIH · SEE YOU NEXT MEAL", W / 2, footerY);
+    if (!preview) drawShare.receiptFootFont = ctx.font;
     ctx.textAlign = "left";
     ctx.restore();
   }

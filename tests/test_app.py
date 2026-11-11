@@ -1822,6 +1822,62 @@ def main():
             bool(desk33) and desk33["above"],
             desk33,
         )
+        receipt34 = page.evaluate(
+            """async () => {
+              const entry = window.Lahap.state.entries.find(e => e.name === 'Tom yum seafood');
+              window.Lahap.drawShare.receiptFootFont = null;
+              window.Lahap.openShare(entry);
+              document.querySelector('[data-seg=template][data-value=receipt]').click();
+              for (let i = 0; i < 30; i++) {
+                await new Promise(r => setTimeout(r, 100));
+                if (window.Lahap.drawShare.receiptFootFont) break;
+              }
+              const out = { foot: window.Lahap.drawShare.receiptFootFont, code: window.Lahap.drawShare.receiptCodeFont };
+              document.getElementById('dlg-share').close();
+              return out;
+            }"""
+        )
+        def px34(font):
+            found = re.search(r"(\d+)px", font or "")
+            return int(found.group(1)) if found else 0
+        check(
+            "r34 share: the receipt sign-off and slip number print large and in full ink (32px / 26px, bold), legible on a phone",
+            px34(receipt34["foot"]) >= 32 and px34(receipt34["code"]) >= 26 and receipt34["foot"].split(" ")[0] in ("700", "bold"),
+            receipt34,
+        )
+        key34 = page.evaluate(
+            """() => {
+              const key = document.querySelector('#view-diary .ws-key');
+              return key ? parseFloat(getComputedStyle(key).fontSize) : null;
+            }"""
+        )
+        check("r34 diary phone: the week-strip key is at least 12px", key34 is None or key34 >= 12, key34)
+        size_before34 = page.viewport_size
+        page.set_viewport_size({"width": 1440, "height": 900})
+        page.goto(base + "#insights")
+        page.wait_for_selector("html[data-ready='1']")
+        page.wait_for_timeout(300)
+        labels34 = page.evaluate(
+            """() => {
+              const labels = [...document.querySelectorAll('#view-insights .bar-row > span:first-child, #view-insights .taste-tally .t-name')]
+                .filter(el => el.offsetParent);
+              return labels.map(el => {
+                const cs = getComputedStyle(el);
+                return {
+                  text: el.textContent.trim(),
+                  size: parseFloat(cs.fontSize),
+                  color: cs.color,
+                  oneLine: el.getBoundingClientRect().height < parseFloat(cs.fontSize) * 2,
+                };
+              });
+            }"""
+        )
+        page.set_viewport_size(size_before34)
+        check(
+            "r34 insights desk: every bar label (tastes, cuisines, money) is 13px+ in ink and stays on one line",
+            len(labels34) >= 8 and all(l["size"] >= 13 and l["color"] == "rgb(29, 24, 19)" and l["oneLine"] for l in labels34),
+            labels34,
+        )
         check(
             "r31 diary desk: each repeat count is glued to its dish with a no-break space, so a lone 'x3.' never wraps",
             repeat31 is None or ("\u00a0\u00d7" in repeat31 and not re.search(r" \u00d7\d", repeat31)),
@@ -1963,6 +2019,20 @@ def main():
             "r26 insights: Top places runs in two columns on wide screens",
             ins26["cols"] == (2 if ins26["width"] >= 1100 else 1),
             ins26,
+        )
+        money34 = page.evaluate(
+            """() => {
+              const lead = document.querySelector('#view-insights .spend-split-lead');
+              const panel = lead ? lead.closest('.panel') : null;
+              const firstBar = panel ? panel.querySelector('.bar-row') : null;
+              if (!lead || !firstBar) return null;
+              return { leadAboveBars: lead.getBoundingClientRect().bottom <= firstBar.getBoundingClientRect().top + 1, count: panel.querySelectorAll('.spend-split-lead').length };
+            }"""
+        )
+        check(
+            "r34 insights: Where the money went opens on its verdict line, above the bars (once)",
+            bool(money34) and money34["leadAboveBars"] and money34["count"] == 1,
+            money34,
         )
         empty26 = page.evaluate(
             """() => {
