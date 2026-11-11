@@ -631,7 +631,7 @@
           <div class="stat"><div class="label">Plate score</div><div class="value">${avg}</div><div class="note">${esc(L.healthLabel(avg))}</div></div>
           <div class="stat"><div class="label">Spent</div><div class="value money">${esc(money(spend.total))}</div></div>
         </div>
-        ${onRepeat.length ? `<p class="notice week-repeat">On repeat this week (last 7 days): ${onRepeat.map((item) => `${esc(item.name)} ×${item.count}`).join(", ")}.</p>` : ""}
+        ${onRepeat.length ? `<p class="notice week-repeat">On repeat this week (last 7 days): ${onRepeat.map((item) => `${esc(item.name)}\u00a0×${item.count}`).join(", ")}.</p>` : ""}
         <div class="btn-row" style="margin-top:16px">
           <button type="button" class="btn primary" data-share-week>Share my week</button>
           <a class="btn" href="#insights">All insights</a>
@@ -649,7 +649,9 @@
     const action = isBud
       ? `<button type="button" class="btn" data-hangout="${best.person.id}">Plan makan</button>`
       : `<button type="button" class="btn" data-add="${best.person.id}">Add bud</button>`;
-    return `<div class="bud-nudge">${avatar(best.person)}<span><strong>${esc(best.person.name)} · ${best.match}% match</strong><span class="muted small">${esc(reasonsFor(best.person))}</span></span>${action}</div>`;
+    const pick = isBud ? planPlaceFor(best.person) : null;
+    const why = pick ? `<span class="plan-why">Try ${esc(pick.place.name)}: ${esc(pick.why)}</span>` : "";
+    return `<div class="bud-nudge">${avatar(best.person)}<span><strong>${esc(best.person.name)} · ${best.match}% match</strong><span class="muted small">${esc(reasonsFor(best.person))}</span>${why}</span>${action}</div>`;
   }
 
   // r21: the social loop and the share action on the Diary's first screen, under the latest day's header:
@@ -1299,11 +1301,24 @@
     return `${level.toNext} pts to ${level.next}: ${parts.join(" + ")}`;
   }
 
+  // r31: a plan says why this place - a cuisine you both like that you already go to, else your regular spot
+  function planPlaceFor(person) {
+    const places = L.topPlaces(state.entries, 20).filter((item) => item.name !== "Home");
+    const shared = places.find((item) => item.cuisines.some((cuisine) => person.cuisines.includes(cuisine)));
+    if (shared) {
+      const cuisine = shared.cuisines.find((item) => person.cuisines.includes(item));
+      return { place: shared, why: `${cuisine}, which ${person.name} likes too · you've been ${shared.count}\u00d7` };
+    }
+    if (places[0]) return { place: places[0], why: `your most-visited spot · you've been ${places[0].count}\u00d7` };
+    return null;
+  }
+
   function suggestedPlanHtml(friends) {
     const best = friends.map((person) => ({ person, match: matchFor(person) })).sort((a, b) => b.match - a.match)[0];
     if (!best) return '<p class="muted">No plans yet. Add a bud first.</p>';
-    const place = L.topPlaces(state.entries, 20).find((item) => item.name !== "Home" && item.cuisines.some((cuisine) => best.person.cuisines.includes(cuisine)));
-    return `<div class="invite suggested"><span class="eyebrow">Suggested</span><strong>Makan with ${esc(best.person.name)}${place ? " at " + esc(place.name) : ""}</strong><span class="muted small">${best.match}% match. ${esc(reasonsFor(best.person))}.</span><div class="btn-row"><button type="button" class="btn primary" data-hangout="${best.person.id}">${place ? "Plan makan at " + esc(place.name) : "Plan makan with " + esc(best.person.name)}</button></div></div>`;
+    const pick = planPlaceFor(best.person);
+    const place = pick && pick.place;
+    return `<div class="invite suggested"><span class="eyebrow">Suggested</span><strong>Makan with ${esc(best.person.name)}${place ? " at " + esc(place.name) : ""}</strong><span class="muted small">${best.match}% match. ${esc(reasonsFor(best.person))}.</span>${pick ? `<span class="plan-why">Why ${esc(place.name)}: ${esc(pick.why)}</span>` : ""}<div class="btn-row"><button type="button" class="btn primary" data-hangout="${best.person.id}">${place ? "Plan makan at " + esc(place.name) : "Plan makan with " + esc(best.person.name)}</button></div></div>`;
   }
 
   // the bud closest to their next level, for the log form nudge

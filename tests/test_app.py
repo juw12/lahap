@@ -1703,6 +1703,62 @@ def main():
             quick30 and quick30["tagged"] and quick30["border"] == "dashed" and "mono" in quick30["font"].lower(),
             quick30,
         )
+        # ---- r31: a plan says why this place; the repeat count never wraps away from its dish ----
+        page.goto(base + "#buds")
+        page.wait_for_selector("html[data-ready='1']")
+        page.wait_for_timeout(250)
+        plan31 = page.evaluate(
+            """() => {
+              const card = document.querySelector('.plans-panel .invite.suggested');
+              const why = card && card.querySelector('.plan-why');
+              const strong = card && card.querySelector('strong');
+              const planned = document.querySelectorAll('.plans-panel .invite:not(.suggested)').length;
+              return { card: !!card, planned, why: why ? why.textContent : null, title: strong ? strong.textContent : '' };
+            }"""
+        )
+        check(
+            "r31 buds: the suggested Plan makan says why that place (shared cuisine or your regular spot, with your visit count)",
+            (not plan31["card"] and plan31["planned"] > 0) or plan31["card"] and plan31["why"] and re.search(r"you've been \d+\u00d7", plan31["why"]) and plan31["why"].split(":")[0].replace("Why ", "") in plan31["title"],
+            plan31,
+        )
+        page.goto(base + "#diary")
+        page.wait_for_selector("html[data-ready='1']")
+        page.wait_for_timeout(250)
+        nudge31 = page.evaluate(
+            """() => {
+              const nudge = document.querySelector('.bud-nudge');
+              if (!nudge) return null;
+              const why = nudge.querySelector('.plan-why');
+              return { plan: !!nudge.querySelector('[data-hangout]'), why: why ? why.textContent : null };
+            }"""
+        )
+        check(
+            "r31 diary: the bud card with Plan makan names a place to try and why",
+            nudge31 is None or not nudge31["plan"] or (nudge31["why"] and nudge31["why"].startswith("Try ") and "\u00d7" in nudge31["why"]),
+            nudge31,
+        )
+        check(
+            "r31 diary: the Plan makan bud card is present with its reason in the demo diary",
+            nudge31 is not None and nudge31["plan"] and bool(nudge31["why"]),
+            nudge31,
+        )
+        size_before31 = page.viewport_size
+        page.set_viewport_size({"width": 1440, "height": 900})
+        page.goto(base + "#diary")
+        page.wait_for_selector("html[data-ready='1']")
+        page.wait_for_timeout(250)
+        repeat31 = page.evaluate(
+            """() => {
+              const note = document.querySelector('#view-diary .week-repeat');
+              return note ? note.textContent : null;
+            }"""
+        )
+        page.set_viewport_size(size_before31)
+        check(
+            "r31 diary desk: each repeat count is glued to its dish with a no-break space, so a lone 'x3.' never wraps",
+            repeat31 is None or ("\u00a0\u00d7" in repeat31 and not re.search(r" \u00d7\d", repeat31)),
+            repeat31,
+        )
         actions22 = page.evaluate(
             """async () => {
               window.Lahap.openShare(window.Lahap.state.entries.find(e => e.name === 'Tom yum seafood'));

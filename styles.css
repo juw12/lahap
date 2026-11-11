@@ -3707,3 +3707,14 @@ label.chip input {
 .chip.quick-tag:hover {
   border-color: var(--accent, #b4380f);
 }
+
+/* r31: the plan's reason for this place - a stamped line under the match */
+.plan-why {
+  display: block;
+  margin-top: 4px;
+  padding-left: 8px;
+  border-left: 2px solid var(--accent, #b4380f);
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--ink);
+}
