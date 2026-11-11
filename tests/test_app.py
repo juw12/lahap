@@ -523,6 +523,28 @@ def main():
         check("r16 week strip: it is compact and opens Insights", strip and strip["height"] <= 64 and strip["href"] == "#insights", strip)
         check("r16 week strip: spend uses the short form", strip and strip["values"][3].startswith("IDR ") and strip["values"][3][-1] in "kM", strip)
         check("r16 week strip: the week line further down no longer repeats the numbers on a phone", strip and strip["lineNumbersHidden"], strip)
+        ws_key = page.evaluate(
+            """() => {
+              const key = document.querySelector('#view-diary .ws-key');
+              const strip = document.querySelector('#view-diary .week-strip');
+              if (!key || !strip) return null;
+              const k = key.getBoundingClientRect();
+              const s = strip.getBoundingClientRect();
+              return {
+                text: key.textContent.trim(),
+                shown: key.offsetParent !== null,
+                below: k.top >= s.bottom - 1,
+                gap: Math.round(k.top - s.bottom),
+                fits: key.scrollWidth <= key.clientWidth + 1,
+              };
+            }"""
+        )
+        check(
+            "r32 week strip: a one-line key under it says what Variety and Plate mean on a phone",
+            ws_key and ws_key["shown"] and ws_key["below"] and ws_key["gap"] <= 16 and ws_key["fits"]
+            and "0 = same meal" in ws_key["text"] and "75+" in ws_key["text"],
+            ws_key,
+        )
         share_spot = page.evaluate(
             """() => [...document.querySelectorAll("#view-diary .ticket-wrap")].slice(0, 6).map((wrap) => {
               const r = (el) => el.getBoundingClientRect();
@@ -1556,6 +1578,8 @@ def main():
                 if (foot) break;
               }
               out.foot = foot;
+              out.labels32 = (window.Lahap.drawShare.statLabels || []).slice();
+              out.flavour32 = window.Lahap.drawShare.flavourLine || '';
               document.getElementById('dlg-share').close();
               entry.photo = photo;
               return out;
@@ -1573,6 +1597,14 @@ def main():
             "r28 share: the paper story card ends in a printed foot (barcode + diary line) below the stats, inside the frame",
             bool(foot28) and foot28.get("top", 0) > foot28.get("statsBottom", 1e9) and foot28.get("y", 2000) <= 1920 - 60 and "LAHAP" in foot28.get("text", ""),
             foot28,
+        )
+        check(
+            "r32 share: the paper story card keeps three hero stats; taste, cuisine and company fold into one printed line",
+            r28["labels32"] == ["PRICE", "RATING", "EATEN"]
+            and "THAI" in r28["flavour32"]
+            and "SPICY" in r28["flavour32"]
+            and "WITH " in r28["flavour32"],
+            {"labels": r28["labels32"], "flavour": r28["flavour32"]},
         )
         # ---- r29: spend bars carry units; the week panel's repeat line says its scope; the desktop week panel has its plate ----
         page.goto(base + "#insights")

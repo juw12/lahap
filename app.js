@@ -704,7 +704,8 @@
         <span><span class="ws-label">Variety <i class="ws-scale">/100</i></span><span class="ws-value">${variety}</span></span>
         <span><span class="ws-label">Plate <i class="ws-scale">/100</i></span><span class="ws-value">${avg}</span></span>
         <span><span class="ws-label">Spent</span><span class="ws-value" title="${esc(money(spend.total))}" aria-label="${esc(money(spend.total))}">${esc(compactMoney(spend.total))}</span></span>
-      </a>`;
+      </a>
+      <p class="ws-key">Variety 0 = same meal · Plate 75+ = balanced</p>`;
   }
 
   function weekLineHtml() {
@@ -2347,6 +2348,7 @@
     if (!preview) drawShare.stamp = null;
     if (!preview) drawShare.photoHero = null;
     if (!preview) drawShare.footer = null;
+    if (!preview) drawShare.flavourLine = null;
     canvas.width = Math.round(W * scale);
     canvas.height = Math.round(H * scale);
     const ctx = canvas.getContext("2d");
@@ -2703,7 +2705,7 @@
     ctx.font = serif(titleSize);
     const titleLines = wrapText(ctx, entry.name, W - pad * 2, 2);
     // the full-bleed photo keeps one row of three hero stats so the food has the frame
-    const rowGap = square || bleed ? 0 : 200;
+    const rowGap = square || bleed ? 0 : 150;
     const blockHeight = titleStep * titleLines.length + (square ? 36 : 56) + (square ? 62 : 84) + rowGap + (square ? 76 : 84);
     const baseY = H - (square ? 70 : 150) - blockHeight;
     const top = square ? 100 : 150;
@@ -2787,10 +2789,18 @@
     if (!square) {
       // second row: what makes this meal yours (taste, cuisine, who with)
       const rowY = statsY + rowGap;
+      // r32 (GLM): three hero stats only; taste, cuisine and company fold into one printed line
       const withWho = (entry.friends || []).map((id) => (personById(id) || {}).name).filter(Boolean);
-      statBlock(pad, rowY, "Taste", (entry.tastes || []).join(" · ") || "–", 56, priceW - gutter);
-      statBlock(pad + priceW, rowY, "Cuisine", entry.cuisine || "–", 56, smallW - gutter);
-      statBlock(pad + priceW + smallW, rowY, "With", withWho.length ? withWho.join(", ") : "Solo", 56, smallW - gutter);
+      const flavourParts = [
+        (entry.tastes || []).join(" · "),
+        entry.cuisine,
+        withWho.length ? `with ${withWho.join(", ")}` : "solo",
+      ].filter(Boolean);
+      const flavourLine = flavourParts.join("  /  ").toUpperCase();
+      ctx.fillStyle = sub;
+      ctx.font = mono(30, 600);
+      ctx.fillText(wrapText(ctx, flavourLine, W - pad * 2, 1)[0], pad, rowY + 30);
+      if (!preview) drawShare.flavourLine = flavourLine;
       // r28: a printed foot (a short barcode and the diary line) so the lower edge reads finished, not empty
       const footY = H - (bg === "paper" ? 74 : 58);
       if (footY - rowY > 150) {
@@ -2809,7 +2819,7 @@
         const footText = `LAHAP · FOOD DIARY · NO. ${String(timesEaten(entry)).padStart(2, "0")}`;
         ctx.fillText(footText, W - pad, footY - 6);
         ctx.restore();
-        if (!preview) drawShare.footer = { y: footY, top: footY - 30, statsBottom: rowY + 70, text: footText, barsRight: barX };
+        if (!preview) drawShare.footer = { y: footY, top: footY - 30, statsBottom: rowY + 40, text: footText, barsRight: barX };
       }
     }
   }
