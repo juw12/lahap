@@ -1,7 +1,7 @@
 {
   "name": "Lahap food diary",
   "short_name": "Lahap",
-  "description": "Private food diary: search every meal, see variety, plate score and spend, share story cards, find taste buds.",
+  "description": "Private food diary: cut-outs, stamp book, collections, food map, collage studio, games, bill scan and 14 languages. Free, offline, no account.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
@@ -12,13 +12,37 @@
       "name": "Log a meal",
       "short_name": "Log",
       "url": "./index.html?log=1",
-      "icons": [{ "src": "icon-192.png", "sizes": "192x192", "type": "image/png" }]
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     },
     {
       "name": "Makan apa? Pick a dish",
       "short_name": "Makan apa?",
       "url": "./index.html?wheel=1",
-      "icons": [{ "src": "icon-192.png", "sizes": "192x192", "type": "image/png" }]
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Food map",
+      "short_name": "Map",
+      "url": "./index.html?map=1",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     }
   ],
   "icons": [
@@ -45,6 +69,104 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "widgets": [
+    {
+      "name": "Quick Snap",
+      "short_name": "Quick Snap",
+      "description": "Log a meal in one tap",
+      "tag": "quick-snap",
+      "ms_ac_template": "widgets/quick-snap.json",
+      "data": "widgets/data.json",
+      "type": "application/json",
+      "screenshots": [
+        {
+          "src": "icon-512.png",
+          "sizes": "512x512",
+          "label": "Quick Snap widget"
+        }
+      ],
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ],
+      "auth": false,
+      "update": 3600
+    },
+    {
+      "name": "Memory Lane",
+      "short_name": "Memory Lane",
+      "description": "What you ate on this day before",
+      "tag": "memory-lane",
+      "ms_ac_template": "widgets/memory-lane.json",
+      "data": "widgets/data.json",
+      "type": "application/json",
+      "screenshots": [
+        {
+          "src": "icon-512.png",
+          "sizes": "512x512",
+          "label": "Memory Lane widget"
+        }
+      ],
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ],
+      "auth": false,
+      "update": 3600
+    },
+    {
+      "name": "Craving Shuffle",
+      "short_name": "Craving",
+      "description": "A dish from your own diary, shuffled",
+      "tag": "craving-shuffle",
+      "ms_ac_template": "widgets/craving.json",
+      "data": "widgets/data.json",
+      "type": "application/json",
+      "screenshots": [
+        {
+          "src": "icon-512.png",
+          "sizes": "512x512",
+          "label": "Craving Shuffle widget"
+        }
+      ],
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ],
+      "auth": false,
+      "update": 3600
+    },
+    {
+      "name": "Table Window",
+      "short_name": "Table Window",
+      "description": "Your latest meals or one collection",
+      "tag": "table-window",
+      "ms_ac_template": "widgets/table-window.json",
+      "data": "widgets/data.json",
+      "type": "application/json",
+      "screenshots": [
+        {
+          "src": "icon-512.png",
+          "sizes": "512x512",
+          "label": "Table Window widget"
+        }
+      ],
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ],
+      "auth": false,
+      "update": 3600
     }
   ]
 }

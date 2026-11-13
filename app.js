@@ -614,8 +614,11 @@
     if (state.view === "lab") renderLab();
     if (state.view === "buds") renderBuds();
     if (state.view === "me") renderMe();
+    if (window.LahapStudio) window.LahapStudio.afterChange();
+    if (window.LahapI18n) window.LahapI18n.apply();
   }
 
+  const ICON_STAMP = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-dasharray="2.6 2"/><path d="M8.5 12.5l2.3 2.3 4.7-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   const ICON_SEARCH = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
   const ICON_SHARE_SMALL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4m0 0L8 8m4-4 4 4M6 12v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   const ICON_CLOSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
@@ -977,6 +980,7 @@
             <label class="sr" for="q" style="position:absolute;left:-9999px">Search your meals</label>
             <input id="q" type="search" placeholder="Have I eaten this? Try “bakso”" value="${esc(state.query)}" autocomplete="off">
             <button type="button" class="fav-filter" data-fav-filter aria-pressed="${!!state.favFilter}" aria-label="Show favourites only" title="Favourites only">${ICON_HEART}</button>
+            <button type="button" class="fav-filter stamp-filter" data-stamps aria-label="Open your stamp book" title="Stamp book">${ICON_STAMP}</button>
           </form>
           ${storageWarningHtml()}${sampleNoticeHtml()}
           ${filters}
@@ -1121,7 +1125,8 @@
           <p class="notice">Exact: out ${esc(money(spend.out))}, home ${esc(money(spend.home))}, delivery ${esc(money(spend.delivery))}.</p>
         </section>
       </div>
-      ${stampBookHtml()}`;
+      ${stampBookHtml()}
+      ${window.LahapStudio ? window.LahapStudio.insightsHtml() : ""}`;
   }
 
   // r26: one stacked bar for the share of spend by source, so the money card reads at a glance
@@ -1594,6 +1599,7 @@
           </div>
           <p class="notice">Photos are resized to 1080 px and kept in this browser's storage. They leave your device only when you share a card or a backup.</p>
         </section>
+        ${window.LahapStudio ? window.LahapStudio.profileHtml() : ""}
       </div>`;
     $("#set-name").addEventListener("change", async (event) => {
       state.settings.name = event.target.value.trim();
@@ -2297,6 +2303,7 @@
             <label class="field"><span>Cuisine</span><input type="text" name="cuisine" list="cuisine-list" value="${esc(draft.cuisine)}" placeholder="Indonesian"></label>
             <label class="field"><span>Price (${esc(state.settings.currency)})</span><input type="number" name="price" inputmode="decimal" min="0" step="any" value="${esc(draft.price)}"></label>
           </div>
+          ${window.LahapStudio ? window.LahapStudio.logToolsHtml() : ""}
           <datalist id="cuisine-list">${CUISINES.map((cuisine) => `<option value="${esc(cuisine)}">`).join("")}</datalist>
           <fieldset class="field"><legend>How did the plate look? <span class="hint">sets the plate score</span></legend>
             <div class="plate-step">
@@ -2331,6 +2338,7 @@
       </form>`;
 
     const form = $("#log-form");
+    if (window.LahapStudio) window.LahapStudio.bindLog(form, draft);
     const plateCanvas = $("#log-plate");
     const initialWhen = form.ts ? form.ts.value : "";
 
@@ -2569,6 +2577,7 @@
             ? `Food cut out on this device in ${(result.ms / 1000).toFixed(1)} s. Tap Original to keep the full photo.`
             : "The cutout model could not load (offline?), so this is a soft oval crop. Tap Original to keep the full photo.";
         autoPlate(result.plate);
+        if (window.LahapStudio && result.method === "model") window.LahapStudio.afterCutout(result.cutout, status);
         saveDraftNow();
       } catch (error) {
         status.textContent = "Could not cut out the food, so the original photo is kept.";
@@ -2680,6 +2689,7 @@
         <section class="nutri" style="margin-top:20px">${nutriHtml(nutrition, N.mealTips(entry, nutrition, profileOrDefault(), dayTotals(L.dayKey(entry.ts), entry.id)))}</section>
         <h3 class="num-only" style="margin-top:20px">Why ${score}?</h3>
         <table class="breakdown num-only">${breakdown.map((part) => `<tr><td>${esc(part.label)}</td><td>${part.value > 0 && part.label !== "Base" ? "+" : ""}${part.value}</td></tr>`).join("")}<tr class="total"><td>Plate score (0 to 100)</td><td>${score}</td></tr></table>
+        ${window.LahapStudio ? window.LahapStudio.detailHtml(entry) : ""}
       </div>
       <div class="sheet-foot foot-four">
         <button type="button" class="btn danger ghost" data-delete="${esc(entry.id)}">Delete</button>
@@ -4124,6 +4134,10 @@
       render();
       return;
     }
+    if (target.closest("[data-stamps]")) {
+      memorySheet("Stamp book", stampBookHtml());
+      return;
+    }
     if (target.closest("[data-wheel]")) {
       openWheel();
       return;
@@ -4249,6 +4263,31 @@
     state.invites = await store.get("invites", []);
     state.deleted = (await store.get("deleted", {})) || {};
     applyNumbers();
+    if (window.LahapI18n) window.LahapI18n.init(() => state.settings.lang || "en");
+    if (window.LahapStudio) {
+      window.LahapStudio.init({
+        state,
+        store,
+        saveMeta,
+        render,
+        toast,
+        esc,
+        money,
+        plural,
+        shortDate,
+        uid,
+        download,
+        imageFor,
+        mealRowHtml,
+        openDetail,
+        openLog,
+        openPlace,
+        loadScriptOnce,
+        backupFile,
+        markBackedUp,
+        personName: (id) => (personById(id) || {}).name || id,
+      });
+    }
     const interrupted = cutoutWasInterrupted();
     if (interrupted) {
       state.settings.autoCutout = false;
@@ -4283,6 +4322,7 @@
     // home-screen shortcuts (manifest.webmanifest) land here
     else if (params.has("wheel")) openWheel();
     else if (params.has("log")) openLog();
+    else if (params.has("map") && window.LahapStudio) window.LahapStudio.openMap();
     registerWorker(params);
   }
 

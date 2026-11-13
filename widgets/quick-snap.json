@@ -1,0 +1,31 @@
+{
+  "type": "AdaptiveCard",
+  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+  "version": "1.5",
+  "body": [
+    {
+      "type": "TextBlock",
+      "text": "Lahap",
+      "weight": "Bolder",
+      "size": "Medium"
+    },
+    {
+      "type": "TextBlock",
+      "text": "${count} meals in your diary",
+      "wrap": true,
+      "isSubtle": true
+    }
+  ],
+  "actions": [
+    {
+      "type": "Action.Execute",
+      "title": "Log a meal",
+      "verb": "log"
+    },
+    {
+      "type": "Action.Execute",
+      "title": "Makan apa?",
+      "verb": "wheel"
+    }
+  ]
+}
