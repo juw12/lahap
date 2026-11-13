@@ -31,6 +31,7 @@
     view: "diary",
     query: "",
     sourceFilter: "all",
+    favFilter: false,
     tasteFilter: [],
     tastesOpen: false,
     period: 7,
@@ -619,6 +620,8 @@
   const ICON_SHARE_SMALL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4m0 0L8 8m4-4 4 4M6 12v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   const ICON_CLOSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
 
+  const ICON_HEART = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>';
+
   /* ---------------- diary ---------------- */
   function filteredEntries() {
     let list = L.searchEntries(sortedEntries(), state.query, friendNames());
@@ -626,6 +629,7 @@
     if (state.tasteFilter.length) {
       list = list.filter((entry) => state.tasteFilter.every((taste) => (entry.tastes || []).includes(taste)));
     }
+    if (state.favFilter) list = list.filter((entry) => entry.fav);
     return list;
   }
 
@@ -641,7 +645,7 @@
       <button type="button" class="ticket" data-open="${esc(entry.id)}">
         <img class="thumb${entry.cutout ? " cut" : ""}" src="${imageFor(entry)}" alt="${entry.photo ? "Photo of " + esc(entry.name) : "Plate drawing of " + esc(entry.name)}" width="72" height="72" loading="lazy">
         <span>
-          <span class="title">${esc(entry.name)}</span>
+          <span class="title">${esc(entry.name)}${entry.fav ? ` <span class="fav-mark" role="img" aria-label="Favourite">${ICON_HEART}</span>` : ""}</span>
           <span class="meta">${meta.map((part) => `<span class="seg">${esc(part)}</span>`).join(" · ")}</span>
           <span class="tags">${tags}${withWho}</span>
         </span>
@@ -664,7 +668,7 @@
     return `
         <dl class="answer-stats">
           <div><dt>Avg price</dt><dd>${esc(money(summary.avgPrice))}${rangeNote}</dd></div>
-          <div><dt>Plate score</dt><dd>${scoreBadge(summary.avgHealth)}</dd></div>
+          <div class="num-only"><dt>Plate score</dt><dd>${scoreBadge(summary.avgHealth)}</dd></div>
           <div><dt>Rating</dt><dd>${summary.avgRating ? summary.avgRating.toFixed(1) + " / 5" : "–"}</dd></div>
           <div><dt>Where</dt><dd>${esc(summary.places.join(", ") || "–")}${firstNote}</dd></div>
         </dl>`;
@@ -915,6 +919,7 @@
           <h1>Your food diary</h1>
           <p>Search every meal by dish, place, taste or friend, and see how often, how much and how balanced.</p>
         </div>
+        ${state.entries.length ? '<button type="button" class="btn makan-apa" data-wheel>Makan apa?</button>' : ""}
       </div>`;
     if (!state.entries.length) {
       root.innerHTML = head + emptyHtml();
@@ -971,6 +976,7 @@
             ${ICON_SEARCH}
             <label class="sr" for="q" style="position:absolute;left:-9999px">Search your meals</label>
             <input id="q" type="search" placeholder="Have I eaten this? Try “bakso”" value="${esc(state.query)}" autocomplete="off">
+            <button type="button" class="fav-filter" data-fav-filter aria-pressed="${!!state.favFilter}" aria-label="Show favourites only" title="Favourites only">${ICON_HEART}</button>
           </form>
           ${storageWarningHtml()}${sampleNoticeHtml()}
           ${filters}
@@ -1114,7 +1120,8 @@
           ${spendSplitHtml(spend)}
           <p class="notice">Exact: out ${esc(money(spend.out))}, home ${esc(money(spend.home))}, delivery ${esc(money(spend.delivery))}.</p>
         </section>
-      </div>`;
+      </div>
+      ${stampBookHtml()}`;
   }
 
   // r26: one stacked bar for the share of spend by source, so the money card reads at a glance
@@ -1358,7 +1365,7 @@
             ${friends.length ? friends.map((person) => {
               const points = state.points[person.id] || 0;
               const level = L.levelFor(points);
-              return `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(matchFor(person))}</span></div><div class="why">${esc(level.name)} · ${points} pts · ${esc(lastTogether(person.id))}</div>${spotFor(person) ? `<div class="spot">${esc(spotFor(person))}</div>` : ""}${pendingPlanHtml(person.id)}${person.id === featuredId ? `<div class="featured-note">Next level shown above</div>` : `${level.next ? `<div class="next-step">${esc(nextStep(level))}</div>` : ""}<div class="level"><div class="track"><div class="fill" style="width:${Math.round(level.progress * 100)}%"></div></div></div>`}</div><div class="person-actions"><button type="button" class="btn small" data-hangout="${person.id}" aria-label="Plan makan with ${esc(person.name)}">Plan makan</button><button type="button" class="person-remove" data-remove="${person.id}" aria-label="Remove ${esc(person.name)}" title="Remove ${esc(person.name)}">Remove</button></div></div>`;
+              return `<div class="person"><button type="button" class="avatar-btn" data-bud="${esc(person.id)}" aria-label="Your meals with ${esc(person.name)}">${avatar(person)}</button><div><div class="name"><button type="button" class="name-btn" data-bud="${esc(person.id)}">${esc(person.name)}</button> <span class="match">${matchLabel(matchFor(person))}</span></div><div class="why">${esc(level.name)} · ${points} pts · ${esc(lastTogether(person.id))}</div>${spotFor(person) ? `<div class="spot">${esc(spotFor(person))}</div>` : ""}${pendingPlanHtml(person.id)}${person.id === featuredId ? `<div class="featured-note">Next level shown above</div>` : `${level.next ? `<div class="next-step">${esc(nextStep(level))}</div>` : ""}<div class="level"><div class="track"><div class="fill" style="width:${Math.round(level.progress * 100)}%"></div></div></div>`}</div><div class="person-actions"><button type="button" class="btn small" data-hangout="${person.id}" aria-label="Plan makan with ${esc(person.name)}">Plan makan</button><button type="button" class="person-remove" data-remove="${person.id}" aria-label="Remove ${esc(person.name)}" title="Remove ${esc(person.name)}">Remove</button></div></div>`;
             }).join("") : '<p class="muted">No buds yet. Invite a friend, or add an example profile below to try tagging and hangouts.</p>'}
           </section>
           <details class="panel suggested-panel suggested-fold"${isPhone() && !friends.length ? " open" : ""}>
@@ -1579,6 +1586,7 @@
           </div>
           <p class="notice">Every meal saves on this phone the moment you tap Save. To sync another phone or laptop, share the backup to yourself (WhatsApp, Drive, email) and open it there with <b>Restore or merge</b>. Meals are matched, so nothing doubles; the newest edit wins and deleted meals stay deleted. There is no Lahap server, so nothing syncs on its own.</p>
           <label class="check-row"><input type="checkbox" id="set-cutout"${autoCutoutOn() ? " checked" : ""}> Cut the food out of new photos automatically <span class="muted small">(downloads a 15 MB model once; turn off if your phone reloads)</span></label>
+          <label class="check-row"><input type="checkbox" id="set-numbers"${numbersOn() ? " checked" : ""}> Show calories, nutrition and plate scores on my meals <span class="muted small">(turn off for a diary with no counting)</span></label>
           <div class="btn-row data-danger">
             ${sampleCount() ? `<button type="button" class="btn" data-clear-sample>Remove ${sampleCount()} sample meals</button>` : ""}
             ${state.entries.length ? "" : '<button type="button" class="btn" data-sample>Load sample fortnight</button>'}
@@ -1619,6 +1627,13 @@
       state.settings.autoCutout = event.target.checked;
       await saveMeta();
       toast(event.target.checked ? "Photos will be cut out automatically" : "Auto cutout off. Tap Cut out on a photo to run it once.");
+    });
+    $("#set-numbers").addEventListener("change", async (event) => {
+      state.settings.numbers = event.target.checked;
+      await saveMeta();
+      applyNumbers();
+      toast(event.target.checked ? "Calories, nutrition and plate scores are showing again" : "Calories and scores hidden. Your diary is just the food now.");
+      render();
     });
     $("#erase").addEventListener("click", async () => {
       if (!confirm("Erase every meal, photo, bud and plan on this device? Export a backup first if you want to keep them.")) return;
@@ -2649,24 +2664,24 @@
     const past = state.entries.filter((item) => L.normalize(item.name) === L.normalize(entry.name)).length;
     const nutrition = nutritionFor(entry);
     dialog.innerHTML = `
-      <div class="sheet-head"><h2 id="detail-title">${esc(entry.name)}</h2><button type="button" class="icon-btn" data-close aria-label="Close">${ICON_CLOSE}</button></div>
+      <div class="sheet-head"><h2 id="detail-title">${esc(entry.name)}</h2><button type="button" class="icon-btn fav-btn" data-fav="${esc(entry.id)}" aria-pressed="${entry.fav ? "true" : "false"}" aria-label="${entry.fav ? "Remove from favourites" : "Add to favourites"}">${ICON_HEART}</button><button type="button" class="icon-btn" data-close aria-label="Close">${ICON_CLOSE}</button></div>
       <div class="sheet-body">
         <img class="detail-photo${entry.cutout ? " cut" : ""}" id="detail-photo" src="${entry.cutout || entry.photo || plateThumb(entry, 480)}" alt="${entry.photo ? "Photo of " + esc(entry.name) : "Plate drawing of " + esc(entry.name)}">
         ${entry.cutout && entry.photo ? '<button type="button" class="btn small" id="detail-swap" style="margin-top:8px">Show original photo</button>' : ""}
-        <p class="muted" style="margin-top:12px">${esc(new Date(entry.ts).toLocaleString(undefined, { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }))} · ${esc(SOURCES[entry.source])}${entry.place ? " · " + esc(entry.place) : ""}</p>
+        <p class="muted" style="margin-top:12px">${esc(new Date(entry.ts).toLocaleString(undefined, { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }))} · ${esc(SOURCES[entry.source])}${placeLinkHtml(entry)}</p>
         <div class="stat-grid" style="margin-top:16px">
           <div class="stat"><div class="label">Price</div><div class="value money">${esc(money(entry.price))}</div></div>
-          <div class="stat"><div class="label">Plate score</div><div class="value">${score}</div></div>
+          <div class="stat num-only"><div class="label">Plate score</div><div class="value">${score}</div></div>
           <div class="stat"><div class="label">Rating</div><div class="value">${entry.rating ? entry.rating + "/5" : "–"}</div></div>
           <div class="stat"><div class="label">Times eaten</div><div class="value">${past}</div></div>
         </div>
         <p style="margin-top:16px">${(entry.tastes || []).map((taste) => `<span class="tag">${esc(taste)}</span>`).join(" ")} <span class="tag">${esc(entry.cuisine || "Other")}</span>${who.length ? ` <span class="tag">with ${esc(who.join(", "))}</span>` : ""}</p>
         ${entry.notes ? `<p style="margin-top:12px">${esc(entry.notes)}</p>` : ""}
         <section class="nutri" style="margin-top:20px">${nutriHtml(nutrition, N.mealTips(entry, nutrition, profileOrDefault(), dayTotals(L.dayKey(entry.ts), entry.id)))}</section>
-        <h3 style="margin-top:20px">Why ${score}?</h3>
-        <table class="breakdown">${breakdown.map((part) => `<tr><td>${esc(part.label)}</td><td>${part.value > 0 && part.label !== "Base" ? "+" : ""}${part.value}</td></tr>`).join("")}<tr class="total"><td>Plate score (0 to 100)</td><td>${score}</td></tr></table>
+        <h3 class="num-only" style="margin-top:20px">Why ${score}?</h3>
+        <table class="breakdown num-only">${breakdown.map((part) => `<tr><td>${esc(part.label)}</td><td>${part.value > 0 && part.label !== "Base" ? "+" : ""}${part.value}</td></tr>`).join("")}<tr class="total"><td>Plate score (0 to 100)</td><td>${score}</td></tr></table>
       </div>
-      <div class="sheet-foot">
+      <div class="sheet-foot foot-four">
         <button type="button" class="btn danger ghost" data-delete="${esc(entry.id)}">Delete</button>
         <button type="button" class="btn" data-edit="${esc(entry.id)}">Edit</button>
         <button type="button" class="btn" data-again="${esc(entry.id)}">Ate it again</button>
@@ -2683,6 +2698,244 @@
       });
     }
     dialog.showModal();
+  }
+
+  /* ---------------- memory: stamp book, place and bud pages, makan apa, recap ---------------- */
+  const M = window.LahapMemory;
+
+  function numbersOn() {
+    return state.settings.numbers !== false;
+  }
+
+  function applyNumbers() {
+    if (numbersOn()) delete document.documentElement.dataset.numbers;
+    else document.documentElement.dataset.numbers = "off";
+  }
+
+  function shortDate(ts) {
+    const date = new Date(ts);
+    const format = { day: "numeric", month: "short" };
+    // The year only earns its space once the meal is from another year.
+    if (date.getFullYear() !== new Date().getFullYear()) format.year = "numeric";
+    return date.toLocaleDateString(undefined, format);
+  }
+
+  function placeLinkHtml(entry) {
+    if (!entry.place) return "";
+    const key = M.placeKey(entry);
+    return " · " + (key ? `<button type="button" class="link-btn" data-place="${esc(key)}">${esc(entry.place)}</button>` : esc(entry.place));
+  }
+
+  function mealRowHtml(entry, hidePlace) {
+    const where = [shortDate(entry.ts)];
+    if (entry.place && hidePlace !== true) where.push(entry.place);
+    const facts = [];
+    if (entry.rating) facts.push(entry.rating + "/5");
+    if (entry.price) facts.push(money(entry.price));
+    return `<button type="button" class="meal-row" data-open="${esc(entry.id)}">
+        <img src="${imageFor(entry)}" alt="" width="44" height="44">
+        <span class="meal-main"><span class="meal-name">${esc(entry.name)}${entry.fav ? ` <span class="fav-mark" role="img" aria-label="Favourite">${ICON_HEART}</span>` : ""}</span><span class="meal-where">${esc(where.join(" · "))}</span></span>
+        <span class="meal-facts mono">${esc(facts.join(" · "))}</span>
+      </button>`;
+  }
+
+  function stampHtml(place) {
+    return `<button type="button" class="stamp${place.count >= 3 ? " regular" : ""}" data-place="${esc(place.key)}" aria-label="${esc(place.name)}, ${plural(place.count, "visit")}">
+        <span class="stamp-name">${esc(place.name)}</span>
+        <span class="stamp-count">×${place.count}</span>
+        <span class="stamp-date">${esc(shortDate(place.last))}</span>
+      </button>`;
+  }
+
+  function stampBookHtml() {
+    const book = M.stampBook(state.entries);
+    const regulars = book.filter((place) => place.count >= 3).length;
+    return `
+      <section class="panel stamp-panel" aria-labelledby="stamp-title">
+        <div class="stamp-head">
+          <div>
+            <p class="eyebrow">Stamp book · all time</p>
+            <h2 id="stamp-title">${book.length ? `${plural(book.length, "place")}, ${plural(regulars, "regular")}` : "No stamps yet"}</h2>
+          </div>
+          ${state.entries.length ? '<button type="button" class="btn" data-recap>Your month in food</button>' : ""}
+        </div>
+        ${book.length
+          ? `<div class="stamp-grid">${book.map(stampHtml).join("")}</div><p class="muted small">One stamp per place, one more tick each visit. Three visits makes a regular. Tap a stamp for every meal you had there.</p>`
+          : '<p class="muted">Add the place when you log a meal out and it gets a stamp here.</p>'}
+      </section>`;
+  }
+
+  function memorySheet(title, body, foot) {
+    const dialog = $("#dlg-memory");
+    clearInterval(wheel.timer);
+    dialog.innerHTML = `
+      <div class="sheet-head"><h2 id="memory-title">${esc(title)}</h2><button type="button" class="icon-btn" data-close aria-label="Close">${ICON_CLOSE}</button></div>
+      <div class="sheet-body memory">${body}</div>
+      ${foot ? `<div class="sheet-foot">${foot}</div>` : ""}`;
+    if (!dialog.open) dialog.showModal();
+    $(".sheet-body", dialog).scrollTop = 0;
+  }
+
+  function openPlace(key) {
+    const page = M.placePage(state.entries, key);
+    if (!page) return;
+    memorySheet(page.name, `
+      <p class="eyebrow">Place · ${plural(page.count, "visit")} · since ${esc(shortDate(page.first))}</p>
+      <div class="stat-grid">
+        <div class="stat"><div class="label">Visits</div><div class="value">${page.count}</div></div>
+        <div class="stat"><div class="label">Avg spend</div><div class="value money">${esc(money(page.avgSpend))}</div></div>
+        <div class="stat"><div class="label">Your usual</div><div class="value words">${page.usual ? `${esc(page.usual.name)} <span class="mono">×${page.usual.count}</span>` : "–"}</div></div>
+        <div class="stat"><div class="label">Avg rating</div><div class="value">${page.avgRating ? page.avgRating.toFixed(1) + "/5" : "–"}</div></div>
+      </div>
+      <h3>Every meal here</h3>
+      <div class="meal-list">${page.visits.map((entry) => mealRowHtml(entry, true)).join("")}</div>
+      ${page.companions.length ? `<h3>Who with</h3><div class="chips">${page.companions.map((item) => {
+        const person = personById(item.id);
+        return person ? `<button type="button" class="chip" data-bud="${esc(person.id)}">${esc(person.name)} <span class="mono">×${item.count}</span></button>` : "";
+      }).join("")}</div>` : ""}`,
+      `<button type="button" class="btn primary" data-place-log="${esc(page.key)}">Log a meal here</button>`);
+  }
+
+  function openBud(id) {
+    const person = personById(id);
+    if (!person) return;
+    const page = M.budPage(state.entries, id);
+    const body = page.count
+      ? `
+      <p class="eyebrow">Makan bud · ${plural(page.count, "meal")} together · since ${esc(shortDate(page.first))}</p>
+      <div class="stat-grid">
+        <div class="stat"><div class="label">Meals together</div><div class="value">${page.count}</div></div>
+        <div class="stat"><div class="label">Spent together</div><div class="value money">${esc(money(page.spend))}</div></div>
+        <div class="stat"><div class="label">Usual together</div><div class="value words">${page.usual ? `${esc(page.usual.name)} <span class="mono">×${page.usual.count}</span>` : "–"}</div></div>
+        <div class="stat"><div class="label">Last makan</div><div class="value words">${esc(ago(page.last))}</div></div>
+      </div>
+      ${page.places.length ? `<h3>Your spots</h3><div class="chips">${page.places.map((place) => `<button type="button" class="chip" data-place="${esc(place.key)}">${esc(place.name)} <span class="mono">×${place.count}</span></button>`).join("")}</div>` : ""}
+      <h3>Every meal together</h3>
+      <div class="meal-list">${page.meals.map((entry) => mealRowHtml(entry)).join("")}</div>`
+      : `
+      <p class="eyebrow">Makan bud · no meals together yet</p>
+      <p class="notice">Tag ${esc(person.name)} on a meal and it shows up here: what you two usually order, where, and how long since the last one.</p>`;
+    memorySheet(`You and ${person.name}`, body, `
+      <button type="button" class="btn" data-bud-plan="${esc(person.id)}">Plan makan</button>
+      <button type="button" class="btn primary" data-bud-log="${esc(person.id)}">Tag a meal</button>`);
+  }
+
+  const wheel = { mode: "all", pick: null, timer: null };
+  const WHEEL_MODES = [["all", "Anything"], ["out", "Eat out"], ["home", "Cook at home"]];
+
+  function openWheel() {
+    wheel.mode = "all";
+    wheel.pick = null;
+    renderWheel();
+  }
+
+  function renderWheel() {
+    const pool = M.cravingPool(state.entries, wheel.mode);
+    memorySheet("Makan apa?", `
+      <p class="eyebrow">One pick from the dishes you already love</p>
+      <div class="chips" role="group" aria-label="Where to eat">${WHEEL_MODES.map(([mode, label]) => `<button type="button" class="chip" data-wheel-mode="${mode}" aria-pressed="${wheel.mode === mode}">${label}</button>`).join("")}</div>
+      ${pool.length
+        ? `<div class="chit" id="wheel-chit">
+            <img id="wheel-thumb" src="${plateThumb({ name: "", plate: {} })}" alt="" width="72" height="72">
+            <div class="chit-text"><p class="roll" id="wheel-roll" aria-live="polite"></p><p class="chit-meta" id="wheel-meta"></p></div>
+          </div>
+          <p class="muted small">Picked from ${pool.length === 1 ? "the 1 dish" : `${pool.length} dishes`} you rated 4 or 5, or hearted.</p>`
+        : `<p class="notice">${wheel.mode === "all" ? "Nothing to pick from yet. Rate a meal 4 or 5, or tap the heart on it, and it joins the pool." : "No loved dishes of this kind yet. Try Anything, or rate a few more meals."}</p>`}`,
+      pool.length ? `
+      <button type="button" class="btn" data-wheel-spin>Spin again</button>
+      <button type="button" class="btn primary" data-wheel-log>Log it</button>` : "");
+    spinWheel();
+  }
+
+  function spinWheel() {
+    clearInterval(wheel.timer);
+    const pool = M.cravingPool(state.entries, wheel.mode);
+    const pick = M.pickCraving(pool, Math.random, wheel.pick && wheel.pick.key);
+    wheel.pick = pick;
+    const roll = $("#wheel-roll");
+    if (!pick || !roll) return;
+    const chit = $("#wheel-chit");
+    const reveal = () => {
+      const entry = pick.entry;
+      const eaten = state.entries.filter((item) => L.normalize(item.name) === pick.key).length;
+      const facts = [];
+      if (entry.place) facts.push(entry.place);
+      facts.push("last eaten " + ago(entry.ts));
+      if (entry.rating) facts.push(entry.rating + "/5");
+      facts.push("eaten " + eaten + "×");
+      roll.textContent = pick.name;
+      $("#wheel-thumb").src = imageFor(entry);
+      $("#wheel-meta").textContent = facts.join(" · ");
+      chit.classList.remove("rolling");
+    };
+    // the only motion besides the toast: the dish name swaps as text, and not at all under reduced motion
+    if (pool.length < 2 || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      reveal();
+      return;
+    }
+    chit.classList.add("rolling");
+    let ticks = 0;
+    wheel.timer = setInterval(() => {
+      ticks += 1;
+      if (ticks >= 10 || !roll.isConnected) {
+        clearInterval(wheel.timer);
+        if (roll.isConnected) reveal();
+        return;
+      }
+      roll.textContent = pool[Math.floor(Math.random() * pool.length)].name;
+    }, 85);
+  }
+
+  const recapView = { year: null, month: null, text: "" };
+
+  function periodLabel(year, month) {
+    if (month === null || month === undefined) return String(year);
+    return new Date(year, month, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  }
+
+  function openRecap(year, month) {
+    const periods = M.recapPeriods(state.entries);
+    if (!periods.months.length) {
+      memorySheet("Your month in food", '<p class="notice">Log a meal first. The recap adds up each month from your own diary.</p>', "");
+      return;
+    }
+    if (year === undefined) {
+      year = periods.months[0].year;
+      month = periods.months[0].month;
+    }
+    const yearly = month === null || month === undefined;
+    const data = M.recap(state.entries, year, yearly ? null : month);
+    const label = periodLabel(year, month);
+    const who = data.companions.map((item) => Object.assign({ person: personById(item.id) }, item)).filter((item) => item.person)[0];
+    const rows = [
+      ["Meals logged", String(data.count)],
+      ["Days with a log", String(data.days)],
+      ["Home / out", `${data.homeCount} / ${data.outCount}`],
+      ["Places", data.newPlaces.length ? `${data.places} (${data.newPlaces.length} new)` : String(data.places)],
+    ];
+    data.topDishes.forEach((dish, index) => rows.push([index ? "" : "Top dishes", `${dish.name} ×${dish.count}`]));
+    if (data.topPlace) rows.push(["Regular spot", `${data.topPlace.name} ×${data.topPlace.count}`]);
+    if (data.newPlaces.length) rows.push(["First time at", data.newPlaces.slice(0, 3).join(", ")]);
+    if (who) rows.push(["Ate most with", `${who.person.name} ×${who.count}`]);
+    if (data.bestRated) rows.push(["Best rated", `${data.bestRated.name} ${data.bestRated.rating}/5`]);
+    if (data.favCount) rows.push(["Favourites", String(data.favCount)]);
+    recapView.year = year;
+    recapView.month = yearly ? null : month;
+    recapView.text = [`Lahap · ${label} in food`].concat(rows.map(([name, value]) => (name ? `${name}: ${value}` : `  ${value}`)), [`Total spent: ${money(data.spend)}`, "lahap, my food diary"]).join("\n");
+    const chips = periods.months.slice(0, 6).concat(periods.years.slice(0, 2));
+    memorySheet(yearly ? "Your year in food" : "Your month in food", `
+      <div class="chips" role="group" aria-label="Recap period">${chips.map((period) => {
+        const pressed = period.year === year && (period.month === null ? yearly : period.month === month && !yearly);
+        return `<button type="button" class="chip" data-recap-period="${period.year}${period.month === null ? "" : "-" + period.month}" aria-pressed="${pressed}">${esc(period.month === null ? "All of " + period.year : new Date(period.year, period.month, 1).toLocaleDateString(undefined, { month: "short", year: "numeric" }))}</button>`;
+      }).join("")}</div>
+      <div class="recap-slip" id="recap-slip">
+        <p class="recap-brand">LAHAP</p>
+        <p class="recap-period">${esc(label)} in food</p>
+        <dl>${rows.map(([name, value]) => `<div><dt>${esc(name)}</dt><dd>${esc(value)}</dd></div>`).join("")}</dl>
+        <div class="recap-total"><span>Total spent</span><span>${esc(money(data.spend))}</span></div>
+        <p class="recap-thanks">terima kasih, makan lagi ya</p>
+      </div>`,
+      '<button type="button" class="btn primary" data-recap-copy>Copy as text</button>');
   }
 
   /* ---------------- share cards ---------------- */
@@ -3853,6 +4106,100 @@
       removeFriend(removeBud.dataset.remove);
       return;
     }
+    const fav = target.closest("[data-fav]");
+    if (fav) {
+      const entry = state.entries.find((item) => item.id === fav.dataset.fav);
+      if (!entry) return;
+      entry.fav = !entry.fav;
+      entry.updatedAt = new Date().toISOString();
+      await store.put(entry);
+      fav.setAttribute("aria-pressed", String(entry.fav));
+      fav.setAttribute("aria-label", entry.fav ? "Remove from favourites" : "Add to favourites");
+      toast(entry.fav ? "Added to favourites" : "Removed from favourites");
+      render();
+      return;
+    }
+    if (target.closest("[data-fav-filter]")) {
+      state.favFilter = !state.favFilter;
+      render();
+      return;
+    }
+    if (target.closest("[data-wheel]")) {
+      openWheel();
+      return;
+    }
+    const wheelMode = target.closest("[data-wheel-mode]");
+    if (wheelMode) {
+      wheel.mode = wheelMode.dataset.wheelMode;
+      wheel.pick = null;
+      renderWheel();
+      return;
+    }
+    if (target.closest("[data-wheel-spin]")) {
+      spinWheel();
+      return;
+    }
+    if (target.closest("[data-wheel-log]")) {
+      if (!wheel.pick) return;
+      $("#dlg-memory").close();
+      const copy = Object.assign({}, wheel.pick.entry, { ts: new Date().toISOString(), photo: null, cutout: null, friends: [], notes: "" });
+      delete copy.id;
+      delete copy.sample;
+      delete copy.fav;
+      openLog(copy);
+      return;
+    }
+    const placeLink = target.closest("[data-place]");
+    if (placeLink) {
+      // the detail sheet always sits above the memory sheet, so close it before the place page changes underneath
+      if ($("#dlg-detail").open) $("#dlg-detail").close();
+      openPlace(placeLink.dataset.place);
+      return;
+    }
+    const placeLog = target.closest("[data-place-log]");
+    if (placeLog) {
+      const page = M.placePage(state.entries, placeLog.dataset.placeLog);
+      $("#dlg-memory").close();
+      const last = page && page.visits[0];
+      openLog(last ? { place: last.place, source: last.source, cuisine: last.cuisine } : {});
+      return;
+    }
+    const budLink = target.closest("[data-bud]");
+    if (budLink) {
+      openBud(budLink.dataset.bud);
+      return;
+    }
+    const budLog = target.closest("[data-bud-log]");
+    if (budLog) {
+      $("#dlg-memory").close();
+      openLog({ friends: [budLog.dataset.budLog] });
+      return;
+    }
+    const budPlan = target.closest("[data-bud-plan]");
+    if (budPlan) {
+      $("#dlg-memory").close();
+      openHangout(budPlan.dataset.budPlan);
+      return;
+    }
+    if (target.closest("[data-recap]")) {
+      openRecap();
+      return;
+    }
+    const recapPeriod = target.closest("[data-recap-period]");
+    if (recapPeriod) {
+      const [year, month] = recapPeriod.dataset.recapPeriod.split("-").map(Number);
+      openRecap(year, month === undefined ? null : month);
+      return;
+    }
+    if (target.closest("[data-recap-copy]")) {
+      try {
+        await navigator.clipboard.writeText(recapView.text);
+        toast("Recap copied. Paste it anywhere.");
+      } catch (error) {
+        toast("Could not copy here. Take a screenshot of the slip instead.");
+      }
+      return;
+    }
   });
 
   document.addEventListener("change", async (event) => {
@@ -3901,6 +4248,7 @@
     state.points = await store.get("points", {});
     state.invites = await store.get("invites", []);
     state.deleted = (await store.get("deleted", {})) || {};
+    applyNumbers();
     const interrupted = cutoutWasInterrupted();
     if (interrupted) {
       state.settings.autoCutout = false;
@@ -3932,6 +4280,9 @@
     }
     // first run: a short quiz to learn the goal (skippable, never in the demo or tests)
     if (!state.settings.quizSeen && !state.settings.profile && !params.has("demo") && !params.has("noquiz")) openQuiz();
+    // home-screen shortcuts (manifest.webmanifest) land here
+    else if (params.has("wheel")) openWheel();
+    else if (params.has("log")) openLog();
     registerWorker(params);
   }
 
@@ -3942,7 +4293,7 @@
   }
 
   // test hook
-  window.Lahap = { state, render, inviteLink, openLog, openShare, openHangout, openQuiz, drawShare, loadSample, sampleEntries, renderLab, nutritionFor, readListPhoto, removeFriend, emptyHtml, store, mergeBackup, backupData, clearSample, resizePhoto };
+  window.Lahap = { state, render, openPlace, openBud, openWheel, openRecap, inviteLink, openLog, openShare, openHangout, openQuiz, drawShare, loadSample, sampleEntries, renderLab, nutritionFor, readListPhoto, removeFriend, emptyHtml, store, mergeBackup, backupData, clearSample, resizePhoto };
 
   init();
 })();

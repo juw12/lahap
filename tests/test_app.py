@@ -8,6 +8,7 @@ import re
 import functools
 import math
 import http.server
+import json
 import os
 import socketserver
 import sys
@@ -48,6 +49,521 @@ def text_file_checks():
         check(f"{name}: LF only", b"\r\n" not in data)
         text = data.decode("utf-8")
         check(f"{name}: no mojibake", "\u00c3" not in text and "\u00e2\u20ac" not in text)
+
+SHEET_AUDIT_JS = """() => {
+  const dialog = document.querySelector('#dlg-memory');
+  const body = dialog.querySelector('.sheet-body');
+  const box = dialog.getBoundingClientRect();
+  const shown = (el) => el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0;
+  const small = [...dialog.querySelectorAll('button, a, input, select')]
+    .filter(shown)
+    .filter((el) => el.getBoundingClientRect().width < 32 || el.getBoundingClientRect().height < 32)
+    .map((el) => (el.textContent || el.getAttribute('aria-label') || '').trim().slice(0, 30));
+  const tiny = [...dialog.querySelectorAll('*')]
+    .filter((el) => el.children.length === 0 && el.textContent.trim() && shown(el))
+    .filter((el) => parseFloat(getComputedStyle(el).fontSize) < 12)
+    .map((el) => el.textContent.trim().slice(0, 30));
+  return {
+    open: dialog.open,
+    page: document.documentElement.scrollWidth - window.innerWidth,
+    sheet: body ? body.scrollWidth - body.clientWidth : 0,
+    outside: box.left < -0.5 || box.right > window.innerWidth + 0.5,
+    small,
+    tiny,
+  };
+}"""
+
+STILL_JS = """() => {
+  const dialog = document.querySelector('#dlg-memory');
+  const nodes = [dialog, ...dialog.querySelectorAll('*')];
+  const moving = nodes
+    .filter((el) => {
+      const style = getComputedStyle(el);
+      const animated = style.animationName.split(',').some((name) => name.trim() !== 'none');
+      const eased = style.transitionDuration.split(',').some((time) => parseFloat(time) > 0);
+      return animated || eased;
+    })
+    .map((el) => el.tagName.toLowerCase() + (el.className ? '.' + String(el.className).split(' ')[0] : ''));
+  const running = document.getAnimations().filter((animation) => animation.effect && dialog.contains(animation.effect.target)).length;
+  return {
+    open: dialog.open,
+    reduced: matchMedia('(prefers-reduced-motion: reduce)').matches,
+    moving: moving.slice(0, 5),
+    running,
+    rolling: !!dialog.querySelector('.rolling'),
+  };
+}"""
+
+
+def sheet_is_still(page):
+    still = page.evaluate(STILL_JS)
+    return still["open"] and still["reduced"] and not still["moving"] and not still["running"] and not still["rolling"], still
+
+
+def memory_checks(browser, base):
+    """Stamp book, place and bud pages, the Makan apa picker, recap, favourites and the numbers switch."""
+    context = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=1, reduced_motion="reduce")
+    page = context.new_page()
+    errors = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.on("console", lambda message: errors.append(message.text) if message.type == "error" else None)
+    page.on("dialog", lambda dialog: dialog.accept())
+    page.goto(base + "?demo=1&nosw=1")
+    page.wait_for_selector("html[data-ready='1']")
+
+    def go(view):
+        page.evaluate(f"() => location.hash = '{view}'")
+        page.wait_for_timeout(150)
+
+    def close_sheets():
+        page.evaluate("() => document.querySelectorAll('dialog[open]').forEach((dialog) => dialog.close())")
+        page.wait_for_timeout(80)
+
+    def is_open(dialog_id):
+        return page.evaluate(f"() => document.querySelector('#{dialog_id}').open")
+
+    # ---- memory logic on a fixed set of meals ----
+    logic = page.evaluate(
+        """() => {
+          const M = window.LahapMemory;
+          const meal = (id, name, place, ts, extra) => Object.assign({ id, name, place, ts, price: 5, rating: 3, source: "hawker", friends: [] }, extra || {});
+          const entries = [
+            meal("a", "Nasi lemak", "Warung A", "2026-01-05T12:00:00", { rating: 5, friends: ["f1"] }),
+            meal("b", "Nasi Lemak", "warung a", "2026-01-20T12:00:00", { price: 7, friends: ["f1", "f2"] }),
+            meal("c", "Mee rebus", "Warung A", "2026-02-02T12:00:00", { rating: 4 }),
+            meal("d", "Laksa", "Kedai B", "2026-02-10T12:00:00", { fav: true, rating: 2 }),
+            meal("e", "Fried rice", "Home", "2026-02-11T19:00:00", { source: "home", rating: 4, price: 0 }),
+            meal("f", "Toast", "", "2025-12-31T08:00:00", { source: "home", rating: 1, price: 0 }),
+          ];
+          const book = M.stampBook(entries);
+          const place = M.placePage(entries, "warung a");
+          const bud = M.budPage(entries, "f1");
+          const stranger = M.budPage(entries, "nobody");
+          const pool = M.cravingPool(entries, "all");
+          const periods = M.recapPeriods(entries);
+          const feb = M.recap(entries, 2026, 1);
+          const year = M.recap(entries, 2026, null);
+          return {
+            homeKey: M.placeKey({ place: "Home" }),
+            emptyKey: M.placeKey({ place: "" }),
+            book: book.map((item) => [item.key, item.count, item.spend, item.topDish.toLowerCase()]),
+            bookFirst: book[0].first,
+            bookLast: book[0].last,
+            place: place && [place.count, place.spend, Math.round(place.avgSpend * 100), place.avgRating, place.usual.count, place.visits[0].id],
+            placeCompanions: place && place.companions.map((item) => [item.id, item.count]),
+            noPlace: M.placePage(entries, "nowhere"),
+            bud: [bud.count, bud.spend, bud.usual.count, bud.places[0].key, bud.places[0].count],
+            stranger: [stranger.count, stranger.usual, stranger.first],
+            pool: pool.map((item) => item.key).sort(),
+            poolHome: M.cravingPool(entries, "home").map((item) => item.key),
+            poolOut: M.cravingPool(entries, "out").length,
+            pickAvoids: M.pickCraving(pool, () => 0, pool[0].key).key !== pool[0].key,
+            pickLast: M.pickCraving(pool, () => 0.999).key === pool[pool.length - 1].key,
+            pickEmpty: M.pickCraving([], () => 0),
+            pickSingle: M.pickCraving([pool[0]], () => 0, pool[0].key).key === pool[0].key,
+            months: periods.months.map((item) => item.year + "-" + item.month),
+            years: periods.years.map((item) => [item.year, item.month]),
+            feb: [feb.count, feb.days, feb.places, feb.spend, feb.homeCount, feb.outCount, feb.favCount],
+            febNew: feb.newPlaces,
+            febBest: feb.bestRated && feb.bestRated.id,
+            febTop: feb.topPlace && feb.topPlace.name,
+            year: [year.count, year.newPlaces.length, year.topDishes[0].count, year.topPlace.key],
+            yearCompanions: year.companions.map((item) => [item.id, item.count]),
+            yearMonth: M.recap(entries, 2026).month,
+          };
+        }"""
+    )
+    check("memory: home and blank places get no stamp", logic["homeKey"] is None and logic["emptyKey"] is None, logic)
+    check(
+        "memory: stamp book groups a place whatever the letter case, most visited first",
+        logic["book"] == [["warung a", 3, 17, "nasi lemak"], ["kedai b", 1, 5, "laksa"]],
+        logic["book"],
+    )
+    check(
+        "memory: a stamp keeps the first and latest visit",
+        logic["bookFirst"].startswith("2026-01-05") and logic["bookLast"].startswith("2026-02-02"),
+        [logic["bookFirst"], logic["bookLast"]],
+    )
+    check("memory: place page totals, average and usual order", logic["place"] == [3, 17, 567, 4, 2, "c"], logic["place"])
+    check("memory: place page counts who you ate there with", logic["placeCompanions"] == [["f1", 2], ["f2", 1]], logic["placeCompanions"])
+    check("memory: unknown place has no page", logic["noPlace"] is None)
+    check("memory: bud page totals, usual dish and usual place", logic["bud"] == [2, 12, 2, "warung a", 2], logic["bud"])
+    check("memory: a bud with no shared meals gets an empty page", logic["stranger"] == [0, None, None], logic["stranger"])
+    check(
+        "memory: picker pool is one item per dish rated 4+ or hearted",
+        logic["pool"] == ["fried rice", "laksa", "mee rebus", "nasi lemak"],
+        logic["pool"],
+    )
+    check("memory: picker pool splits home cooking from eating out", logic["poolHome"] == ["fried rice"] and logic["poolOut"] == 3, logic)
+    check("memory: picker never repeats the dish it just showed", logic["pickAvoids"] and logic["pickLast"])
+    check("memory: picker handles an empty and a one-dish pool", logic["pickEmpty"] is None and logic["pickSingle"])
+    check(
+        "memory: recap periods list months and years newest first",
+        logic["months"] == ["2026-1", "2026-0", "2025-11"] and logic["years"] == [[2026, None], [2025, None]],
+        [logic["months"], logic["years"]],
+    )
+    check("memory: month recap counts meals, days, places, spend, home and out", logic["feb"] == [3, 3, 2, 10, 1, 2, 1], logic["feb"])
+    check("memory: month recap lists only places first visited that month", logic["febNew"] == ["Kedai B"], logic["febNew"])
+    check("memory: month recap best rated and regular spot", logic["febBest"] == "e" and logic["febTop"] == "Kedai B", [logic["febBest"], logic["febTop"]])
+    check("memory: year recap covers the whole year", logic["year"] == [5, 2, 2, "warung a"] and logic["yearMonth"] is None, logic["year"])
+    check("memory: recap counts companions", logic["yearCompanions"] == [["f1", 2], ["f2", 1]], logic["yearCompanions"])
+
+    # ---- stamp book and place page ----
+    go("insights")
+    expected = page.evaluate(
+        """() => {
+          const book = window.LahapMemory.stampBook(window.Lahap.state.entries);
+          return { places: book.length, regulars: book.filter((item) => item.count >= 3).length, key: book[0].key, name: book[0].name, count: book[0].count };
+        }"""
+    )
+    shown = page.evaluate(
+        """() => ({
+          stamps: document.querySelectorAll('#view-insights .stamp-grid .stamp[data-place]').length,
+          regulars: document.querySelectorAll('#view-insights .stamp-grid .stamp.regular').length,
+          title: document.querySelector('#stamp-title') ? document.querySelector('#stamp-title').textContent : '',
+          recap: !!document.querySelector('#view-insights [data-recap]'),
+        })"""
+    )
+    check("stamps: demo diary has places to stamp", expected["places"] >= 5 and expected["regulars"] >= 1, expected)
+    check("stamps: one stamp per place", shown["stamps"] == expected["places"], [shown, expected])
+    check("stamps: regulars are marked from 3 visits", shown["regulars"] == expected["regulars"], [shown, expected])
+    check("stamps: heading counts places and regulars", str(expected["places"]) in shown["title"] and "regular" in shown["title"], shown["title"])
+    check("stamps: recap button sits with the stamp book", shown["recap"])
+
+    page.click(f"#view-insights .stamp[data-place=\"{expected['key']}\"]")
+    page.wait_for_timeout(150)
+    place_sheet = page.evaluate(
+        """() => ({
+          open: document.querySelector('#dlg-memory').open,
+          title: document.querySelector('#memory-title').textContent.trim(),
+          rows: document.querySelectorAll('#dlg-memory .meal-row[data-open]').length,
+          log: !!document.querySelector('#dlg-memory [data-place-log]'),
+          text: document.querySelector('#dlg-memory').innerText,
+        })"""
+    )
+    check("place: a stamp opens the place page", place_sheet["open"] and place_sheet["title"] == expected["name"], place_sheet["title"])
+    check("place: page lists the meals eaten there", 1 <= place_sheet["rows"] <= expected["count"], [place_sheet["rows"], expected["count"]])
+    check("place: page says how many visits", str(expected["count"]) in place_sheet["text"] and place_sheet["log"])
+    audit = page.evaluate(SHEET_AUDIT_JS)
+    check("motion: place page stays still when the phone asks for less motion", *sheet_is_still(page))
+    check("place: sheet fits a phone with no small targets or tiny text", audit["page"] <= 0 and audit["sheet"] <= 0 and not audit["outside"] and not audit["small"] and not audit["tiny"], audit)
+
+    page.click("#dlg-memory .meal-row[data-open]")
+    page.wait_for_timeout(150)
+    detail = page.evaluate(
+        """() => {
+          const dialog = document.querySelector('#dlg-detail');
+          const heart = dialog.querySelector('[data-fav]');
+          const link = dialog.querySelector('.link-btn[data-place]');
+          return { open: dialog.open, id: heart ? heart.dataset.fav : null, pressed: heart ? heart.getAttribute('aria-pressed') : null, link: link ? link.dataset.place : null };
+        }"""
+    )
+    check("place: a meal row opens that meal", detail["open"] and detail["id"])
+    check("detail: place name links back to the place page", detail["link"] == expected["key"], detail["link"])
+
+    # ---- favourites ----
+    check("favourites: heart starts unpressed on a sample meal", detail["pressed"] == "false", detail["pressed"])
+    page.click("#dlg-detail [data-fav]")
+    page.wait_for_timeout(200)
+    hearted = page.evaluate(
+        """(id) => ({
+          pressed: document.querySelector('#dlg-detail [data-fav]').getAttribute('aria-pressed'),
+          label: document.querySelector('#dlg-detail [data-fav]').getAttribute('aria-label'),
+          saved: window.Lahap.state.entries.find((entry) => entry.id === id).fav === true,
+          count: window.Lahap.state.entries.filter((entry) => entry.fav).length,
+        })""",
+        detail["id"],
+    )
+    check("favourites: heart toggles and names its next action", hearted["pressed"] == "true" and hearted["label"] == "Remove from favourites", hearted)
+    check("favourites: heart is saved on the meal", hearted["saved"])
+    close_sheets()
+
+    go("diary")
+    total_tickets = page.evaluate("() => document.querySelectorAll('#view-diary .ticket').length")
+    page.click("#view-diary [data-fav-filter]")
+    page.wait_for_timeout(200)
+    filtered = page.evaluate(
+        """() => ({
+          pressed: document.querySelector('#view-diary [data-fav-filter]').getAttribute('aria-pressed'),
+          tickets: document.querySelectorAll('#view-diary .ticket').length,
+          marks: document.querySelectorAll('#view-diary .ticket .fav-mark').length,
+          overflow: document.documentElement.scrollWidth - window.innerWidth,
+        })"""
+    )
+    check(
+        "favourites: heart filter keeps only hearted meals",
+        filtered["pressed"] == "true" and filtered["tickets"] == hearted["count"] and filtered["marks"] == hearted["count"],
+        [filtered, hearted["count"]],
+    )
+    check("favourites: filter button does not widen the phone layout", filtered["overflow"] <= 0, filtered["overflow"])
+    page.click("#view-diary [data-fav-filter]")
+    page.wait_for_timeout(200)
+    restored = page.evaluate(
+        """() => ({
+          pressed: document.querySelector('#view-diary [data-fav-filter]').getAttribute('aria-pressed'),
+          tickets: document.querySelectorAll('#view-diary .ticket').length,
+        })"""
+    )
+    check("favourites: filter switches off again", restored["pressed"] == "false" and restored["tickets"] == total_tickets, [restored, total_tickets])
+
+    page.reload()
+    page.wait_for_selector("html[data-ready='1']")
+    check(
+        "favourites: heart survives a reload",
+        page.evaluate("(id) => window.Lahap.state.entries.some((entry) => entry.id === id && entry.fav === true)", detail["id"]),
+    )
+
+    # ---- detail place link ----
+    go("diary")
+    page.evaluate("(id) => document.querySelector(`#view-diary [data-open=\"${id}\"]`).click()", detail["id"])
+    page.wait_for_timeout(150)
+    page.click("#dlg-detail .link-btn[data-place]")
+    page.wait_for_timeout(150)
+    check(
+        "detail: place link opens the place page",
+        is_open("dlg-memory") and page.inner_text("#memory-title").strip() == expected["name"],
+    )
+    close_sheets()
+
+    # ---- bud page ----
+    go("buds")
+    bud = page.evaluate(
+        """() => {
+          const button = document.querySelector('#view-buds .name-btn[data-bud]');
+          return button ? { id: button.dataset.bud, name: button.textContent.trim(), avatars: document.querySelectorAll('#view-buds .avatar-btn[data-bud]').length } : null;
+        }"""
+    )
+    check("buds: each bud name and avatar opens their page", bool(bud) and bud["avatars"] >= 1, bud)
+    page.click("#view-buds .name-btn[data-bud]")
+    page.wait_for_timeout(150)
+    bud_sheet = page.evaluate(
+        """(id) => ({
+          open: document.querySelector('#dlg-memory').open,
+          title: document.querySelector('#memory-title').textContent.trim(),
+          rows: document.querySelectorAll('#dlg-memory .meal-row[data-open]').length,
+          meals: window.LahapMemory.budPage(window.Lahap.state.entries, id).count,
+          log: !!document.querySelector('#dlg-memory [data-bud-log]'),
+        })""",
+        bud["id"],
+    )
+    check("buds: page is titled with the bud's name", bud_sheet["open"] and bud["name"] in bud_sheet["title"], bud_sheet["title"])
+    check("buds: page lists meals shared with that bud", bud_sheet["rows"] == min(bud_sheet["rows"], bud_sheet["meals"]) and (bud_sheet["rows"] >= 1) == (bud_sheet["meals"] >= 1), bud_sheet)
+    audit = page.evaluate(SHEET_AUDIT_JS)
+    check("motion: bud page stays still when the phone asks for less motion", *sheet_is_still(page))
+    check("buds: sheet fits a phone with no small targets or tiny text", audit["page"] <= 0 and audit["sheet"] <= 0 and not audit["outside"] and not audit["small"] and not audit["tiny"], audit)
+    page.click("#dlg-memory [data-bud-log]")
+    page.wait_for_timeout(200)
+    check("buds: log a meal together opens the log sheet", is_open("dlg-log") and not is_open("dlg-memory"))
+    close_sheets()
+
+    # ---- Makan apa picker ----
+    go("diary")
+    page.click("#view-diary [data-wheel]")
+    page.wait_for_timeout(150)
+    pools = page.evaluate(
+        """() => {
+          const names = (mode) => window.LahapMemory.cravingPool(window.Lahap.state.entries, mode).map((item) => item.name);
+          return { all: names('all'), home: names('home'), out: names('out'), modes: [...document.querySelectorAll('#dlg-memory [data-wheel-mode]')].map((button) => button.dataset.wheelMode) };
+        }"""
+    )
+    check("picker: Makan apa opens from the diary", is_open("dlg-memory") and pools["modes"] == ["all", "out", "home"], pools["modes"])
+    check("picker: demo diary has dishes worth eating again", len(pools["all"]) >= 3 and len(pools["home"]) >= 1 and len(pools["out"]) >= 1, pools)
+
+    def spin():
+        page.click("#dlg-memory [data-wheel-spin]")
+        page.wait_for_timeout(250)
+        return page.evaluate("() => document.querySelector('#wheel-roll').textContent.trim()")
+
+    first_pick = spin()
+    second_pick = spin()
+    check("picker: a spin shows a dish from your own diary", first_pick in pools["all"] and second_pick in pools["all"], [first_pick, second_pick])
+    check("picker: the next spin is a different dish", first_pick != second_pick, [first_pick, second_pick])
+    page.click("#dlg-memory [data-wheel-spin]")
+    check("motion: a spin shows its pick at once, with no rolling names, when the phone asks for less motion", *sheet_is_still(page))
+    instant_pick = page.evaluate("() => document.querySelector('#wheel-roll').textContent.trim()")
+    check("motion: the instant pick is still a dish from your own diary", instant_pick in pools["all"], instant_pick)
+    page.click("#dlg-memory [data-wheel-mode='home']")
+    page.wait_for_timeout(100)
+    home_pick = spin()
+    check("picker: Cook at home only picks home cooking", home_pick in pools["home"], home_pick)
+    page.click("#dlg-memory [data-wheel-mode='out']")
+    page.wait_for_timeout(100)
+    out_pick = spin()
+    check("picker: Eat out only picks meals eaten out", out_pick in pools["out"], out_pick)
+    audit = page.evaluate(SHEET_AUDIT_JS)
+    check("picker: sheet fits a phone with no small targets or tiny text", audit["page"] <= 0 and audit["sheet"] <= 0 and not audit["outside"] and not audit["small"] and not audit["tiny"], audit)
+    page.click("#dlg-memory [data-wheel-log]")
+    page.wait_for_timeout(250)
+    prefilled = page.evaluate("(name) => [...document.querySelectorAll('#dlg-log input')].some((input) => input.value === name)", out_pick)
+    check("picker: Log it opens the log sheet with the dish filled in", is_open("dlg-log") and not is_open("dlg-memory") and prefilled, out_pick)
+    close_sheets()
+
+    # ---- recap ----
+    go("insights")
+    page.click("#view-insights [data-recap]")
+    page.wait_for_timeout(150)
+    recap = page.evaluate(
+        """() => {
+          const chips = [...document.querySelectorAll('#dlg-memory [data-recap-period]')].map((chip) => chip.dataset.recapPeriod);
+          const first = chips[0].split('-').map(Number);
+          const data = window.LahapMemory.recap(window.Lahap.state.entries, first[0], first.length > 1 ? first[1] : null);
+          return { open: document.querySelector('#dlg-memory').open, chips, count: data.count, slip: document.querySelector('#recap-slip') ? document.querySelector('#recap-slip').innerText : '' };
+        }"""
+    )
+    year_chip = next((chip for chip in recap["chips"] if "-" not in chip), None)
+    check("recap: opens as a receipt slip with month and year chips", recap["open"] and len(recap["chips"]) >= 2 and year_chip is not None, recap["chips"])
+    check("recap: slip shows the meal count for the period", str(recap["count"]) in recap["slip"] and "meal" in recap["slip"].lower(), recap["slip"][:120])
+    audit = page.evaluate(SHEET_AUDIT_JS)
+    check("motion: recap slip stays still when the phone asks for less motion", *sheet_is_still(page))
+    check("recap: sheet fits a phone with no small targets or tiny text", audit["page"] <= 0 and audit["sheet"] <= 0 and not audit["outside"] and not audit["small"] and not audit["tiny"], audit)
+    page.click(f"#dlg-memory [data-recap-period='{year_chip}']")
+    page.wait_for_timeout(150)
+    year_recap = page.evaluate(
+        """(year) => ({
+          count: window.LahapMemory.recap(window.Lahap.state.entries, Number(year), null).count,
+          slip: document.querySelector('#recap-slip').innerText,
+        })""",
+        year_chip,
+    )
+    check("recap: year chip switches the slip to the whole year", str(year_recap["count"]) in year_recap["slip"] and year_chip in year_recap["slip"], year_recap["slip"][:120])
+    page.evaluate(
+        """() => {
+          window.__copied = null;
+          Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (text) => { window.__copied = text; } } });
+        }"""
+    )
+    page.click("#dlg-memory [data-recap-copy]")
+    page.wait_for_timeout(150)
+    copied = page.evaluate("() => window.__copied") or ""
+    check("recap: copy puts the slip on the clipboard as plain text", str(year_recap["count"]) in copied and "<" not in copied and len(copied) > 40, copied[:120])
+    close_sheets()
+
+    # ---- numbers switch ----
+    go("me")
+    label = page.evaluate("() => document.querySelector('#set-numbers').closest('label').textContent.trim()")
+    check("numbers: the switch says exactly what it hides", "calories" in label.lower() and "plate scores" in label.lower(), label)
+    page.click("#set-numbers")
+    page.wait_for_timeout(250)
+    check("numbers: switching off marks the page", page.evaluate("() => document.documentElement.dataset.numbers") == "off")
+    go("diary")
+    VISIBLE_NUMBERS_JS = """() => {
+      const shown = (el) => el.getBoundingClientRect().height > 0;
+      const scope = document.querySelector('dialog[open]') || document.querySelector('#view-diary');
+      return {
+        kcal: [...scope.querySelectorAll('*')].filter((el) => el.children.length === 0 && shown(el) && /kcal/i.test(el.textContent)).length,
+        scores: [...scope.querySelectorAll('.score, .nutri, .num-only')].filter(shown).length,
+        plate: [...scope.querySelectorAll('*')].filter((el) => el.children.length === 0 && shown(el) && /plate score/i.test(el.textContent)).length,
+        tickets: document.querySelectorAll('#view-diary .ticket').length,
+        text: scope.innerText,
+      };
+    }"""
+    quiet = page.evaluate(VISIBLE_NUMBERS_JS)
+    check("numbers: diary drops calories and plate scores", quiet["kcal"] == 0 and quiet["scores"] == 0 and quiet["plate"] == 0, {key: quiet[key] for key in ("kcal", "scores", "plate")})
+    check("numbers: diary still shows every meal", quiet["tickets"] == total_tickets, [quiet["tickets"], total_tickets])
+    page.click("#view-diary .ticket [data-open], #view-diary .ticket[data-open]")
+    page.wait_for_timeout(150)
+    quiet_detail = page.evaluate(VISIBLE_NUMBERS_JS)
+    check("numbers: meal sheet drops calories, nutrition and plate score", is_open("dlg-detail") and quiet_detail["kcal"] == 0 and quiet_detail["scores"] == 0 and quiet_detail["plate"] == 0, {key: quiet_detail[key] for key in ("kcal", "scores", "plate")})
+    check("numbers: meal sheet keeps price and rating", "price" in quiet_detail["text"].lower() and "rating" in quiet_detail["text"].lower())
+    close_sheets()
+    page.reload()
+    page.wait_for_selector("html[data-ready='1']")
+    check("numbers: the choice survives a reload", page.evaluate("() => document.documentElement.dataset.numbers") == "off")
+    go("me")
+    check("numbers: the switch shows it is off", page.evaluate("() => document.querySelector('#set-numbers').checked") is False)
+    page.click("#set-numbers")
+    page.wait_for_timeout(250)
+    go("diary")
+    loud = page.evaluate(VISIBLE_NUMBERS_JS)
+    check("numbers: switching on brings calories and scores back", page.evaluate("() => document.documentElement.dataset.numbers") is None and loud["kcal"] > 0 and loud["scores"] > 0, {key: loud[key] for key in ("kcal", "scores")})
+
+    # ---- sheets at the narrowest phone and on desktop ----
+    openers = {
+        "place": f"() => window.Lahap.openPlace('{expected['key']}')",
+        "bud": f"() => window.Lahap.openBud('{bud['id']}')",
+        "picker": "() => { window.Lahap.openWheel(); document.querySelector('#dlg-memory [data-wheel-spin]').click(); }",
+        "recap": "() => window.Lahap.openRecap()",
+    }
+    for width, height in ((320, 640), (1280, 800)):
+        page.set_viewport_size({"width": width, "height": height})
+        bad = {}
+        for name, opener in openers.items():
+            page.evaluate(opener)
+            page.wait_for_timeout(250)
+            audit = page.evaluate(SHEET_AUDIT_JS)
+            if not audit["open"] or audit["page"] > 0 or audit["sheet"] > 0 or audit["outside"] or audit["small"] or audit["tiny"]:
+                bad[name] = audit
+            close_sheets()
+        check(f"memory sheets: no overflow, small targets or tiny text @ {width}", not bad, bad)
+    page.set_viewport_size({"width": 390, "height": 844})
+
+    # ---- meal sheet actions stay on screen ----
+    for width in (390, 320):
+        page.set_viewport_size({"width": width, "height": 844})
+        close_sheets()
+        go("diary")
+        page.click(".ticket[data-open]")
+        page.wait_for_timeout(250)
+        clipped = page.evaluate(
+            """() => [...document.querySelectorAll('dialog[open] .sheet-foot > *')]
+              .map((button) => [button.textContent.trim(), Math.round(button.getBoundingClientRect().left), Math.round(button.getBoundingClientRect().right)])
+              .filter((item) => item[1] < 0 || item[2] > window.innerWidth)"""
+        )
+        count = page.evaluate("() => document.querySelectorAll('dialog[open] .sheet-foot > *').length")
+        check(f"meal sheet: Delete, Edit, Ate it again and Share card all sit inside the screen at {width}px", count == 4 and not clipped, f"{count} buttons, clipped {clipped}")
+    close_sheets()
+    page.set_viewport_size({"width": 390, "height": 844})
+
+    # ---- app shortcuts ----
+    manifest = json.loads((ROOT / "manifest.webmanifest").read_text(encoding="utf-8"))
+    shortcut_urls = [item.get("url", "") for item in manifest.get("shortcuts", [])]
+    check(
+        "shortcuts: manifest offers Log a meal and Makan apa from the home screen icon",
+        len(shortcut_urls) == 2 and any("log=1" in url for url in shortcut_urls) and any("wheel=1" in url for url in shortcut_urls) and all(item.get("name") for item in manifest["shortcuts"]),
+        shortcut_urls,
+    )
+    page.goto(base + "?demo=1&nosw=1&wheel=1")
+    page.wait_for_selector("html[data-ready='1']")
+    page.wait_for_timeout(200)
+    check("shortcuts: ?wheel=1 lands on the picker", is_open("dlg-memory") and page.query_selector("#dlg-memory [data-wheel-spin]") is not None)
+    page.goto(base + "?demo=1&nosw=1&log=1")
+    page.wait_for_selector("html[data-ready='1']")
+    page.wait_for_timeout(200)
+    check("shortcuts: ?log=1 lands on the log sheet", is_open("dlg-log"))
+
+    empty_picker = page.evaluate(
+        """() => {
+          document.querySelectorAll('dialog[open]').forEach((dialog) => dialog.close());
+          const kept = window.Lahap.state.entries;
+          window.Lahap.state.entries = [];
+          window.Lahap.openWheel();
+          const dialog = document.querySelector('#dlg-memory');
+          const notice = dialog.querySelector('.notice');
+          const result = {
+            open: dialog.open,
+            notice: notice ? notice.textContent.trim() : '',
+            chit: !!dialog.querySelector('#wheel-chit'),
+            actions: dialog.querySelectorAll('[data-wheel-spin], [data-wheel-log]').length,
+          };
+          window.Lahap.state.entries = kept;
+          dialog.close();
+          return result;
+        }"""
+    )
+    check(
+        "picker: an empty diary gets a plain note on how to fill the pool, not a blank sheet or dead buttons",
+        empty_picker["open"] and empty_picker["notice"].startswith("Nothing to pick from yet") and not empty_picker["chit"] and empty_picker["actions"] == 0,
+        empty_picker,
+    )
+
+    index_html = (ROOT / "index.html").read_text(encoding="utf-8")
+    worker = (ROOT / "sw.js").read_text(encoding="utf-8")
+    check(
+        "memory.js loads after logic.js and before app.js, and is cached for offline",
+        0 < index_html.find('src="logic.js') < index_html.find('src="memory.js') < index_html.find('src="app.js') and '"memory.js"' in worker,
+    )
+    check("memory: no JS errors", not errors, "; ".join(errors[:3]))
+    context.close()
 
 
 def main():
@@ -2782,6 +3298,9 @@ def main():
         check("lab: no overflow on desktop", page2.evaluate("() => document.documentElement.scrollWidth - window.innerWidth") <= 0)
         check("first-run flows: no JS errors", not errors2, "; ".join(errors2[:3]))
         fresh.close()
+
+        # ---- memory: stamps, places, buds, picker, recap, favourites ----
+        memory_checks(browser, base)
 
         # ---- persistence ----
         page.reload()

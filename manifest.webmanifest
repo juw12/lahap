@@ -7,6 +7,20 @@
   "display": "standalone",
   "background_color": "#f5efe3",
   "theme_color": "#f5efe3",
+  "shortcuts": [
+    {
+      "name": "Log a meal",
+      "short_name": "Log",
+      "url": "./index.html?log=1",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Makan apa? Pick a dish",
+      "short_name": "Makan apa?",
+      "url": "./index.html?wheel=1",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ],
   "icons": [
     {
       "src": "icon.svg",

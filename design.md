@@ -39,3 +39,17 @@ gradient text, fake testimonials, "Get started" hero.
 - Today bar: two thin bars (kcal chili, protein leaf), no rings or gauges.
 - Lab recipe cards are paper cards with mono meta (min, kcal, protein); ingredients you have turn leaf green.
 - Quiz is a bottom sheet with a thin chili progress line, one question per step, always skippable.
+
+## Memory: stamps, place and bud pages, picker, recap (added 2026-11-13)
+- A place is a **stamp**: a rubber-stamp box (2 px ink border with a thin inner line, tilted by under 1 degree) with
+  the place name in mono caps, the last visit date and the visit count in serif. Places with 3 or more visits are
+  "regular" and print in chili. No badges, medals or confetti.
+- Place pages and bud pages are bottom sheets built from the same parts as the diary: stat row, then plain meal rows
+  with a dashed rule between them. One primary action per sheet.
+- "Makan apa?" picker shows one dish in serif on a ticket. The only motion is the dish name swapping a few times
+  before it settles (text only, under a second); with reduced motion it shows the pick at once. This is the one
+  motion exception besides the toast.
+- Recap is a thermal receipt (mono, dashed rules, totals at the bottom), the same language as the Receipt share card.
+- Favourite is a small heart outline that fills chili. It is the only place a heart is used.
+- Numbers off (`html[data-numbers="off"]`) hides anything marked `.num-only` and the nutrition blocks; layouts must
+  still read as complete without them.
