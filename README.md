@@ -33,6 +33,18 @@ What it does
   Story 9:16 or Post 1:1, the food cut-out drawn as a sticker, saved as PNG or sent through the share sheet.
   Every meal surface has one-tap share — the chip on each diary ticket, plus "Share card" on the
   On-repeat hero and the search answer card — so a past meal is as quick to share as a new one.
+- Favourites: tap the heart on a meal; the heart in the search bar shows only those.
+- Stamp book (Insights): every place you ate out becomes a stamp with its visit count, and a place turns "regular"
+  at 3 visits. Tap a stamp for the place page: visits, spend, what you ordered and who you went with.
+- Bud pages: tap a bud to see every meal you shared, where you went together and what you ordered, then log or plan
+  the next one.
+- "Makan apa?" picker: can't decide? It picks from dishes you already rated well and have not had lately
+  (all, eat out or home), never the same pick twice in a row, and one tap starts the log.
+- Recap slip: a receipt for any month or year (meals, new dishes, new places, top dish, top place, spend), with
+  "Copy" to paste it into a chat.
+- Numbers off (Profile): one switch hides calories, nutrition and plate scores on your meals, for a plain photo
+  and memory diary. Prices and ratings stay.
+- Home-screen shortcuts: long-press the installed icon for "Log a meal" and "Makan apa?".
 - Taste buds: match % from your taste profile, tag buds in meals (+10 points), plan a hangout by WhatsApp,
   mark "We went" (+25), levels New bud, Makan buddy, Regular, Family table.
 - Invite links: "Invite a bud" shares a link that carries only your taste profile (no meals); your friend
@@ -63,11 +75,35 @@ Limits (honest)
 - Suggested buds are example profiles. Invited buds are real but one-way snapshots: there is no server, so buds,
   matching and points live on each device and do not sync after the invite.
 
-Tests: `python tests/test_app.py` (Playwright, 343 checks, including a real cut-out and OCR run). Design rules: `design.md`.
+Tests: `python tests/test_app.py` (Playwright, 425 checks, including a real cut-out and OCR run). Design rules: `design.md`.
 
-Why another food diary: PlateDiary is a private restaurant photo journal and Mynu is a home-cooking journal.
-Lahap logs both (ate out, home-cooked, delivery), answers "have I eaten this before?", estimates what is on the
-plate against your own goal, turns what is in your kitchen into recipes, and adds Strava-style share cards.
+Lahap vs PlateDiary (checked against platediary.app on 13 Nov 2026)
+
+PlateDiary is a polished native app for iPhone and Android: a private photo journal for eating out, with a free tier,
+a paid Premium tier and a separate AI add-on. Lahap is a free web app with no paid tier. Both keep the diary on your
+device with no account.
+
+What Lahap now matches from PlateDiary's free tier, in its own receipt-and-stamp look: favourites, a stamp book of
+places, place pages, pages for the people you eat with, a craving picker, a recap you can share, calories off when
+you do not want them, and food cut-outs.
+
+Where Lahap goes further
+- Nothing to install and no store: it opens in any browser on phone or laptop, and works offline after the first visit.
+- Everything is free. There is no Premium tier and no AI add-on to buy.
+- Search answers "have I eaten this?" with count, last time and place, price range and rating in one card.
+- Eating out, home-cooked and delivery live in one diary, with spend split across the three.
+- Nutrition estimates against your own goal (quiz, daily bar, one tip), and a single switch to hide all of it.
+- Lab turns what is in your kitchen into ranked recipes and a shopping list, typed, spoken or scanned.
+- Share cards in three templates and four backgrounds, free.
+
+Where PlateDiary is still ahead (not built here)
+- It is a native app from the App Store and Google Play, with home-screen widgets.
+- One photo of the whole table becomes separate dish cut-outs; Lahap cuts out one photo per meal.
+- Cutout collage maker, a food map, collections, themes (its Look & feel studio) and games.
+- Backups to your own iCloud Drive or a Google Drive file; Lahap's backup is a file you share yourself.
+- Bill and receipt scan that fills in prices; Lahap's scanner reads ingredient lists for the Lab only.
+- AI that names dishes from the photo (paid add-on there); Lahap never recognises the dish, you pick or type it.
+- More than a dozen app languages; Lahap's interface is English, with Bahasa Indonesia input in the Lab.
 
 Third-party files in `vendor/`: onnxruntime-web (MIT, Microsoft), U-2-Net small model (Apache-2.0, Xuebin Qin et al.),
 tesseract.js and its English data (Apache-2.0).

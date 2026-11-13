@@ -1145,6 +1145,16 @@ dialog.sheet::backdrop {
   background: var(--paper);
   border-top: 1px solid var(--line);
 }
+/* The meal sheet has four actions: on a phone they share the row, and wrap on the narrowest screens. */
+@media (max-width: 440px) {
+  .sheet-foot.foot-four {
+    flex-wrap: wrap;
+  }
+  .sheet-foot.foot-four .btn {
+    flex: 1 1 auto;
+    padding-inline: 10px;
+  }
+}
 
 .icon-btn {
   width: 44px;
@@ -3888,4 +3898,419 @@ label.chip input {
   dialog.sheet .sheet-body:last-child {
     padding-bottom: calc(var(--s6) + env(safe-area-inset-bottom));
   }
+}
+
+/* ---------------- memory: favourites, stamp book, place and bud pages, makan apa, recap ---------------- */
+.search input {
+  padding-right: 54px;
+}
+
+.search .fav-filter {
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.search .fav-filter svg {
+  position: static;
+  width: 22px;
+  height: 22px;
+  transform: none;
+  color: inherit;
+}
+
+.fav-filter[aria-pressed="true"],
+.fav-btn[aria-pressed="true"] {
+  color: var(--accent);
+}
+
+.fav-filter[aria-pressed="true"] svg path,
+.fav-btn[aria-pressed="true"] svg path,
+.fav-mark svg path {
+  fill: currentColor;
+}
+
+.fav-mark {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-left: 2px;
+  vertical-align: -1px;
+  color: var(--accent);
+}
+
+.fav-mark svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+}
+
+.sheet-head h2 {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.fav-btn svg {
+  width: 22px;
+  height: 22px;
+}
+
+.link-btn {
+  display: inline;
+  padding: 8px 2px;
+  margin: -8px -2px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.avatar-btn {
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+
+.name-btn {
+  padding: 6px 4px;
+  margin: -6px -4px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.makan-apa {
+  font-family: var(--font-mono);
+  border-style: dashed;
+  border-color: var(--ink);
+}
+
+/* the stamp book: one rubber stamp per place, chili ink once it is a regular */
+.stamp-panel {
+  margin-top: var(--s5);
+}
+
+.stamp-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s3);
+  margin-bottom: var(--s4);
+}
+
+.stamp-head h2 {
+  margin-bottom: 0;
+}
+
+.stamp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: var(--s4) var(--s3);
+  padding: var(--s1);
+  margin-bottom: var(--s4);
+}
+
+.stamp {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-content: space-between;
+  gap: var(--s2) var(--s2);
+  min-height: 92px;
+  padding: 10px 12px;
+  border: 2px solid currentColor;
+  border-radius: var(--radius-sm);
+  outline: 1px solid currentColor;
+  outline-offset: -6px;
+  background: none;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  text-align: left;
+  cursor: pointer;
+  transform: rotate(-1.2deg);
+}
+
+.stamp:nth-child(3n + 2) {
+  transform: rotate(0.9deg);
+}
+
+.stamp:nth-child(4n + 3) {
+  transform: rotate(-0.4deg);
+}
+
+.stamp.regular {
+  color: var(--accent);
+}
+
+.stamp:hover,
+.stamp:focus-visible {
+  background: var(--card);
+}
+
+.stamp-name {
+  grid-column: 1 / -1;
+  padding: 2px 2px 0;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.stamp-date {
+  align-self: end;
+  padding: 0 2px 2px;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+.stamp-count {
+  grid-column: 2;
+  grid-row: 2;
+  align-self: end;
+  padding: 0 2px;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.stamp-date {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+/* memory sheets */
+.memory h3 {
+  margin: var(--s5) 0 var(--s3);
+}
+
+.memory .stat-grid {
+  margin-top: var(--s4);
+}
+
+.stat .value.words {
+  font-size: 19px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.stat .value.words .mono {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.memory .chips {
+  margin-top: var(--s3);
+}
+
+.meal-list {
+  border-top: 1px dashed var(--line-strong);
+}
+
+.meal-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s3);
+  width: 100%;
+  min-height: 60px;
+  padding: var(--s2) 0;
+  border: 0;
+  border-bottom: 1px dashed var(--line-strong);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.meal-row img {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+}
+
+.meal-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.meal-name {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.meal-where {
+  font-size: 13px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.meal-facts {
+  font-size: 13px;
+  color: var(--muted);
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* makan apa: the pick prints as an order chit */
+.chit {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s4);
+  min-height: 112px;
+  margin: var(--s4) 0 var(--s3);
+  padding: var(--s4);
+  background-color: var(--card);
+  background-image: var(--grain);
+  background-size: 180px 180px;
+  border: 1px solid var(--line);
+  border-top: 2px dashed var(--ink);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.chit img {
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+}
+
+.chit.rolling img {
+  visibility: hidden;
+}
+
+.chit.rolling .roll {
+  color: var(--muted);
+}
+
+.roll {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  overflow-wrap: anywhere;
+}
+
+.chit-meta {
+  margin-top: var(--s2);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* recap: a thermal receipt of the month */
+.recap-slip {
+  max-width: 340px;
+  margin: var(--s5) auto 0;
+  padding: var(--s5) var(--s4) var(--s4);
+  background-color: var(--card);
+  background-image: var(--grain);
+  background-size: 180px 180px;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.recap-brand {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-align: center;
+}
+
+.recap-period {
+  padding-bottom: var(--s3);
+  border-bottom: 1px dashed var(--ink);
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.recap-slip dl {
+  margin: var(--s3) 0;
+}
+
+.recap-slip dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.recap-slip dt {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.recap-slip dd {
+  margin: 0;
+  min-width: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.recap-total {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s3) 0;
+  border-top: 1px dashed var(--ink);
+  border-bottom: 1px dashed var(--ink);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.recap-thanks {
+  margin-top: var(--s3);
+  text-align: center;
+  color: var(--muted);
+}
+
+/* Profile > "Show calories and nutrition numbers" off: the diary keeps the food and drops the counting */
+html[data-numbers="off"] .ticket .kcal,
+html[data-numbers="off"] .ticket .stub .score,
+html[data-numbers="off"] .day-chip.score,
+html[data-numbers="off"] a.week-strip > span:nth-child(2),
+html[data-numbers="off"] a.week-strip > span:nth-child(3),
+html[data-numbers="off"] .ws-key,
+html[data-numbers="off"] .today,
+html[data-numbers="off"] .today-empty,
+html[data-numbers="off"] #dlg-detail .nutri,
+html[data-numbers="off"] .num-only {
+  display: none;
 }
