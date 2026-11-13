@@ -1,0 +1,30 @@
+{
+  "type": "AdaptiveCard",
+  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+  "version": "1.5",
+  "body": [
+    {
+      "type": "TextBlock",
+      "text": "Craving shuffle",
+      "weight": "Bolder"
+    },
+    {
+      "type": "TextBlock",
+      "text": "${craving}",
+      "wrap": true,
+      "size": "Medium"
+    }
+  ],
+  "actions": [
+    {
+      "type": "Action.Execute",
+      "title": "Shuffle",
+      "verb": "shuffle"
+    },
+    {
+      "type": "Action.Execute",
+      "title": "Log it",
+      "verb": "log"
+    }
+  ]
+}

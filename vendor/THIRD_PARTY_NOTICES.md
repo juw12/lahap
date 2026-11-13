@@ -11,3 +11,4 @@ These files are redistributed unchanged under their own licences. Lahap's own co
 | vendor/tesseract/eng.traineddata.gz, vendor/tesseract/ind.traineddata.gz | Tesseract English and Indonesian models (tessdata, via @tesseract.js-data 4.0.0_best_int) | Apache-2.0, https://github.com/tesseract-ocr/tessdata_fast |
 
 The Apache License 2.0 text: https://www.apache.org/licenses/LICENSE-2.0.txt
+| vendor/leaflet/leaflet.js, vendor/leaflet/leaflet.css | Leaflet 1.9.4, Volodymyr Agafonkin and contributors | BSD-2-Clause, vendor/leaflet/LICENSE |

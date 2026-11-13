@@ -4314,3 +4314,294 @@ html[data-numbers="off"] #dlg-detail .nutri,
 html[data-numbers="off"] .num-only {
   display: none;
 }
+
+/* ================= r40 studio: looks, collections, map, Share Studio, games, ask ================= */
+
+/* Look & feel: palettes override the paper tokens; everything else follows */
+:root[data-theme="night"] {
+  --paper: #17130f; --card: #221c16; --ink: #f3eadb; --muted: #c9bba6; --line: #3a3128; --line-strong: #54473a;
+  --accent: #f08a4b; --accent-ink: #1b120b; --accent-soft: #4a2a17; --leaf: #8fcf8f; --leaf-soft: #23361f;
+  --amber: #f0c060; --amber-soft: #3d3016; --chili-soft: #4a2219;
+  --shadow: 0 1px 0 rgba(0, 0, 0, 0.4), 0 6px 18px -12px rgba(0, 0, 0, 0.8);
+  color-scheme: dark;
+}
+:root[data-theme="matcha"] {
+  --paper: #eef1e4; --card: #fbfcf6; --ink: #1b2116; --muted: #48523f; --line: #d3dac2; --line-strong: #b4bf9f;
+  --accent: #3f6b3a; --accent-ink: #ffffff; --accent-soft: #d9e7d2; --leaf: #2f6a3a; --leaf-soft: #dcebd9;
+}
+:root[data-theme="sambal"] {
+  --paper: #fbeee8; --card: #fffaf7; --ink: #2a1210; --muted: #5c3a34; --line: #efd2c8; --line-strong: #dcb0a2;
+  --accent: #c0262d; --accent-ink: #ffffff; --accent-soft: #f8d3d0;
+}
+:root[data-theme="kopi"] {
+  --paper: #efe5d6; --card: #fbf6ee; --ink: #2b1d12; --muted: #5b4632; --line: #ddcdb6; --line-strong: #c4ae8f;
+  --accent: #7a4a26; --accent-ink: #ffffff; --accent-soft: #ecd9c3;
+}
+:root[data-theme="laut"] {
+  --paper: #e9f0f2; --card: #f8fbfc; --ink: #11222a; --muted: #3c525c; --line: #cddbe0; --line-strong: #a9bfc7;
+  --accent: #1f6680; --accent-ink: #ffffff; --accent-soft: #d2e6ee;
+}
+:root[data-type="rounded"] {
+  --font-display: ui-rounded, "SF Pro Rounded", "Nunito", "Segoe UI", system-ui, sans-serif;
+  --font-body: ui-rounded, "SF Pro Rounded", "Nunito", "Segoe UI", system-ui, sans-serif;
+}
+:root[data-type="mono"] {
+  --font-display: var(--font-mono);
+  --font-body: var(--font-mono);
+}
+:root[data-type="large"] { font-size: 112.5%; }
+
+/* studio tiles */
+.studio-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--s2); }
+.studio-tile {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 64px;
+  padding: var(--s3); text-align: left; background: var(--card); color: var(--ink);
+  border: 1px dashed var(--line-strong); border-radius: var(--radius-sm); cursor: pointer; font: inherit;
+}
+.studio-tile:hover, .studio-tile:focus-visible { border-style: solid; border-color: var(--accent); }
+.studio-name { font-family: var(--font-display); font-weight: 700; font-size: 1.02rem; }
+.studio-why { color: var(--muted); font-size: 0.82rem; line-height: 1.3; }
+.sheet-body.studio h3 { margin: var(--s4) 0 var(--s2); font-size: 0.95rem; }
+.studio-detail { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s3); }
+.studio-log-tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin: calc(var(--s1) * -1) 0 var(--s2); }
+.file-chip { position: relative; cursor: pointer; }
+.row-btns { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.inline-form { display: flex; gap: var(--s2); margin: var(--s3) 0; }
+.inline-form input { flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--card); color: var(--ink); font: inherit; }
+
+/* collections */
+.collection-list, .pin-list { display: grid; gap: var(--s2); }
+.collection-row, .pin-row {
+  display: flex; align-items: center; gap: var(--s3); width: 100%; padding: var(--s2);
+  background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-sm); text-align: left; font: inherit;
+}
+.collection-row { cursor: pointer; }
+.pin-row .meal-main { flex: 1; min-width: 0; }
+.cover { display: inline-flex; flex: none; }
+.cover img, .cover-empty { width: 40px; height: 40px; object-fit: contain; border-radius: 6px; background: var(--paper); border: 1px solid var(--line); }
+.cover img + img { margin-left: -14px; }
+.check-list { display: grid; gap: var(--s2); margin: var(--s2) 0; }
+
+/* swatches */
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: var(--s2); margin: var(--s3) 0; }
+.swatch {
+  display: flex; align-items: center; gap: var(--s2); padding: 8px 10px; border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm); background: var(--card); color: var(--ink); font: inherit; font-size: 0.88rem; cursor: pointer;
+}
+.swatch.on { border: 2px solid var(--accent); padding: 7px 9px; }
+.swatch .dots { display: inline-flex; }
+.swatch .dots i { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, 0.18); }
+.swatch .dots i + i { margin-left: -4px; }
+.type-chips { margin-bottom: var(--s3); }
+.lang-field select { width: 100%; padding: 10px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--card); color: var(--ink); font: inherit; }
+
+/* map */
+.food-map { height: min(56vh, 420px); border-radius: var(--radius-sm); border: 1px solid var(--line); background: var(--card); overflow: hidden; }
+.food-map.offline { height: auto; padding: var(--s3); }
+.map-pin span {
+  display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--card);
+  background: var(--accent); color: var(--accent-ink); font: 700 12px var(--font-mono); box-shadow: var(--shadow);
+}
+.map-fallback { margin: 0; padding-left: 1.2em; }
+
+/* Share Studio */
+.studio-canvas-wrap, .game-wrap { display: grid; place-items: center; }
+#collage-canvas { width: min(100%, 360px); height: auto; aspect-ratio: 1080 / 1350; border: 1px solid var(--line); border-radius: var(--radius-sm); touch-action: none; background: var(--paper); }
+.doodle-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin-top: var(--s2); }
+.ink { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--line-strong); cursor: pointer; }
+.ink.on { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* games */
+#game-canvas { width: min(100%, 360px); height: auto; aspect-ratio: 3 / 4; border: 1px solid var(--line); border-radius: var(--radius-sm); touch-action: none; background: var(--paper); }
+
+/* ask + story + memory lane */
+.answer-card, .story-card { margin-top: var(--s3); padding: var(--s3); background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.answer-text { margin: 0 0 var(--s2); font-weight: 600; }
+.story-card h4 { margin: 0 0 var(--s2); font-family: var(--font-display); font-size: 1.1rem; }
+.story-card p { margin: 0 0 var(--s2); }
+.memory-wall { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: var(--s2); }
+.memory-wall.small { grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); }
+.wall-tile { display: grid; gap: 4px; padding: var(--s2); background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-sm); font: inherit; font-size: 0.85rem; text-align: center; cursor: pointer; }
+.wall-tile img { width: 100%; aspect-ratio: 1; object-fit: contain; }
+.wall-tile.wide { grid-template-columns: 72px 1fr; align-items: center; text-align: left; }
+
+/* split dishes */
+.split-list { display: grid; gap: var(--s2); }
+.split-item { display: grid; grid-template-columns: 72px 1fr; gap: var(--s3); align-items: center; }
+.split-item img { width: 72px; height: 72px; object-fit: contain; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+
+/* the stamp book button sits next to the favourites filter in the search bar */
+.search .stamp-filter svg { position: static; transform: none; }
+
+.search .stamp-filter { right: 50px; }
+.search:has(.stamp-filter) input { padding-right: 100px; }
+
+/* r40: palette-safe surfaces - the topbar, inputs and hover states follow the theme tokens */
+.topbar {
+  background: color-mix(in srgb, var(--paper) 94%, transparent);
+}
+input[type="text"],
+input[type="search"],
+input[type="number"],
+input[type="datetime-local"],
+input[type="date"],
+input[type="time"],
+select,
+textarea {
+  background: var(--card);
+  color: var(--ink);
+}
+.ticket:hover {
+  background-color: color-mix(in srgb, var(--card) 92%, var(--ink));
+}
+.stage-zoom {
+  background: color-mix(in srgb, var(--card) 94%, transparent);
+}
+
+/* r40: longer and CJK labels from the 14 languages - keep chips, tabs and the Log label on one line,
+   let the week-strip labels wrap instead of running into each other */
+.bottombar .fab-label {
+  white-space: nowrap;
+}
+/* a long chip shortens with an ellipsis instead of running under the share disc */
+.tag {
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bottombar a span {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bottombar a {
+  min-width: 0;
+}
+.week-strip > span {
+  min-width: 0;
+}
+.week-strip .ws-label {
+  display: block;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+:root:not([lang="en"]) .bottombar a span {
+  font-size: 11px;
+}
+
+/* r40: translated "Share card" labels run wider than the middle column allows, so outside English the
+   share button is the icon disc alone (its translated aria-label still names it) and the chips get the room */
+:root:not([lang="en"]) .ticket-share-label {
+  display: none;
+}
+:root:not([lang="en"]) .ticket-share {
+  padding: 0;
+}
+:root:not([lang="en"]) .ticket-wrap .ticket .tags {
+  padding-right: 44px;
+}
+
+/* r40: Table window - latest meals or a collection as Scatter, Postcard or Menu */
+.table-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  align-items: center;
+  margin-bottom: var(--s3);
+}
+.table-controls select {
+  width: auto;
+  min-width: 0;
+  flex: 1 1 140px;
+}
+.table-scatter {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s3);
+  padding: var(--s2) var(--s1);
+}
+.table-scatter .wall-tile {
+  box-shadow: var(--shadow);
+}
+.table-postcard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--s3);
+  width: 100%;
+  padding: var(--s3);
+  text-align: left;
+  font: inherit;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+.table-postcard img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+}
+.table-postcard .tp-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: var(--s1);
+  border-left: 1px dashed var(--line-strong);
+  padding-left: var(--s3);
+}
+.table-postcard .tp-name {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.table-postcard .tp-where {
+  color: var(--muted);
+  font-size: 13px;
+}
+.table-menu {
+  list-style: none;
+  margin: 0;
+  padding: var(--s3);
+  background: var(--card);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+.table-menu button {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  width: 100%;
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.table-menu .tm-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.table-menu .tm-dots {
+  flex: 1 1 auto;
+  min-width: 16px;
+  border-bottom: 2px dotted var(--line-strong);
+}
+.table-menu .tm-price {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  white-space: nowrap;
+}

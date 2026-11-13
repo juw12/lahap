@@ -518,8 +518,8 @@ def memory_checks(browser, base):
     manifest = json.loads((ROOT / "manifest.webmanifest").read_text(encoding="utf-8"))
     shortcut_urls = [item.get("url", "") for item in manifest.get("shortcuts", [])]
     check(
-        "shortcuts: manifest offers Log a meal and Makan apa from the home screen icon",
-        len(shortcut_urls) == 2 and any("log=1" in url for url in shortcut_urls) and any("wheel=1" in url for url in shortcut_urls) and all(item.get("name") for item in manifest["shortcuts"]),
+        "shortcuts: manifest offers Log a meal, Makan apa and Food map from the home screen icon",
+        len(shortcut_urls) == 3 and any("log=1" in url for url in shortcut_urls) and any("wheel=1" in url for url in shortcut_urls) and any("map=1" in url for url in shortcut_urls) and all(item.get("name") for item in manifest["shortcuts"]),
         shortcut_urls,
     )
     page.goto(base + "?demo=1&nosw=1&wheel=1")
@@ -563,6 +563,223 @@ def memory_checks(browser, base):
         0 < index_html.find('src="logic.js') < index_html.find('src="memory.js') < index_html.find('src="app.js') and '"memory.js"' in worker,
     )
     check("memory: no JS errors", not errors, "; ".join(errors[:3]))
+    context.close()
+
+
+def studio_checks(browser, base):
+    """r40: collections, map, Share Studio, games, Ask Lahap, looks, languages, widgets, bill scan, dish split."""
+    context = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=1, reduced_motion="reduce")
+    page = context.new_page()
+    errors = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.on("console", lambda message: errors.append(message.text) if message.type == "error" and "tile.openstreetmap" not in message.text and "ERR_" not in message.text else None)
+    page.on("dialog", lambda dialog: dialog.accept())
+    page.goto(base + "?demo=1&nosw=1")
+    page.wait_for_selector("html[data-ready='1']")
+
+    def go(view):
+        page.evaluate(f"() => location.hash = '{view}'")
+        page.wait_for_timeout(250)
+
+    def close_studio():
+        page.evaluate("() => { const d = document.querySelector('#dlg-studio'); if (d && d.open) d.close(); }")
+
+    logic = page.evaluate(
+        """() => {
+          const S = window.LahapStudioLogic;
+          const bill = S.parseBill('WARUNG\\nNasi Goreng 35.000\\nEs Teh 10.000\\nSubtotal 45.000\\nPPN 10% 4.500\\nTOTAL Rp 49.500\\nTunai 50.000\\nKembali 500');
+          const usd = S.parseBill('Ramen 12.50\\nGyoza 6.90\\nTotal $19.40');
+          const now = new Date('2026-11-13T12:00:00');
+          const e = [
+            { id: 'a', name: 'Bakso', place: 'Bakso Pak Gun', source: 'out', price: 25000, rating: 5, ts: '2026-11-12T12:00:00', friends: ['rina'], fav: true },
+            { id: 'b', name: 'Bakso', place: 'Bakso Pak Gun', source: 'out', price: 27000, rating: 4, ts: '2026-11-05T12:00:00' },
+            { id: 'c', name: 'Nasi lemak', place: 'Home', source: 'home', price: 8000, rating: 4, ts: '2026-11-10T08:00:00' },
+            { id: 'd', name: 'Ramen', place: 'Menya', source: 'out', price: 120000, rating: 3, ts: '2026-10-01T19:00:00' },
+          ];
+          const money = (v) => 'Rp ' + v;
+          const ask = (q) => S.answer(e, q, { now, money, budName: () => 'Rina' });
+          const smart = Object.fromEntries(S.smartCollections(e, now).map((c) => [c.id, c.entries.length]));
+          const custom = S.toggleInCollection([{ id: 'c1', name: 'Best', ids: [] }], 'c1', 'a');
+          const w = 20, h = 10, alpha = new Uint8Array(w * h);
+          for (let y = 1; y < 9; y++) for (let x = 1; x < 8; x++) alpha[y * w + x] = 255;
+          for (let y = 2; y < 8; y++) for (let x = 12; x < 19; x++) alpha[y * w + x] = 255;
+          return {
+            billTotal: bill.total, billItems: bill.items.map((i) => i.name + '=' + i.price).join(','), billTax: bill.tax, usd: usd.total,
+            spend: ask('how much did I spend on bakso this month?').text,
+            last: ask('when did I last eat ramen').text,
+            count: ask('how many times bakso').text,
+            best: ask('where is the best bakso').text,
+            who: ask('who did I eat bakso with').text,
+            none: ask('sushi').kind,
+            outSpend: ask('how much did I spend eating out this month').text,
+            story: S.story(e, { days: 30, now, money }).paragraphs.length,
+            smart,
+            custom: custom[0].ids.join(','),
+            blobs: S.splitBlobs(alpha, w, h, { pad: 0 }).length,
+            names: S.suggestNames(e, { place: 'bakso pak gun' }).map((n) => n.name).join(','),
+            palettes: S.PALETTES.length, types: S.TYPES.length,
+            langs: window.LahapI18n.LANGS.length,
+          };
+        }"""
+    )
+    check("bill scan: total includes tax and ignores cash and change", logic["billTotal"] == 49500 and logic["billTax"] == 4500, logic)
+    check("bill scan: dish lines and prices", logic["billItems"] == "Nasi Goreng=35000,Es Teh=10000", logic["billItems"])
+    check("bill scan: decimal currencies", abs(logic["usd"] - 19.4) < 1e-9, logic["usd"])
+    check("ask: spend on a dish this month", logic["spend"].startswith("Rp 52000"), logic["spend"])
+    check("ask: when did I last eat", "Ramen at Menya" in logic["last"], logic["last"])
+    check("ask: how many times", logic["count"].startswith("2 times"), logic["count"])
+    check("ask: best place by rating", logic["best"].startswith("Bakso Pak Gun"), logic["best"])
+    check("ask: who with", "Rina (1)" in logic["who"], logic["who"])
+    check("ask: nothing found is said plainly", logic["none"] == "none", logic["none"])
+    check("ask: eating out filter", logic["outSpend"].startswith("Rp 52000"), logic["outSpend"])
+    check("story: several paragraphs from the diary", logic["story"] >= 4, logic["story"])
+    check("smart collections fill themselves", logic["smart"]["smart-fav"] == 1 and logic["smart"]["smart-home"] == 1 and logic["smart"]["smart-top"] == 1, logic["smart"])
+    check("custom collection toggles a meal", logic["custom"] == "a", logic["custom"])
+    check("split dishes: two separate blobs", logic["blobs"] == 2, logic["blobs"])
+    check("name ideas: your usual at this place", logic["names"] == "Bakso", logic["names"])
+    check("looks: 6 palettes and 4 type styles", logic["palettes"] == 6 and logic["types"] == 4, logic)
+    check("languages: 14 interface languages", logic["langs"] == 14, logic["langs"])
+
+    # stamp book from Diary (search bar button)
+    go("diary")
+    page.click("[data-stamps]")
+    page.wait_for_selector("#dlg-memory[open] .stamp")
+    check("diary: stamp book opens from the search bar", page.locator("#dlg-memory[open] .stamp").count() >= 5)
+    page.evaluate("() => document.querySelector('#dlg-memory').close()")
+    box = page.evaluate("() => { const a = document.querySelector('[data-stamps]').getBoundingClientRect(); const b = document.querySelector('[data-fav-filter]').getBoundingClientRect(); return { overlap: a.right > b.left && a.left < b.right, inside: a.right <= innerWidth }; }")
+    check("diary: stamp and heart buttons do not overlap", not box["overlap"] and box["inside"], box)
+
+    # studio tiles
+    go("insights")
+    tiles = page.locator(".studio-panel [data-studio]").count()
+    check("insights: studio panel with 6 tools", tiles == 6, tiles)
+
+    page.click(".studio-panel [data-studio='collections']")
+    page.wait_for_selector("#dlg-studio[open] .collection-row")
+    page.fill("[data-studio-new-collection] input[name=name]", "Best bakso")
+    page.click("[data-studio-new-collection] button[type=submit]")
+    page.wait_for_timeout(200)
+    check("collections: make your own", page.locator("#dlg-studio[open] .collection-row:has-text('Best bakso')").count() == 1)
+    close_studio()
+
+    page.click(".studio-panel [data-studio='ask']")
+    page.wait_for_selector("#dlg-studio[open] [data-studio-example]")
+    page.locator("[data-studio-example]").first.click()
+    answer = page.locator("#ask-answer").text_content() or ""
+    check("ask lahap: example question answers from the diary", "eating out" in answer and "meals" in answer, answer[:80])
+    page.click("[data-studio-story='30']")
+    story = page.locator("#story-out").text_content() or ""
+    check("ask lahap: month story", "meals later" in story, story[:80])
+    close_studio()
+
+    page.click(".studio-panel [data-studio='memory']")
+    page.wait_for_selector("#dlg-studio[open] .wall-tile")
+    check("memory lane: wall and craving shuffle", page.locator("#dlg-studio[open] .wall-tile").count() >= 3)
+    check("table window: latest meals as a scatter", page.locator("#table-window .table-scatter .wall-tile").count() >= 3)
+    page.click("[data-table-style='menu']")
+    page.wait_for_timeout(200)
+    menu_rows = page.locator("#table-window .table-menu li").count()
+    check("table window: menu style lists the meals", menu_rows >= 3, menu_rows)
+    page.click("[data-table-style='postcard']")
+    page.wait_for_timeout(200)
+    check("table window: postcard style shows one meal", page.locator("#table-window .table-postcard").count() == 1)
+    first_collection = page.evaluate("() => { const option = [...document.querySelectorAll('#table-source option')].find((o) => o.value !== 'latest'); return option ? option.value : ''; }")
+    if first_collection:
+        page.select_option("#table-source", first_collection)
+        page.wait_for_timeout(200)
+    check("table window: a collection can be the source", bool(first_collection) and page.locator("#table-source").input_value() == first_collection, first_collection)
+    table_overflow = page.evaluate("() => { const box = document.querySelector('#table-window'); return box ? box.scrollWidth - box.clientWidth : -1; }")
+    check("table window: fits the sheet at 390 px", table_overflow == 0, table_overflow)
+    page.click("[data-table-style='scatter']")
+    page.select_option("#table-source", "latest")
+    page.wait_for_timeout(200)
+    close_studio()
+
+    page.click(".studio-panel [data-studio='collage']")
+    page.wait_for_selector("#collage-canvas")
+    page.wait_for_timeout(400)
+    painted = page.evaluate("() => { const c = document.querySelector('#collage-canvas'); const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 0; i < d.length; i += 4000) if (d[i] !== d[0]) n++; return n; }")
+    check("share studio: collage drawn", painted > 20, painted)
+    page.click("[data-collage-template='grid']")
+    check("share studio: template switch", page.locator("[data-collage-template='grid'].on").count() == 1)
+    canvas_box = page.locator("#collage-canvas").bounding_box()
+    page.mouse.move(canvas_box["x"] + 40, canvas_box["y"] + 60)
+    page.mouse.down()
+    page.mouse.move(canvas_box["x"] + 120, canvas_box["y"] + 140)
+    page.mouse.up()
+    check("share studio: doodle stroke recorded", page.evaluate("() => document.querySelector('[data-collage-undo]') !== null"))
+    close_studio()
+
+    page.click(".studio-panel [data-studio='games']")
+    page.wait_for_selector("#dlg-studio[open] [data-game]")
+    games = page.locator("#dlg-studio[open] .games-grid [data-game]").count()
+    check("games: ten cut-out toys", games == 10, games)
+    page.click("#dlg-studio [data-game='catch']")
+    page.wait_for_selector("#game-canvas")
+    page.wait_for_timeout(600)
+    check("games: catch runs on a canvas", page.locator("#game-canvas").count() == 1)
+    close_studio()
+
+    page.click(".studio-panel [data-studio='map']")
+    page.wait_for_selector("#food-map")
+    page.wait_for_timeout(800)
+    pins = page.evaluate("() => document.querySelectorAll('#food-map .map-pin, #food-map .map-fallback li').length")
+    check("food map: sample places pinned", pins >= 5, pins)
+    close_studio()
+    check("insights: no sideways scroll with the studio", page.evaluate("() => document.documentElement.scrollWidth <= innerWidth"))
+
+    # detail: collections + split chip
+    go("diary")
+    page.locator(".ticket").first.click()
+    page.wait_for_selector("#dlg-detail[open] [data-studio-collect]")
+    page.click("#dlg-detail [data-studio-collect]")
+    page.wait_for_selector("#dlg-studio[open] [data-studio-toggle]")
+    page.locator("[data-studio-toggle]").first.check()
+    page.wait_for_timeout(200)
+    page.click("[data-studio-back]")
+    page.wait_for_selector("#dlg-detail[open]")
+    check("detail: meal added to a collection", "Best bakso" in (page.locator("#dlg-detail [data-studio-collect]").text_content() or ""))
+    page.evaluate("() => document.querySelector('#dlg-detail').close()")
+
+    # log sheet: bill scan + name ideas
+    page.locator('[data-action="log"]:visible').first.click()
+    page.wait_for_selector("#dlg-log[open] [data-studio-names]")
+    check("log: scan bill control", page.locator("#dlg-log [data-studio-bill]").count() == 1)
+    page.fill("#dlg-log [name=place]", "Bakso Pak Gun")
+    page.click("#dlg-log [data-studio-names]")
+    page.wait_for_timeout(300)
+    idea = page.locator("#studio-name-ideas [data-studio-name]").first
+    check("log: name ideas from your usual at this place", idea.count() == 1)
+    if idea.count():
+        idea.click()
+        check("log: picking an idea fills the dish", (page.input_value("#dlg-log [name=name]") or "").startswith("Bakso"))
+    page.evaluate("() => document.querySelector('#dlg-log').close()")
+
+    # looks + language, persisted
+    go("me")
+    page.click("[data-look-palette='night']")
+    page.click("[data-look-type='rounded']")
+    page.select_option("#set-lang", "id")
+    page.wait_for_timeout(300)
+    page.reload()
+    page.wait_for_selector("html[data-ready='1']")
+    page.wait_for_timeout(300)
+    state = page.evaluate("() => ({ theme: document.documentElement.dataset.theme, type: document.documentElement.dataset.type, lang: document.documentElement.lang, nav: [...document.querySelectorAll('nav a span')].map((s) => s.textContent).join('|') })")
+    check("looks: palette and type kept after reload", state["theme"] == "night" and state["type"] == "rounded", state)
+    check("language: Bahasa Indonesia kept and applied", state["lang"] == "id" and "Insights" not in state["nav"], state)
+    go("me")
+    page.select_option("#set-lang", "en")
+    page.click("[data-look-palette='receipt']")
+    page.click("[data-look-type='classic']")
+    page.wait_for_timeout(300)
+    back = page.evaluate("() => ({ theme: document.documentElement.dataset.theme || '', nav: [...document.querySelectorAll('nav a span')].map((s) => s.textContent).join('|') })")
+    check("language and looks switch back to English and Receipt", back["theme"] == "" and "Insights" in back["nav"], back)
+
+    manifest = json.loads((ROOT / "manifest.webmanifest").read_text(encoding="utf-8"))
+    check("widgets: four Windows widgets in the manifest (Quick Snap, Memory Lane, Craving Shuffle, Table Window)", len(manifest.get("widgets", [])) == 4 and all((ROOT / w["ms_ac_template"]).exists() for w in manifest["widgets"]))
+    sw = (ROOT / "sw.js").read_text(encoding="utf-8")
+    check("sw: studio files cached and widget events handled", "studio.js" in sw and "widgetinstall" in sw and "lahap-v60" in sw)
+    check("studio: no console errors", not errors, errors[:3])
     context.close()
 
 
@@ -3301,6 +3518,7 @@ def main():
 
         # ---- memory: stamps, places, buds, picker, recap, favourites ----
         memory_checks(browser, base)
+        studio_checks(browser, base)
 
         # ---- persistence ----
         page.reload()

@@ -53,3 +53,21 @@ gradient text, fake testimonials, "Get started" hero.
 - Favourite is a small heart outline that fills chili. It is the only place a heart is used.
 - Numbers off (`html[data-numbers="off"]`) hides anything marked `.num-only` and the nutrition blocks; layouts must
   still read as complete without them.
+
+## Studio, looks and languages (added 2026-11-13, run 2)
+- Studio tools (collections, food map, Share Studio, games, Ask Lahap, memory lane) open as one bottom sheet,
+  `#dlg-studio`, from a six-tile panel on Insights. Tiles are plain cards with a mono label and a serif name; no
+  gradients, no icons bigger than the label.
+- Looks are token swaps only: `:root[data-theme]` sets `--paper`, `--card`, `--ink`, `--muted`, `--line`,
+  `--accent` (Receipt is the default; Night, Matcha, Sambal, Kopi, Laut). Components must never hard-code a light
+  colour; surfaces that need translucency use `color-mix(in srgb, var(--paper) 94%, transparent)`.
+- Type styles (`:root[data-type]`: classic, rounded, mono, large) only swap `--font-display` / `--font-body` or the
+  base size; layout must not depend on a specific font.
+- Share Studio canvas is 1080 x 1350. Templates draw with the current theme tokens; doodles use four inks and one undo.
+- Table window (Memory lane sheet) shows six meals at most in one of three layouts: Scatter (tilted photo tiles),
+  Postcard (one photo, name and place behind a dashed rule) and Menu (names, dotted leaders, prices in mono).
+- Food map pins are round ink dots with the visit count; tiles are OpenStreetMap; with no network the map falls back
+  to a plain place list, never an empty grey box.
+- Languages: 14, chosen in Profile. Text is translated in place from the English source, so English stays the
+  reference. Labels in tabs, chips and the Log button never wrap (ellipsis instead); outside English the ticket
+  share button is the icon disc only. User content (dish names, places, notes, people) is never translated.

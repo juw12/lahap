@@ -77,35 +77,50 @@ Limits (honest)
 
 Tests: `python tests/test_app.py` (Playwright, 425 checks, including a real cut-out and OCR run). Design rules: `design.md`.
 
-Lahap vs PlateDiary (checked against platediary.app on 13 Nov 2026)
+Lahap vs PlateDiary (checked against platediary.app/features on 13 Nov 2026)
 
 PlateDiary is a polished native app for iPhone and Android: a private photo journal for eating out, with a free tier,
 a paid Premium tier and a separate AI add-on. Lahap is a free web app with no paid tier. Both keep the diary on your
 device with no account.
 
-What Lahap now matches from PlateDiary's free tier, in its own receipt-and-stamp look: favourites, a stamp book of
-places, place pages, pages for the people you eat with, a craving picker, a recap you can share, calories off when
-you do not want them, and food cut-outs.
+Everything on PlateDiary's feature list now has a Lahap counterpart, free:
+- Cut-outs, and several dishes from one photo: open a meal and tap Split dishes; each dish becomes its own meal.
+- Stamp book, place pages, favourites, people you eat with, a craving picker ("Makan apa?") and a month or year recap.
+- Collections: eight smart collections that fill themselves (favourites, five stars, with buds, home, delivered,
+  this month, treats, first tries) plus your own named collections.
+- Food map of every place you ate (OpenStreetMap; pin a place where you stand or by tapping the map).
+- Look & feel: six colour palettes (including a dark "Night market") and four type styles.
+- Share Studio: collage templates (grid, scatter, stack, receipt), doodles on top, and a 3 second looping video.
+- Games with your own cut-outs: Tumble, Float, Water, Magnet, Claw, Launch, Catch, Tap, Burst, Slice.
+- Bill scan: a photo of the bill fills in the total (or one line's price), read on the device in English or Bahasa.
+- Ask Lahap: questions about your own diary ("how much did I spend on bakso this month?") and a written story of
+  your week, month or year. Name ideas for a new meal from your usual dish at that place and from photos that look alike.
+- 14 interface languages: English, Bahasa Indonesia, Bahasa Melayu, Thai, Vietnamese, Traditional and Simplified
+  Chinese, Japanese, Korean, Spanish, Brazilian Portuguese, French, German, Italian.
+- Backup to iCloud Drive or Google Drive: "Back up now" opens the share sheet (Save to Files or Drive); on a computer
+  you can pick a file inside a synced iCloud Drive or Google Drive folder and Lahap rewrites it after every change.
+- Widgets: on Windows 11 the installed app offers Quick Snap, Memory Lane, Craving Shuffle and Table Window on the
+  Widgets board; in the app, Memory lane, Craving shuffle, Table window (latest meals or one collection, as Scatter,
+  Postcard or Menu) and the Save wall live under Insights, and home-screen shortcuts open
+  Log, Makan apa? and the Food map directly.
 
 Where Lahap goes further
 - Nothing to install and no store: it opens in any browser on phone or laptop, and works offline after the first visit.
-- Everything is free. There is no Premium tier and no AI add-on to buy.
+- Everything is free. There is no Premium tier and no AI add-on to buy, and nothing is sent to a server.
 - Search answers "have I eaten this?" with count, last time and place, price range and rating in one card.
 - Eating out, home-cooked and delivery live in one diary, with spend split across the three.
-- Nutrition estimates against your own goal (quiz, daily bar, one tip), and a single switch to hide all of it.
+- Nutrition estimates against your own goal, and a single switch to hide all numbers.
 - Lab turns what is in your kitchen into ranked recipes and a shopping list, typed, spoken or scanned.
-- Share cards in three templates and four backgrounds, free.
 
-Where PlateDiary is still ahead (not built here)
-- It is a native app from the App Store and Google Play, with home-screen widgets.
-- One photo of the whole table becomes separate dish cut-outs; Lahap cuts out one photo per meal.
-- Cutout collage maker, a food map, collections, themes (its Look & feel studio) and games.
-- Backups to your own iCloud Drive or a Google Drive file; Lahap's backup is a file you share yourself.
-- Bill and receipt scan that fills in prices; Lahap's scanner reads ingredient lists for the Lab only.
-- AI that names dishes from the photo (paid add-on there); Lahap never recognises the dish, you pick or type it.
-- More than a dozen app languages; Lahap's interface is English, with Bahasa Indonesia input in the Lab.
+Honest limits (what a web app cannot match today)
+- Phone home-screen widgets on iPhone and Android need a native app from the App Store or Google Play, which needs
+  developer accounts. Lahap's widgets run on Windows 11 only; phones get home-screen shortcuts instead.
+- Name ideas only know dishes already in your diary. PlateDiary's paid AI can name a dish you have never logged.
+- The 13 non-English languages were machine-translated and have not been reviewed by native speakers yet. Each covers
+  94-99 % of the interface text; the few strings left show in English. Your own dish names and notes are never translated.
+- The food map needs a connection for the map tiles; offline it lists your pinned places instead.
 
 Third-party files in `vendor/`: onnxruntime-web (MIT, Microsoft), U-2-Net small model (Apache-2.0, Xuebin Qin et al.),
-tesseract.js and its English data (Apache-2.0).
+tesseract.js and its English and Indonesian data (Apache-2.0), Leaflet 1.9.4 (BSD-2-Clause).
 
 Licence: MIT.
