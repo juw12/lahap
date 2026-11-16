@@ -91,7 +91,7 @@
       <p class="muted small">Colours and type for the whole app. Free, all of them.</p>
       <div class="swatches" role="radiogroup" aria-label="Colours">${S.PALETTES.map((palette) => `<button type="button" class="swatch${(look.palette || "receipt") === palette.id ? " on" : ""}" role="radio" aria-checked="${(look.palette || "receipt") === palette.id}" data-look-palette="${palette.id}"><span class="dots">${palette.swatch.map((colour) => `<i style="background:${colour}"></i>`).join("")}</span>${esc(palette.name)}</button>`).join("")}</div>
       <div class="chips type-chips" role="radiogroup" aria-label="Type">${S.TYPES.map((type) => `<button type="button" class="chip${(look.type || "classic") === type.id ? " on" : ""}" role="radio" aria-checked="${(look.type || "classic") === type.id}" data-look-type="${type.id}">${esc(type.name)}</button>`).join("")}</div>
-      <label class="field lang-field"><span>Language</span><select id="set-lang">${(window.LahapI18n ? window.LahapI18n.LANGS : [["en", "English"]]).map(([code, name]) => `<option value="${code}"${(settings().lang || "en") === code ? " selected" : ""}>${esc(name)}</option>`).join("")}</select></label>
+      <label class="field lang-field"><span>Language</span><span class="select-wrap"><select id="set-lang">${(window.LahapI18n ? window.LahapI18n.LANGS : [["en", "English"]]).map(([code, name]) => `<option value="${code}"${(settings().lang || "en") === code ? " selected" : ""}>${esc(name)}</option>`).join("")}</select></span></label>
     </section>
     <section class="panel studio-profile">
       <h2>Back up to iCloud Drive or Google Drive</h2>
@@ -795,10 +795,10 @@
     return `<div class="table-window" id="table-window">
       <div class="table-controls">
         <label class="sr-only" for="table-source">Show</label>
-        <select id="table-source">
+        <span class="select-wrap"><select id="table-source">
           <option value="latest"${choice.source === "latest" ? " selected" : ""}>Latest meals</option>
           ${sources.map((collection) => `<option value="${esc(collection.id)}"${choice.source === collection.id ? " selected" : ""}>${esc(collection.name)}</option>`).join("")}
-        </select>
+        </select></span>
         <div class="chips" role="radiogroup" aria-label="Style">${TABLE_STYLES.map(([key, name]) => `<button type="button" class="chip${choice.style === key ? " on" : ""}" role="radio" aria-checked="${choice.style === key}" data-table-style="${key}">${esc(name)}</button>`).join("")}</div>
       </div>
       <div class="table-body">${tableBodyHtml(choice)}</div>

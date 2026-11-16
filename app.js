@@ -1599,7 +1599,7 @@
         <section class="panel">
           <h2>Settings</h2>
           <label class="field"><span>Your name <span class="hint">shown on share cards</span></span><input type="text" id="set-name" value="${esc(state.settings.name)}" placeholder="e.g. Juwen" autocomplete="nickname"></label>
-          <label class="field"><span>Currency</span><select id="set-currency">${CURRENCIES.map((code) => `<option ${code === state.settings.currency ? "selected" : ""}>${code}</option>`).join("")}</select></label>
+          <label class="field"><span>Currency</span><span class="select-wrap"><select id="set-currency">${CURRENCIES.map((code) => `<option ${code === state.settings.currency ? "selected" : ""}>${code}</option>`).join("")}</select></span></label>
         </section>
         <section class="panel data-panel">
           <h2>Save, sync and share</h2>
