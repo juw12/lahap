@@ -97,6 +97,7 @@ Everything on PlateDiary's feature list now has a Lahap counterpart, free:
   that do not fit scroll sideways beside an icon-only Shuffle button.
 - Games with your own cut-outs: Tumble, Float, Water, Magnet, Claw, Launch, Catch, Tap, Burst, Slice. All ten
   keep a best score on this device (the four toys count plates piled, flung, dunked with a tap, or pulled in).
+  `screenshots/game-best-score.png` shows Tap scoring 5 and the Games sheet still showing "Best 5" after a reload.
 - Bill scan: a photo of the bill fills in the total (or one line's price), read on the device in English or Bahasa.
 - Ask Lahap: questions about your own diary ("how much did I spend on bakso this month?") and a written story of
   your week, month or year. Name ideas for a new meal from your usual dish at that place and from photos that look alike.
@@ -129,10 +130,11 @@ Honest limits (what a web app cannot match today)
   has the same 837 entries; sentences with a name or number in them are filled in through templates. On the screens of
   the demo diary, 616 of 716 strings translate and the other 100 are data (times, dates, money, names, areas, recipe
   lines). A scan of the source strings for Bahasa Indonesia left 128 untranslated candidates; read by hand, they are code
-  values, sample data, fragments that templates cover, and share-image text. A second model checked 4,823 translations
-  by translating them back: it flagged 227, 220 were fixed (28 of those corrected by hand) and 11 flags were rejected as
-  wrong; a hand pass then fixed 118 terms (for example one word for "bud" per language). That is a model check, not a
-  human one, so odd wording can remain.
+  values, sample data, fragments that templates cover, and share-image text. A second model checked 4,823 of the
+  10,881 translations (under half) by translating them back and flagged 227. Of those, 161 now ship the reviewer's
+  wording, 60 a wording written by hand and 6 are unchanged; a hand pass changed 200 more strings (for example one word
+  for "bud" per language). Every flag and hand change is listed in `docs/translation-qa.md`. That is a model check,
+  not a human one, so odd wording can remain.
 - Left in English on purpose: recipe steps and ingredient lines, the text drawn on share images, the share and invite
   messages, and the phrase "Makan apa?". Dates and times follow the app language; money follows the device number
   format and your currency. Your own dish names and notes are never translated.
