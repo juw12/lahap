@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lahap widget render check</title>
+<style>
+  body { margin: 0; padding: 20px; font: 14px/1.4 "Segoe UI", system-ui, sans-serif; background: #e9e6df; color: #1f1d1a; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  p.note { margin: 0 0 16px; max-width: 70ch; }
+  .board { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; align-items: start; }
+  .slot h2 { font-size: 13px; margin: 0 0 6px; font-weight: 600; }
+  .slot .card { background: #fff; border-radius: 8px; box-shadow: 0 1px 4px rgba(0, 0, 0, .18); overflow: hidden; }
+  .slot .error { color: #a40000; font-weight: 600; }
+</style>
+</head>
+<body>
+<h1>Lahap widgets, rendered</h1>
+<p class="note">Each card below is one template from <code>widgets/</code>, filled with data by the Adaptive Cards
+templating library and drawn by the Adaptive Cards JavaScript renderer. Windows 11 draws the same templates with its
+own renderer on the Widgets board, so fonts and button shapes differ there.</p>
+<div class="board" id="board"></div>
+<script src="adaptive-expressions.min.js"></script>
+<script src="adaptivecards-templating.min.js"></script>
+<script src="adaptivecards.min.js"></script>
+<script>
+  // Test harness only; the app never loads this page or these libraries.
+  async function renderAll(data) {
+    const board = document.getElementById("board");
+    board.textContent = "";
+    const manifest = await (await fetch("../../manifest.webmanifest")).json();
+    const values = data || (await (await fetch("../../widgets/data.json")).json());
+    const report = [];
+    for (const widget of manifest.widgets || []) {
+      const slot = document.createElement("section");
+      slot.className = "slot";
+      slot.dataset.tag = widget.tag;
+      const title = document.createElement("h2");
+      title.textContent = widget.name + " (" + widget.ms_ac_template + ")";
+      const holder = document.createElement("div");
+      holder.className = "card";
+      slot.append(title, holder);
+      board.append(slot);
+      const row = { tag: widget.tag, template: widget.ms_ac_template, ok: false, text: "", actions: [], error: "" };
+      try {
+        const template = await (await fetch("../../" + widget.ms_ac_template)).json();
+        const filled = new ACData.Template(template).expand({ $root: values });
+        const card = new AdaptiveCards.AdaptiveCard();
+        card.parse(filled);
+        const node = card.render();
+        holder.append(node);
+        row.ok = Boolean(node);
+        row.text = node ? node.innerText : "";
+        row.actions = [...holder.querySelectorAll("button")].map((button) => button.innerText.trim());
+        row.expectedActions = (template.actions || []).map((action) => action.title);
+        row.unresolved = /\$\{/.test(JSON.stringify(filled)) || /\$\{/.test(row.text);
+      } catch (error) {
+        row.error = String(error);
+        const message = document.createElement("p");
+        message.className = "error";
+        message.textContent = row.error;
+        holder.append(message);
+      }
+      report.push(row);
+    }
+    document.body.dataset.ready = "1";
+    window.widgetReport = report;
+    return report;
+  }
+  window.renderAll = renderAll;
+  if (!new URLSearchParams(location.search).has("wait")) renderAll();
+</script>
+</body>
+</html>

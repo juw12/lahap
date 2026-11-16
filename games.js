@@ -1,12 +1,13 @@
 /* Lahap games: ten small toys played with your own food cut-outs, on one tiny circle-physics engine.
-   Free: Tumble, Float, Water, Magnet. Also free here: Claw, Launch, Catch, Tap, Burst, Slice. */
+   Tumble, Float, Water, Magnet, Claw, Launch, Catch, Tap, Burst, Slice.
+   Every game counts what you do in it and keeps one best score, in the device store under "gameBest". */
 (function () {
   "use strict";
 
   const GAMES = [
     ["tumble", "Tumble", "Tap to drop your plates into a pile"],
     ["float", "Float", "No gravity. Fling them about"],
-    ["water", "Water", "They bob on the surface"],
+    ["water", "Water", "Tap a plate to dunk it under"],
     ["magnet", "Magnet", "Hold to pull them to your finger"],
     ["claw", "Claw", "Tap to drop the claw, win a plate"],
     ["launch", "Launch", "Drag back and let go at the stack"],
@@ -16,9 +17,33 @@
     ["slice", "Slice", "Swipe through the tossed plates"],
   ];
 
+  // every game counts something: plates piled, flung, dunked, pulled in, won, knocked, caught, tapped, popped, sliced
+  const SCORED = new Set(GAMES.map((game) => game[0]));
+
   let api = null;
   let sheet = null;
   let loops = null;
+  let best = {};
+
+  async function loadBest() {
+    try {
+      best = (await api.store.get("gameBest", {})) || {};
+    } catch (error) {
+      best = {};
+    }
+  }
+
+  // keeps the highest score per game on this device; returns true when it is a new best
+  function recordScore(mode, score) {
+    if (!SCORED.has(mode) || !(score > (best[mode] || 0))) return false;
+    best[mode] = score;
+    if (api && api.store) api.store.set("gameBest", best).catch(() => {});
+    return true;
+  }
+
+  function bestChip(key) {
+    return best[key] ? `<span class="game-best-chip">Best <b data-no-i18n>${best[key]}</b></span>` : "";
+  }
 
   function images() {
     const list = api.state.entries.filter((entry) => entry && entry.name);
@@ -32,22 +57,29 @@
     }))).then((loaded) => loaded.filter(Boolean));
   }
 
-  function open(appApi, sheetFn, loopSet) {
+  async function open(appApi, sheetFn, loopSet) {
     api = appApi;
     sheet = sheetFn;
     loops = loopSet;
+    await loadBest();
+    const anyBest = Object.keys(best).some((key) => best[key] > 0);
     sheet("Games", `
-      <p class="muted">Little toys made from your own plates. No scores are kept, nothing leaves this phone.</p>
-      <div class="studio-grid games-grid">${GAMES.map(([key, name, how]) => `<button type="button" class="studio-tile" data-game="${key}"><span class="studio-name">${name}</span><span class="studio-why">${how}</span></button>`).join("")}</div>`);
+      <p class="muted">Little toys made from your own plates. All ten keep your best score, on this phone only.</p>
+      <div class="studio-grid games-grid">${GAMES.map(([key, name, how]) => `<button type="button" class="studio-tile" data-game="${key}"><span class="studio-name">${name}</span><span class="studio-why">${how}</span>${bestChip(key)}</button>`).join("")}</div>
+      ${anyBest ? `<p class="game-reset"><button type="button" class="btn small" data-game-reset>Clear best scores</button></p>` : ""}`);
   }
 
   async function play(key) {
     const game = GAMES.find((item) => item[0] === key);
     if (!game) return;
     const pics = await images();
+    await loadBest();
     sheet(game[1], `
       <div class="game-wrap"><canvas id="game-canvas" width="720" height="960" aria-label="${game[1]} game" tabindex="0"></canvas></div>
-      <p class="muted small" id="game-status">${game[2]}.</p>`,
+      <div class="game-line">
+        <p class="muted small" id="game-status">${game[2]}.</p>
+        <p class="game-best" id="game-best"><span class="game-best-label">Best</span> <b id="game-best-value" data-no-i18n>${best[key] || 0}</b></p>
+      </div>`,
       `<button type="button" class="btn" data-studio="games">All games</button><button type="button" class="btn primary" data-game="${key}">Restart</button>`);
     start(key, document.getElementById("game-canvas"), pics);
   }
@@ -67,6 +99,9 @@
     const sparks = [];
     const pointer = { x: W / 2, y: H / 2, down: false, trail: [], startX: 0, startY: 0 };
     const game = { score: 0, misses: 0, time: 0, claw: { x: W / 2, y: 60, state: "idle", grab: null }, tray: W / 2, spawn: 0, sling: null };
+    const FLING_SPEED = 5; // canvas px per frame at release
+    const FLING_DRAG = 24; // canvas px the finger must travel, so a tap is not a fling
+    const MAGNET_REACH = 150; // canvas px from the finger
     let picIndex = 0;
     let running = true;
     let last = performance.now();
@@ -90,8 +125,23 @@
       }
     }
 
+    const bestValue = document.getElementById("game-best-value");
+    const bestLabel = document.querySelector("#game-best .game-best-label");
+    let lastScore = 0;
+
     function say(text) {
       status.textContent = text;
+    }
+
+    // called every frame; writes only when the score went up
+    function trackBest() {
+      if (game.score === lastScore) return;
+      lastScore = game.score;
+      if (!recordScore(mode, game.score)) return;
+      if (bestValue) bestValue.textContent = String(game.score);
+      if (bestLabel && bestLabel.textContent !== "New best") bestLabel.textContent = "New best";
+      const line = document.getElementById("game-best");
+      if (line) line.classList.add("is-new");
     }
 
     // set up each mode
@@ -122,7 +172,20 @@
       pointer.startX = pointer.x;
       pointer.startY = pointer.y;
       pointer.trail = [[pointer.x, pointer.y, game.time]];
-      if (mode === "tumble") add(pointer.x, 40, 50 + Math.random() * 25, { va: (Math.random() - 0.5) * 0.1 });
+      if (mode === "tumble") {
+        add(pointer.x, 40, 50 + Math.random() * 25, { va: (Math.random() - 0.5) * 0.1 });
+        game.score += 1;
+        say(`${game.score} piled`);
+      }
+      if (mode === "water") {
+        const body = hit(pointer.x, pointer.y);
+        if (body) {
+          body.vy += 14;
+          burst(body.x, body.y);
+          game.score += 1;
+          say(`${game.score} dunked`);
+        }
+      }
       if (mode === "claw" && game.claw.state === "idle") game.claw.state = "down";
       if (mode === "tap" || mode === "burst") {
         const body = hit(pointer.x, pointer.y);
@@ -130,7 +193,7 @@
           body.alive = false;
           burst(body.x, body.y);
           game.score += 1;
-          say(`${game.score} ${mode === "tap" ? "tapped" : "popped"}${mode === "tap" ? `, ${game.misses} got away` : ""}.`);
+          say(mode === "tap" ? `${game.score} tapped · ${game.misses} got away` : `${game.score} popped`);
         }
       }
       if (mode === "float") pointer.grab = hit(pointer.x, pointer.y) || null;
@@ -151,7 +214,7 @@
             body.alive = false;
             burst(body.x, body.y);
             game.score += 1;
-            say(`${game.score} sliced, ${game.misses} dropped.`);
+            say(`${game.score} sliced · ${game.misses} dropped`);
           }
         }
       }
@@ -163,6 +226,13 @@
         game.sling.vy = (pointer.startY - pointer.y) * 0.25 - 4;
         game.sling.flying = true;
       }
+      // a real fling: the finger dragged the plate and it leaves with some speed
+      const dragged = Math.hypot(pointer.x - pointer.startX, pointer.y - pointer.startY);
+      if (mode === "float" && pointer.grab && dragged > FLING_DRAG && Math.hypot(pointer.grab.vx, pointer.grab.vy) > FLING_SPEED) {
+        game.score += 1;
+        say(`${game.score} flung`);
+      }
+      if (mode === "magnet") for (const body of bodies) body.pulled = false;
       pointer.down = false;
       pointer.grab = null;
     };
@@ -190,7 +260,14 @@
         if (mode === "magnet" && pointer.down) {
           const dx = pointer.x - body.x;
           const dy = pointer.y - body.y;
-          const dist = Math.max(40, Math.hypot(dx, dy));
+          const reach = Math.hypot(dx, dy);
+          const dist = Math.max(40, reach);
+          // each plate that reaches the finger counts once per hold
+          if (!body.pulled && reach < MAGNET_REACH) {
+            body.pulled = true;
+            game.score += 1;
+            say(`${game.score} pulled in`);
+          }
           body.vx += (dx / dist) * 1.4 * dt;
           body.vy += (dy / dist) * 1.4 * dt;
         }
@@ -287,7 +364,7 @@
             claw.grab = null;
             claw.state = "idle";
             game.score += 1;
-            say(`${game.score} won. Tap to drop the claw again.`);
+            say(`${game.score} won · Tap to drop the claw again`);
           }
         }
         if (claw.grab) {
@@ -306,7 +383,7 @@
         if (sling.flying && (sling.x > W + 100 || sling.y > H + 200 || (Math.abs(sling.vx) < 0.2 && sling.y + sling.r >= H - 1))) {
           const down = bodies.filter((body) => body.target && (body.y < H - 400 || Math.abs(body.vx) > 0.5 || body.x > W - 40 || body.x < W - 320)).length;
           game.score = Math.max(game.score, down);
-          say(`${down} of 6 knocked. Drag back again.`);
+          say(`${down} of 6 knocked · Drag back again`);
           sling.flying = false;
           sling.held = true;
           sling.x = 150;
@@ -328,11 +405,11 @@
             body.alive = false;
             game.score += 1;
             burst(body.x, body.y);
-            say(`${game.score} caught, ${game.misses} dropped.`);
+            say(`${game.score} caught · ${game.misses} dropped`);
           } else if (body.y > H + 60) {
             body.alive = false;
             game.misses += 1;
-            say(`${game.score} caught, ${game.misses} dropped.`);
+            say(`${game.score} caught · ${game.misses} dropped`);
           }
         }
       }
@@ -346,7 +423,7 @@
           if (body.alive && game.time - body.born > body.life) {
             body.alive = false;
             game.misses += 1;
-            say(`${game.score} tapped, ${game.misses} got away.`);
+            say(`${game.score} tapped · ${game.misses} got away`);
           }
         }
       }
@@ -369,7 +446,7 @@
           if (body.alive && body.vy > 0 && body.y > H + 80) {
             body.alive = false;
             game.misses += 1;
-            say(`${game.score} sliced, ${game.misses} dropped.`);
+            say(`${game.score} sliced · ${game.misses} dropped`);
           }
         }
       }
@@ -446,11 +523,16 @@
         pointer.trail.forEach(([x, y], i) => (i ? context.lineTo(x, y) : context.moveTo(x, y)));
         context.stroke();
       }
-      if (["claw", "catch", "tap", "burst", "slice", "launch"].includes(mode)) {
+      if (SCORED.has(mode)) {
         context.fillStyle = ink;
         context.font = "700 44px ui-monospace, Consolas, monospace";
         context.textAlign = "right";
         context.fillText(String(game.score), W - 30, 60);
+        if (best[mode]) {
+          const word = window.LahapI18n ? window.LahapI18n.t("Best") : "Best";
+          context.font = "600 24px ui-monospace, Consolas, monospace";
+          context.fillText(`${word} ${best[mode]}`, W - 30, 96);
+        }
       }
     }
 
@@ -460,6 +542,7 @@
       last = now;
       physics(dt);
       rules(dt);
+      trackBest();
       for (let i = sparks.length - 1; i >= 0; i--) {
         const spark = sparks[i];
         spark.x += spark.vx;
@@ -479,9 +562,16 @@
   }
 
   document.addEventListener("click", (event) => {
+    const reset = event.target.closest("[data-game-reset]");
+    if (reset && api) {
+      best = {};
+      api.store.set("gameBest", best).catch(() => {});
+      open(api, sheet, loops);
+      return;
+    }
     const button = event.target.closest("[data-game]");
     if (button && api) play(button.dataset.game);
   });
 
-  window.LahapGames = { open, play, GAMES };
+  window.LahapGames = { open, play, GAMES, SCORED, recordScore, bestScores: () => Object.assign({}, best) };
 })();

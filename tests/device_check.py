@@ -5,6 +5,13 @@ on-device cut-out, Bahasa voice and the share sheet. Speech and share are replac
 see exactly what the phone OS would receive. The share stub enforces Safari's rule: share() only works while
 the tap's user activation is still active (it rejects with NotAllowedError otherwise, like iOS does).
 
+It then walks the everyday data flows: log a meal with no camera, reload half-way through logging and get the
+draft back, share a backup, and restore that backup into a second, empty browser profile (twice, to prove a
+second restore adds nothing). Each flow lands in "flows" as true/false and the last line counts them.
+
+This is device emulation (screen size, touch, user agent, and the real Safari engine for the iPhone profile).
+It is not a run on a physical phone.
+
 Usage: python tests/device_check.py [base_url] [--proxy http://host:port] [--slow-blob] [--only webkit|chromium]
 --slow-blob makes PNG encoding take 6 s (a slow phone) to prove Share still opens inside Safari's 5 s window.
 """
@@ -33,13 +40,17 @@ STUBS = r"""
   const fakeShare = async (data) => {
     const activation = navigator.userActivation ? navigator.userActivation.isActive : 'unsupported';
     const file = data && data.files && data.files[0];
-    window.__shareCalls.push({
+    const call = {
       activation,
       name: file ? file.name : null,
       type: file ? file.type : null,
       size: file ? file.size : 0,
       title: data ? data.title : null,
-    });
+      text: null,
+    };
+    window.__shareCalls.push(call);
+    // a backup is a text file: keep what the share sheet would receive so the restore flow can use it
+    if (file && /json|text\/plain/.test(file.type)) call.text = await file.text();
     if (activation === false) throw new DOMException('Share needs a user gesture', 'NotAllowedError');
   };
   Object.defineProperty(navigator, 'share', { value: fakeShare, configurable: true });
@@ -153,10 +164,114 @@ def run_device(playwright, engine_name, device_name, base, proxy, slow_blob=Fals
             }"""
         )
         results["overflow_px"] = page.evaluate("() => document.documentElement.scrollWidth - innerWidth")
+        results["flows"] = data_flows(playwright, browser, page, device_name, base)
     finally:
         results["js_errors"] = errors[:5]
         browser.close()
     return results
+
+
+def toast_text(page):
+    return page.evaluate("() => (document.querySelector('.toast') || {}).textContent || ''")
+
+
+def real_meal_names(page):
+    return page.evaluate("() => window.Lahap.state.entries.filter((entry) => !entry.sample).map((entry) => entry.name).sort()")
+
+
+def with_query(base, query):
+    return base + ("&" if "?" in base else "?") + query
+
+
+def data_flows(playwright, browser, page, device_name, base):
+    """Everyday data flows: quick log, draft restore after a reload, backup share, restore on a second profile."""
+    flows = {}
+
+    # 1. log a meal with no camera: a name is enough
+    page.evaluate("() => location.hash = 'diary'")
+    page.locator("[data-action=log]:visible").first.click()
+    page.wait_for_selector("#log-form")
+    page.fill("#log-form input[name=name]", "Device check quick meal")
+    page.locator("#log-form button[type=submit]").click()
+    page.wait_for_timeout(500)
+    flows["quick_log_saved"] = "Device check quick meal" in real_meal_names(page)
+    flows["quick_log_on_diary"] = page.locator(".ticket", has_text="Device check quick meal").count() >= 1
+
+    # 2. reload half-way through logging: the sheet comes back with what was typed
+    page.locator("[data-action=log]:visible").first.click()
+    page.wait_for_selector("#log-form")
+    page.fill("#log-form input[name=name]", "Device check draft meal")
+    page.wait_for_timeout(900)
+    page.reload()
+    page.wait_for_selector("html[data-ready='1']", timeout=30000)
+    try:
+        page.wait_for_selector("#dlg-log[open] #log-form", timeout=5000)
+        flows["draft_sheet_reopened"] = True
+        flows["draft_name_kept"] = page.input_value("#log-form input[name=name]") == "Device check draft meal"
+        flows["draft_toast"] = "Restored the meal you were logging" in toast_text(page)
+        page.locator("#log-form button[type=submit]").click()
+        page.wait_for_timeout(600)
+    except Exception:
+        flows["draft_sheet_reopened"] = False
+        flows["draft_name_kept"] = False
+        flows["draft_toast"] = False
+    flows["draft_saved_as_meal"] = "Device check draft meal" in real_meal_names(page)
+    page.reload()
+    page.wait_for_selector("html[data-ready='1']", timeout=30000)
+    page.wait_for_timeout(500)
+    flows["draft_cleared_after_save"] = not page.evaluate("() => document.getElementById('dlg-log').open")
+    if page.evaluate("() => document.getElementById('dlg-quiz')?.open"):
+        page.locator("[data-quiz-skip]").first.click()
+        page.wait_for_timeout(200)
+
+    # 3. share a backup from the profile tab
+    expected = real_meal_names(page)
+    page.evaluate("() => { window.__shareCalls.length = 0; location.hash = 'me'; }")
+    page.wait_for_selector("#share-backup")
+    page.locator("#share-backup").click()
+    page.wait_for_function("() => window.__shareCalls.some((call) => call.text)", timeout=15000)
+    call = page.evaluate("() => window.__shareCalls.find((call) => call.text)")
+    backup = json.loads(call["text"])
+    flows["backup_share_called"] = call["title"] == "Lahap backup" and call["size"] > 0
+    flows["backup_file_type"] = call["type"] in ("application/json", "text/plain")
+    flows["backup_has_my_meals"] = sorted(entry["name"] for entry in backup["entries"]) == expected
+    flows["backup_has_no_samples"] = not any(entry.get("sample") for entry in backup["entries"])
+    page.wait_for_timeout(400)
+    flows["backup_marked_done"] = page.evaluate("() => !!window.Lahap.state.settings.lastBackup")
+
+    # 4. restore it on a second, empty profile (another phone), then once more to prove nothing doubles
+    other = browser.new_context(**playwright.devices[device_name])
+    other.add_init_script(STUBS)
+    try:
+        second = other.new_page()
+        second.goto(with_query(base, "noquiz=1"))
+        second.wait_for_selector("html[data-ready='1']", timeout=30000)
+        flows["second_profile_starts_empty"] = real_meal_names(second) == []
+        second.evaluate("() => location.hash = 'me'")
+        second.wait_for_selector("#import", state="attached")
+        payload = {"name": call["name"], "mimeType": call["type"], "buffer": call["text"].encode("utf-8")}
+        second.set_input_files("#import", payload)
+        second.wait_for_function(
+            "() => ((document.querySelector('.toast') || {}).textContent || '').includes('Synced:')", timeout=15000
+        )
+        first_toast = toast_text(second)
+        flows["restore_toast"] = first_toast == f"Synced: {len(expected)} new, 0 updated, 0 removed"
+        flows["restore_meals_match"] = real_meal_names(second) == expected
+        second.evaluate("() => location.hash = 'diary'")
+        second.wait_for_timeout(400)
+        flows["restore_on_diary"] = second.locator(".ticket", has_text="Device check quick meal").count() >= 1
+        second.evaluate("() => location.hash = 'me'")
+        second.wait_for_selector("#import", state="attached")
+        second.set_input_files("#import", payload)
+        second.wait_for_function(
+            "() => ((document.querySelector('.toast') || {}).textContent || '').includes('Synced: 0 new')", timeout=15000
+        )
+        flows["second_restore_adds_nothing"] = toast_text(second) == "Synced: 0 new, 0 updated, 0 removed"
+        flows["second_restore_no_doubles"] = real_meal_names(second) == expected
+        flows["detail"] = {"meals": expected, "backup_bytes": call["size"], "restore_toast": first_toast}
+    finally:
+        other.close()
+    return flows
 
 
 def main():
@@ -181,6 +296,23 @@ def main():
             except Exception as error:
                 report.append({"device": device_name, "engine": engine_name, "crash": str(error)[:300]})
     print(json.dumps(report, indent=1))
+    passed = 0
+    total = 0
+    for row in report:
+        flows = row.get("flows") or {}
+        for name, value in flows.items():
+            if name == "detail":
+                continue
+            total += 1
+            passed += 1 if value is True else 0
+            if value is not True:
+                print(f"FAILED {row.get('device')}: {name}")
+        if "crash" in row:
+            total += 1
+            print(f"FAILED {row.get('device')}: crashed: {row['crash']}")
+    print(f"device flows: {passed}/{total} passed (emulation, not a physical phone)")
+    if passed != total:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

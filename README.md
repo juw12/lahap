@@ -70,12 +70,14 @@ Limits (honest)
 - The models (about 37 MB: onnxruntime-web, U-2-Net small, Tesseract English + Indonesian) load only the first time you use a photo or
   scan, then stay cached for offline use.
 - Install: Chrome / Android shows "Install app" or "Add to Home Screen"; on iPhone use Safari, Share, Add to
-  Home Screen. It opens full screen with its own icon. `python tests/device_check.py` runs the camera photo,
-  cut-out, Bahasa voice and share sheet in iPhone (WebKit) and Android (Chromium) profiles; not yet on a real handset.
+  Home Screen. It opens full screen with its own icon. `python tests/device_check.py` runs 36 flows (18 each in an
+  iPhone 13 WebKit profile and a Pixel 7 Chromium profile): camera photo, cut-out, Bahasa voice, share sheet, quick log,
+  draft restore, and backup share plus restore on a second empty profile. This is emulation on a computer; Lahap has
+  never been run through these checks on a real phone.
 - Suggested buds are example profiles. Invited buds are real but one-way snapshots: there is no server, so buds,
   matching and points live on each device and do not sync after the invite.
 
-Tests: `python tests/test_app.py` (Playwright, 425 checks, including a real cut-out and OCR run). Design rules: `design.md`.
+Tests: `python tests/test_app.py` (Playwright, 619 checks, including a real cut-out and OCR run). Design rules: `design.md`.
 
 Lahap vs PlateDiary (checked against platediary.app/features on 13 Nov 2026)
 
@@ -91,18 +93,25 @@ Everything on PlateDiary's feature list now has a Lahap counterpart, free:
 - Food map of every place you ate (OpenStreetMap; pin a place where you stand or by tapping the map).
 - Look & feel: six colour palettes (including a dark "Night market") and four type styles.
 - Share Studio: collage templates (grid, scatter, stack, receipt), doodles on top, and a 3 second looping video.
-- Games with your own cut-outs: Tumble, Float, Water, Magnet, Claw, Launch, Catch, Tap, Burst, Slice.
+  On a narrow phone the pen row and the template row each stay on one line in every language; template names
+  that do not fit scroll sideways beside an icon-only Shuffle button.
+- Games with your own cut-outs: Tumble, Float, Water, Magnet, Claw, Launch, Catch, Tap, Burst, Slice. All ten
+  keep a best score on this device (the four toys count plates piled, flung, dunked with a tap, or pulled in).
 - Bill scan: a photo of the bill fills in the total (or one line's price), read on the device in English or Bahasa.
 - Ask Lahap: questions about your own diary ("how much did I spend on bakso this month?") and a written story of
   your week, month or year. Name ideas for a new meal from your usual dish at that place and from photos that look alike.
 - 14 interface languages: English, Bahasa Indonesia, Bahasa Melayu, Thai, Vietnamese, Traditional and Simplified
-  Chinese, Japanese, Korean, Spanish, Brazilian Portuguese, French, German, Italian.
+  Chinese, Japanese, Korean, Spanish, Brazilian Portuguese, French, German, Italian. Field hints and control names
+  follow the language too. Tab labels are never cut: a long label wraps onto a second line at the same 12 px size,
+  and on phones the portion controls take the full sheet width (one row in English, at most two elsewhere).
 - Backup to iCloud Drive or Google Drive: "Back up now" opens the share sheet (Save to Files or Drive); on a computer
   you can pick a file inside a synced iCloud Drive or Google Drive folder and Lahap rewrites it after every change.
 - Widgets: on Windows 11 the installed app offers Quick Snap, Memory Lane, Craving Shuffle and Table Window on the
   Widgets board; in the app, Memory lane, Craving shuffle, Table window (latest meals or one collection, as Scatter,
   Postcard or Menu) and the Save wall live under Insights, and home-screen shortcuts open
-  Log, Makan apa? and the Food map directly.
+  Log, Makan apa? and the Food map directly. `screenshots/widgets-rendered.png` shows the four Windows templates
+  filled with sample data by the open-source Adaptive Cards renderer in a test page. Windows 11 draws them with its
+  own renderer, so that picture proves the templates and data bind, not the exact look on the Widgets board.
 
 Where Lahap goes further
 - Nothing to install and no store: it opens in any browser on phone or laptop, and works offline after the first visit.
@@ -116,11 +125,24 @@ Honest limits (what a web app cannot match today)
 - Phone home-screen widgets on iPhone and Android need a native app from the App Store or Google Play, which needs
   developer accounts. Lahap's widgets run on Windows 11 only; phones get home-screen shortcuts instead.
 - Name ideas only know dishes already in your diary. PlateDiary's paid AI can name a dish you have never logged.
-- The 13 non-English languages were machine-translated and have not been reviewed by native speakers yet. Each covers
-  94-99 % of the interface text; the few strings left show in English. Your own dish names and notes are never translated.
+- The 13 non-English languages are machine translations and have not been reviewed by native speakers. Each language
+  has the same 837 entries; sentences with a name or number in them are filled in through templates. On the screens of
+  the demo diary, 616 of 716 strings translate and the other 100 are data (times, dates, money, names, areas, recipe
+  lines). A scan of the source strings for Bahasa Indonesia left 128 untranslated candidates; read by hand, they are code
+  values, sample data, fragments that templates cover, and share-image text. A second model checked 4,823 translations
+  by translating them back: it flagged 227, 220 were fixed (28 of those corrected by hand) and 11 flags were rejected as
+  wrong; a hand pass then fixed 118 terms (for example one word for "bud" per language). That is a model check, not a
+  human one, so odd wording can remain.
+- Left in English on purpose: recipe steps and ingredient lines, the text drawn on share images, the share and invite
+  messages, and the phrase "Makan apa?". Dates and times follow the app language; money follows the device number
+  format and your currency. Your own dish names and notes are never translated.
+- Colour contrast is measured, not judged by eye: all six looks pass WCAG AA (4.5:1, 3:1 for large text) on 5 views and
+  6 sheets. That includes what you type into a field and the hint shown in an empty one. Text over photos is not
+  measured.
 - The food map needs a connection for the map tiles; offline it lists your pinned places instead.
 
 Third-party files in `vendor/`: onnxruntime-web (MIT, Microsoft), U-2-Net small model (Apache-2.0, Xuebin Qin et al.),
-tesseract.js and its English and Indonesian data (Apache-2.0), Leaflet 1.9.4 (BSD-2-Clause).
+tesseract.js and its English and Indonesian data (Apache-2.0), Leaflet 1.9.4 (BSD-2-Clause). Test-only files in
+`tests/fixtures/`: the Adaptive Cards renderer, templating and expressions libraries (MIT, Microsoft); the app never loads them.
 
 Licence: MIT.

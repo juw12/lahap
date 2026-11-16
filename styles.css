@@ -14,6 +14,7 @@
   --amber: #85560a;
   --amber-soft: #f3e3c2;
   --chili-soft: #f6d9d0;
+  --chili: #8f2a0a;
 
   --font-display: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
   --font-body: system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -95,6 +96,13 @@ select,
 textarea {
   font: inherit;
   color: inherit;
+}
+
+/* Field hints use the muted ink, which passes AA on every surface in all six looks.
+   The browser default (a faded grey) measured 2.8-4.5:1. */
+::placeholder {
+  color: var(--muted);
+  opacity: 1;
 }
 
 :focus-visible {
@@ -387,7 +395,7 @@ main:focus {
 }
 
 .btn.primary:hover {
-  background: #9a2f0b;
+  background: color-mix(in srgb, var(--accent) 86%, #000);
 }
 
 .btn.ghost {
@@ -400,7 +408,7 @@ main:focus {
 }
 
 .btn.danger {
-  color: #9a2f0b;
+  color: var(--chili);
 }
 
 .btn.block {
@@ -411,6 +419,13 @@ main:focus {
   display: flex;
   flex-wrap: wrap;
   gap: var(--s2);
+}
+
+/* r41: a button whose label is wider than the whole row breaks its text instead of leaving the screen */
+.btn-row > .btn {
+  max-width: 100%;
+  white-space: normal;
+  text-align: center;
 }
 
 .chips {
@@ -756,7 +771,7 @@ textarea {
 
 .score.heavy {
   background: var(--chili-soft);
-  color: #8f2a0a;
+  color: var(--chili);
 }
 
 @media (max-width: 420px) {
@@ -976,10 +991,15 @@ textarea {
   color: var(--muted);
 }
 
+/* r41: a segmented control never grows wider than its row. When a language's options do not fit
+   on one line they wrap onto a second one; 23px is still a full pill on a single 46px row. */
 .seg {
   display: inline-flex;
+  flex-wrap: wrap;
+  row-gap: 6px;
+  max-width: 100%;
   border: 1px solid var(--line-strong);
-  border-radius: 999px;
+  border-radius: 23px;
   padding: 3px;
   background: var(--card);
 }
@@ -1154,6 +1174,19 @@ dialog.sheet::backdrop {
     flex: 1 1 auto;
     padding-inline: 10px;
   }
+  /* r41: on a phone any sheet's action buttons drop to a second row when a language's labels need it */
+  .sheet-foot {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 340px) {
+  .sheet-foot .btn {
+    padding-inline: 12px;
+  }
+  .portion .seg button {
+    padding-inline: 8px;
+  }
 }
 
 .icon-btn {
@@ -1190,6 +1223,13 @@ dialog.sheet::backdrop {
   align-items: center;
 }
 
+/* r41: the photo button wraps instead of pushing the Log sheet sideways on a 320 px phone */
+.photo-pick .btn {
+  white-space: normal;
+  max-width: 100%;
+  text-align: center;
+}
+
 .photo-pick .preview {
   width: 96px;
   height: 96px;
@@ -1213,6 +1253,26 @@ dialog.sheet::backdrop {
 
 .plate-live {
   text-align: center;
+}
+
+/* r41: on phones the portion controls get the full sheet width (three options fit on one row);
+   the live plate sits above them, smaller, with its score beside it */
+@media (max-width: 480px) {
+  .plate-step {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s3);
+  }
+  .plate-step .plate-live {
+    order: -1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--s3);
+  }
+  .plate-step canvas {
+    width: 96px;
+    height: 96px;
+  }
 }
 
 .portion {
@@ -1571,7 +1631,7 @@ dialog.sheet::backdrop {
 
 .pday b.heavy {
   background: var(--chili-soft);
-  color: #8f2a0a;
+  color: var(--chili);
 }
 
 .pday b.none {
@@ -2482,6 +2542,7 @@ label.chip input {
    ghost that only lights up on hover/focus so it does not steal attention. */
 .person-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--s2);
 }
@@ -2542,7 +2603,7 @@ label.chip input {
 }
 .plate-key .pk.heavy {
   background: var(--chili-soft);
-  color: #8f2a0a;
+  color: var(--chili);
 }
 /* r9: a pending plan on the bud row, so the next step is on the row itself */
 .plan-pending {
@@ -2933,6 +2994,22 @@ label.chip input {
   }
 }
 
+/* r41: on the narrowest phones (340 px and under) the plate preview goes back to 96 px and the photo button
+   is a rounded rectangle, so a long label ("Foto aufnehmen oder auswählen") takes two lines, not four */
+@media (max-width: 340px) {
+  .photo-pick {
+    grid-template-columns: 96px minmax(0, 1fr);
+  }
+  .photo-pick .preview {
+    width: 96px;
+    height: 96px;
+  }
+  .photo-pick .btn {
+    border-radius: 16px;
+    padding-inline: var(--s3);
+  }
+}
+
 /* r20: desktop day plates big enough to read the score at a glance */
 @media (min-width: 1000px) {
   .plate-week .pday img {
@@ -3230,11 +3307,13 @@ label.chip input {
     width: 52px;
     height: 52px;
   }
+  /* r41: the stub's facts wrap onto a second line when a language's score word is long */
   .recipe-stub {
     grid-column: 1 / -1;
-    grid-auto-flow: column;
-    justify-content: start;
-    gap: var(--s3);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 4px var(--s3);
     align-items: center;
     padding: var(--s2) 0 0;
     border-left: 0;
@@ -3263,7 +3342,6 @@ label.chip input {
 .ws-scale {
   font-style: normal;
   font-weight: 400;
-  opacity: 0.7;
 }
 
 /* Insights and Taste buds cards are slips of the same receipt paper: a ruled head
@@ -3544,7 +3622,7 @@ label.chip input {
   border-radius: 999px;
   border: 1px solid var(--line-strong);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
@@ -3637,7 +3715,7 @@ label.chip input {
   height: 18px;
   border-radius: 50%;
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
   font-family: var(--font-display);
   font-style: italic;
   font-size: 13px;
@@ -3710,9 +3788,9 @@ label.chip input {
 
 /* r30: Quick add chips are receipt tear-offs - dashed edge, till type - to match the slip above */
 .chip.quick-tag {
-  border: 1px dashed rgba(29, 24, 19, 0.42);
+  border: 1px dashed color-mix(in srgb, var(--ink) 42%, transparent);
   border-radius: 4px;
-  background: #fffdf7;
+  background: var(--card);
   font-family: var(--mono, ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace);
   font-size: 13px;
   letter-spacing: 0.01em;
@@ -3795,7 +3873,7 @@ label.chip input {
 .invite-carries b {
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #2f6b3a;
+  color: var(--leaf);
 }
 .invite-carries li.never b {
   color: var(--accent);
@@ -4321,7 +4399,7 @@ html[data-numbers="off"] .num-only {
 :root[data-theme="night"] {
   --paper: #17130f; --card: #221c16; --ink: #f3eadb; --muted: #c9bba6; --line: #3a3128; --line-strong: #54473a;
   --accent: #f08a4b; --accent-ink: #1b120b; --accent-soft: #4a2a17; --leaf: #8fcf8f; --leaf-soft: #23361f;
-  --amber: #f0c060; --amber-soft: #3d3016; --chili-soft: #4a2219;
+  --amber: #f0c060; --amber-soft: #3d3016; --chili-soft: #4a2219; --chili: #ff9d80;
   --shadow: 0 1px 0 rgba(0, 0, 0, 0.4), 0 6px 18px -12px rgba(0, 0, 0, 0.8);
   color-scheme: dark;
 }
@@ -4407,8 +4485,35 @@ html[data-numbers="off"] .num-only {
 /* Share Studio */
 .studio-canvas-wrap, .game-wrap { display: grid; place-items: center; }
 #collage-canvas { width: min(100%, 360px); height: auto; aspect-ratio: 1080 / 1350; border: 1px solid var(--line); border-radius: var(--radius-sm); touch-action: none; background: var(--paper); }
-.doodle-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin-top: var(--s2); }
-.ink { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--line-strong); cursor: pointer; }
+.doodle-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: var(--s2); }
+/* r41: in every language Undo stays on the pen row and Shuffle on the template row, down to a 320 px phone.
+   No label breaks inside a chip. When a language needs more room than the phone has, the templates slide
+   sideways under Shuffle, which stays pinned at the end of the row. The 4px of padding keeps the chips'
+   enlarged tap area inside the row's scroll box. */
+.doodle-bar .chip, .template-row .chip { flex: none; white-space: nowrap; }
+.doodle-bar .chip { margin-left: auto; }
+.template-row {
+  flex-wrap: nowrap; gap: 6px; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: none;
+  padding-block: 4px; margin-block: calc(var(--s2) - 4px) 0;
+}
+.template-row::-webkit-scrollbar { display: none; }
+.template-row [data-collage-shuffle] { position: sticky; right: 0; margin-left: auto; box-shadow: -10px 0 8px -2px var(--paper); }
+.template-row [data-collage-shuffle] svg { width: 16px; height: 16px; }
+@media (max-width: 420px) {
+  .doodle-bar > span { flex-basis: 100%; }
+  .template-row .chip { padding-inline: 10px; }
+  /* on a phone Shuffle is its icon; the name stays for screen readers and as the tooltip */
+  .template-row [data-collage-shuffle] { justify-content: center; min-width: 36px; padding-inline: 0; }
+  .template-row .chip-word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
+@media (max-width: 375px) {
+  .template-row .chip { padding-inline: 8px; }
+}
+@media (max-width: 340px) {
+  .doodle-bar { gap: 4px; }
+  .doodle-bar .chip, .template-row .chip { padding-inline: 6px; font-size: 13px; }
+}
+.ink { width: 34px; height: 34px; border-radius: 50%; border: 2px solid var(--line-strong); cursor: pointer; }
 .ink.on { outline: 3px solid var(--accent); outline-offset: 2px; }
 
 /* games */
@@ -4470,15 +4575,37 @@ textarea {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* r41: a tab label is never cut with "…". The tab columns are equal unless a label's longest word needs more;
+   that column grows and the others share the rest. A label with several words (or Thai, which breaks at word
+   boundaries) wraps onto a second line; CJK words stay whole. Icons stay on one line across tabs because every
+   tab is top-aligned at the height a one-line tab used when it was centred. */
+.bottombar {
+  grid-template-columns: repeat(6, minmax(min-content, 1fr));
+}
 .bottombar a span {
   display: block;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: normal;
+  text-wrap: balance;
+  text-align: center;
+  line-height: 1.15;
 }
 .bottombar a {
-  min-width: 0;
+  align-self: stretch;
+  justify-content: flex-start;
+  min-width: 44px;
+  padding: 11px 2px 0;
+}
+.bottombar .fab-label {
+  padding-inline: 2px;
+}
+/* narrow phones: the centre column is wider so a long "Log" label clears the tabs beside it */
+@media (max-width: 380px) {
+  .bottombar {
+    grid-template-columns: repeat(3, minmax(min-content, 1fr)) minmax(min-content, 1.4fr) repeat(2, minmax(min-content, 1fr));
+  }
 }
 .week-strip > span {
   min-width: 0;
@@ -4487,9 +4614,6 @@ textarea {
   display: block;
   white-space: normal;
   overflow-wrap: anywhere;
-}
-:root:not([lang="en"]) .bottombar a span {
-  font-size: 11px;
 }
 
 /* r40: translated "Share card" labels run wider than the middle column allows, so outside English the
@@ -4604,4 +4728,263 @@ textarea {
   font-family: var(--font-mono);
   font-size: 13px;
   white-space: nowrap;
+}
+
+/* ---------------- r41: solid pass - ticket foot, bud reason, studio, hero, places, game scores ---------------- */
+/* The taste chips get their own row under the photo and the text, as wide as both, so a chip is never cut
+   to "Uma..." on a phone. The share pill sits on that same row: both are 30px tall and bottom-aligned. */
+.ticket-wrap > .ticket {
+  row-gap: 0;
+  grid-template-rows: auto auto 1fr;
+}
+.ticket-wrap > .ticket > .ticket-main {
+  display: contents;
+}
+.ticket-wrap > .ticket > .thumb {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+.ticket-wrap > .ticket .title {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: end;
+}
+.ticket-wrap > .ticket .meta {
+  grid-column: 2;
+  grid-row: 2;
+  align-self: start;
+}
+.ticket-wrap > .ticket .tags {
+  grid-column: 1 / span 2;
+  grid-row: 3;
+  align-self: end;
+  align-items: center;
+  align-content: center;
+  min-height: 30px;
+  margin-top: 8px;
+}
+.ticket-wrap > .ticket > .stub {
+  grid-column: 3;
+  grid-row: 1 / span 3;
+}
+@media (max-width: 360px) {
+  .ticket-share-label {
+    display: none;
+  }
+  .ticket-share {
+    padding: 0;
+  }
+  .ticket-wrap .ticket .tags {
+    padding-right: 44px;
+  }
+}
+
+/* the pulse says why this bud: the tastes and cuisines you share */
+.pulse-why {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.why-item {
+  color: var(--ink);
+  font-weight: 600;
+}
+/* phones: the pulse stays one compact row - a slightly tighter reason line, and between 361 and 420 px
+   (where the text sits beside both buttons) it names the first shared taste only */
+@media (max-width: 420px) {
+  .day-pulse .pulse-text {
+    gap: 1px;
+  }
+  .day-pulse .pulse-why {
+    font-size: 12.5px;
+    line-height: 1.3;
+  }
+}
+@media (min-width: 361px) and (max-width: 420px) {
+  .day-pulse .why-more {
+    display: none;
+  }
+}
+.why-area {
+  white-space: nowrap;
+}
+
+/* Share Studio on a phone: the card is sized to the screen height so the pen row under it stays
+   above the sticky action bar instead of hiding behind it */
+@media (max-width: 760px) {
+  #collage-canvas {
+    width: min(100%, 360px, calc(40vh * 0.8));
+  }
+  dialog.sheet {
+    scroll-padding-bottom: 96px;
+  }
+}
+
+/* an empty wall's note spans the wall instead of being squeezed into one tile's width */
+.memory-wall > p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+/* desktop: the On repeat photo is one square on the left, and the name, the numbers and the buttons
+   stack beside it - no more small photo floating above a full-width strip */
+@media (min-width: 761px) {
+  .answer.featured.hero-wide {
+    display: grid;
+    grid-template-columns: 148px minmax(0, 1fr);
+    column-gap: var(--s5);
+    align-items: start;
+  }
+  .answer.featured.hero-wide .answer-hero {
+    display: contents;
+  }
+  .answer.featured.hero-wide .answer-hero .answer-thumb {
+    grid-column: 1;
+    grid-row: 1 / span 3;
+    width: 148px;
+    height: 148px;
+    border-radius: 14px;
+    align-self: start;
+  }
+  .answer.featured.hero-wide .answer-hero-body,
+  .answer.featured.hero-wide dl,
+  .answer.featured.hero-wide .btn-row {
+    grid-column: 2;
+  }
+}
+
+/* Top places: the name and the amount share the first line, the visits and cuisines get the full width
+   under them, and every row is the same height */
+.place-list .place-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--s3);
+  row-gap: 2px;
+  align-items: baseline;
+  align-content: center;
+}
+.place-row .place-main {
+  display: contents;
+}
+.place-row .name {
+  grid-column: 1;
+  grid-row: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.place-row .place-amount {
+  grid-column: 2;
+  grid-row: 1;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.place-row .why {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.place-more {
+  color: var(--muted);
+}
+@media (min-width: 1100px) {
+  #view-insights .place-list {
+    grid-auto-rows: 1fr;
+  }
+}
+
+/* the narrowest phones: the bud pulse keeps its words on one full line and the two buttons drop under them */
+@media (max-width: 360px) {
+  .day-pulse {
+    flex-wrap: wrap;
+  }
+  .day-pulse .pulse-text {
+    flex: 1 1 calc(100% - 50px);
+  }
+  .day-pulse .btn.primary,
+  .day-pulse a.btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
+
+/* games keep a best score */
+.game-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px var(--s3);
+}
+.game-line > p {
+  margin: 0;
+}
+.game-best {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.game-best b {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.game-best.is-new,
+.game-best.is-new b {
+  color: var(--accent-text, var(--ink));
+  font-weight: 700;
+}
+.game-best-chip {
+  margin-top: 4px;
+  padding: 1px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+.game-best-chip b {
+  color: var(--ink);
+}
+.game-reset {
+  margin: var(--s3) 0 0;
+}
+.game-reset .btn {
+  min-height: 36px;
+}
+
+/* r41 week strip: a value never runs into the next number. Each column is at least as wide as its value and
+   its longest label word, and the four share what is left; a label breaks between words, not inside one.
+   On the narrowest phones (340 px and under) four columns cannot hold the longer languages, so the strip is
+   a two-by-two block there in every language.
+   Chinese, Japanese and Korean labels do not break between characters (keep-all). A Thai label stays on one
+   line, because the browser would otherwise split it in the middle of a single term. */
+@media (max-width: 760px) {
+  /* the gap between columns stays 8 px: at 12 px the English "Variety /100" label no longer fits its column
+     on a 390 px phone and the strip grows a second label line */
+  .week-strip {
+    grid-template-columns: repeat(4, minmax(min-content, 1fr));
+  }
+  .week-strip .ws-label {
+    overflow-wrap: break-word;
+    word-break: keep-all;
+  }
+  html[lang="th"] .week-strip .ws-label {
+    white-space: nowrap;
+  }
+}
+@media (max-width: 340px) {
+  .week-strip {
+    grid-template-columns: repeat(2, minmax(min-content, 1fr));
+    row-gap: var(--s3);
+  }
+}
+/* r41 search: a hint that is longer than the field ends with "…" instead of a cut letter */
+.search input {
+  text-overflow: ellipsis;
 }
