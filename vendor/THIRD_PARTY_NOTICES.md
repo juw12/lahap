@@ -12,3 +12,14 @@ These files are redistributed unchanged under their own licences. Lahap's own co
 
 The Apache License 2.0 text: https://www.apache.org/licenses/LICENSE-2.0.txt
 | vendor/leaflet/leaflet.js, vendor/leaflet/leaflet.css | Leaflet 1.9.4, Volodymyr Agafonkin and contributors | BSD-2-Clause, vendor/leaflet/LICENSE |
+
+## Test-only files in tests/fixtures/
+
+These three libraries are used only by `tests/fixtures/widgets.html`, the page the test suite opens to draw the
+Windows 11 widget templates. The app never loads them and the service worker does not cache them.
+
+| Path | Project | Licence |
+| --- | --- | --- |
+| tests/fixtures/adaptivecards.min.js | adaptivecards 3.0.4, Microsoft | MIT, https://github.com/microsoft/AdaptiveCards/blob/main/LICENSE |
+| tests/fixtures/adaptivecards-templating.min.js | adaptivecards-templating 2.3.1, Microsoft | MIT, https://github.com/microsoft/AdaptiveCards/blob/main/LICENSE |
+| tests/fixtures/adaptive-expressions.min.js | adaptive-expressions 4.22.3, Microsoft | MIT, https://github.com/microsoft/botbuilder-js/blob/main/LICENSE |

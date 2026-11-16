@@ -778,8 +778,1249 @@ def studio_checks(browser, base):
     manifest = json.loads((ROOT / "manifest.webmanifest").read_text(encoding="utf-8"))
     check("widgets: four Windows widgets in the manifest (Quick Snap, Memory Lane, Craving Shuffle, Table Window)", len(manifest.get("widgets", [])) == 4 and all((ROOT / w["ms_ac_template"]).exists() for w in manifest["widgets"]))
     sw = (ROOT / "sw.js").read_text(encoding="utf-8")
-    check("sw: studio files cached and widget events handled", "studio.js" in sw and "widgetinstall" in sw and "lahap-v60" in sw)
+    check("sw: studio files cached and widget events handled", "studio.js" in sw and "widgetinstall" in sw and "lahap-v61" in sw)
     check("studio: no console errors", not errors, errors[:3])
+    context.close()
+
+def solid_checks(browser, base):
+    """r41: judge asks closed - ticket footer, pulse reason, studio bar, wall text, desktop rows, game bests, contrast in every look, widget templates rendered."""
+    context = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=1, reduced_motion="reduce")
+    page = context.new_page()
+    errors = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.on("console", lambda message: errors.append(message.text) if message.type == "error" and "tile.openstreetmap" not in message.text and "ERR_" not in message.text else None)
+    page.on("dialog", lambda dialog: dialog.accept())
+    page.goto(base + "?demo=1&nosw=1")
+    page.wait_for_selector("html[data-ready='1']")
+    page.wait_for_timeout(600)
+
+    def go(view):
+        page.evaluate(f"() => location.hash = '{view}'")
+        page.wait_for_timeout(250)
+
+    def close_sheets():
+        page.evaluate("() => document.querySelectorAll('dialog[open]').forEach((d) => d.close())")
+        page.wait_for_timeout(150)
+
+    def open_studio(tile):
+        go("insights")
+        page.locator(f".studio-tile[data-studio='{tile}']").first.click()
+        page.wait_for_selector("#dlg-studio[open]")
+        page.wait_for_timeout(500)
+
+    ticket_js = """() => [...document.querySelectorAll('#view-diary .ticket-wrap')].slice(0, 10).map((wrap) => {
+      const pill = wrap.querySelector('.ticket-share').getBoundingClientRect();
+      const chips = [...wrap.querySelectorAll('.tag')];
+      const boxes = chips.map((chip) => chip.getBoundingClientRect());
+      const last = boxes.length ? boxes[boxes.length - 1] : null;
+      return {
+        name: wrap.querySelector('.title').textContent.trim().slice(0, 18),
+        cut: chips.filter((chip) => chip.scrollWidth > chip.clientWidth + 1).map((chip) => chip.textContent),
+        offLine: last ? Math.abs((pill.top + pill.height / 2) - (last.top + last.height / 2)) : 0,
+        overlap: boxes.some((box) => box.right > pill.left + 1 && box.left < pill.right - 1 && box.bottom > pill.top + 1 && box.top < pill.bottom - 1),
+        pillW: Math.round(pill.width), pillH: Math.round(pill.height),
+        outside: pill.right > wrap.getBoundingClientRect().right + 1,
+      };
+    })"""
+    for width in (390, 320):
+        page.set_viewport_size({"width": width, "height": 844})
+        go("diary")
+        tickets = page.evaluate(ticket_js)
+        check(f"ticket @ {width}: no chip is cut short", bool(tickets) and not any(t["cut"] for t in tickets), [t for t in tickets if t["cut"]][:2])
+        check(f"ticket @ {width}: share pill sits on the chip line and never covers a chip", all(t["offLine"] <= 4 and not t["overlap"] and not t["outside"] for t in tickets), [t for t in tickets if t["offLine"] > 4 or t["overlap"] or t["outside"]][:2])
+        check(f"ticket @ {width}: share pill is a 32px tap target", all(t["pillW"] >= 32 and t["pillH"] >= 32 for t in tickets), tickets[:1])
+        pulse = page.evaluate(
+            """() => {
+              const why = document.querySelector('.day-pulse .pulse-why');
+              if (!why) return null;
+              const box = why.getBoundingClientRect();
+              const pulse = why.closest('.day-pulse').getBoundingClientRect();
+              return { text: why.textContent.trim(), font: parseFloat(getComputedStyle(why).fontSize), inside: box.left >= pulse.left - 1 && box.right <= pulse.right + 1 && box.bottom <= pulse.bottom + 1,
+                       cut: why.scrollWidth > why.clientWidth + 1, visible: box.width > 0 && box.height > 0 };
+            }"""
+        )
+        check(f"bud pulse @ {width}: says why this bud (shared taste), readable and inside the card", bool(pulse) and pulse["visible"] and pulse["font"] >= 12 and pulse["inside"] and not pulse["cut"] and len(pulse["text"]) > 8, pulse)
+        check(f"solid: no sideways scroll on the diary @ {width}", page.evaluate("() => document.documentElement.scrollWidth - innerWidth") <= 0)
+    page.set_viewport_size({"width": 390, "height": 844})
+
+    # Share Studio: the doodle row belongs to the canvas, clear of the sticky foot
+    open_studio("collage")
+    page.wait_for_timeout(700)
+    bar = page.evaluate(
+        """() => {
+          const bar = document.querySelector('#dlg-studio .doodle-bar');
+          const foot = document.querySelector('#dlg-studio .sheet-foot');
+          const wrap = document.querySelector('#dlg-studio .studio-canvas-wrap');
+          if (!bar || !foot || !wrap) return null;
+          return { barBottom: Math.round(bar.getBoundingClientRect().bottom), footTop: Math.round(foot.getBoundingClientRect().top),
+                   underCanvas: bar.previousElementSibling === wrap, small: [...bar.querySelectorAll('button')].filter((b) => b.getBoundingClientRect().height < 32).length };
+        }"""
+    )
+    check("share studio: doodle row sits under the canvas, clear of the sticky buttons", bool(bar) and bar["underCanvas"] and bar["barBottom"] <= bar["footTop"] and bar["small"] == 0, bar)
+    close_sheets()
+
+    open_studio("memory")
+    page.wait_for_timeout(500)
+    wall = page.evaluate("() => [...document.querySelectorAll('#dlg-studio .memory-wall > p')].map((node) => Math.round(node.getBoundingClientRect().width))")
+    check("memory wall: the Save wall note uses the full width", bool(wall) and min(wall) >= 200, wall)
+    close_sheets()
+
+    # games: a real tap scores, the best is kept, shown and can be cleared
+    open_studio("games")
+    intro = page.locator("#dlg-studio").inner_text()
+    check("games: the list says all ten games keep a best score on this phone, not 'no scores'", "All ten keep your best score" in intro and "No scores" not in intro, intro[:120])
+    page.locator("#dlg-studio [data-game='tap']").first.click()
+    page.wait_for_selector("#game-canvas")
+    page.wait_for_timeout(500)
+    start = page.evaluate("() => ({ best: document.querySelector('#game-best-value').textContent, label: document.querySelector('#game-best .game-best-label').textContent, font: parseFloat(getComputedStyle(document.querySelector('#game-best')).fontSize) })")
+    check("games: Tap starts with Best 0 shown under the canvas", start["best"] == "0" and start["label"] == "Best" and start["font"] >= 12, start)
+    box = page.locator("#game-canvas").bounding_box()
+    scored = 0
+    for _ in range(6):
+        for row in range(1, 9):
+            for col in range(1, 7):
+                x = box["x"] + box["width"] * col / 7
+                y = box["y"] + box["height"] * row / 9
+                if 0 < y < 840:
+                    page.mouse.click(x, y)
+        page.wait_for_timeout(120)
+        scored = int(page.evaluate("() => document.querySelector('#game-best-value').textContent") or 0)
+        if scored > 0:
+            break
+    played = page.evaluate("() => ({ label: document.querySelector('#game-best .game-best-label').textContent, isNew: document.querySelector('#game-best').classList.contains('is-new'), status: document.querySelector('#game-status').textContent, kept: window.LahapGames.bestScores().tap || 0 })")
+    check("games: tapping a plate scores and the sheet shows 'New best'", scored > 0 and played["label"] == "New best" and played["isNew"] and "tapped" in played["status"], played)
+    check("games: the score on the sheet is the one kept", played["kept"] == scored, played)
+    page.wait_for_timeout(400)
+    page.reload()
+    page.wait_for_selector("html[data-ready='1']")
+    page.wait_for_timeout(400)
+    open_studio("games")
+    kept = page.evaluate(
+        """() => {
+          const tile = document.querySelector("#dlg-studio [data-game='tap']");
+          const chip = tile && tile.querySelector('.game-best-chip');
+          const reset = document.querySelector('#dlg-studio [data-game-reset]');
+          return { chip: chip ? chip.textContent.trim() : '', chipFont: chip ? parseFloat(getComputedStyle(chip).fontSize) : 0, chipCut: chip ? chip.scrollWidth > chip.clientWidth + 1 : true,
+                   chips: document.querySelectorAll('#dlg-studio .game-best-chip').length,
+                   resetH: reset ? Math.round(reset.getBoundingClientRect().height) : 0, resetW: reset ? Math.round(reset.getBoundingClientRect().width) : 0,
+                   wide: document.querySelector('#dlg-studio').scrollWidth > document.querySelector('#dlg-studio').clientWidth + 1 };
+        }"""
+    )
+    check("games: best score survives a reload and shows on the game tile", kept["chip"].endswith(str(scored)) and kept["chip"].startswith("Best") and kept["chips"] == 1 and kept["chipFont"] >= 12 and not kept["chipCut"], kept)
+    check("games: 'Clear best scores' is a 32px tap target and the list does not scroll sideways", kept["resetH"] >= 32 and kept["resetW"] >= 32 and not kept["wide"], kept)
+    page.locator("#dlg-studio [data-game-reset]").click()
+    page.wait_for_timeout(400)
+    cleared = page.evaluate("() => ({ chips: document.querySelectorAll('#dlg-studio .game-best-chip').length, reset: document.querySelectorAll('#dlg-studio [data-game-reset]').length, best: Object.keys(window.LahapGames.bestScores()).length })")
+    check("games: clearing removes every best score and the button", cleared == {"chips": 0, "reset": 0, "best": 0}, cleared)
+    api = page.evaluate("() => ({ unknown: window.LahapGames.recordScore('nope', 9), lower: (window.LahapGames.recordScore('tap', 5), window.LahapGames.recordScore('tap', 3)), best: window.LahapGames.bestScores().tap, scored: [...window.LahapGames.SCORED].sort().join(','), all: window.LahapGames.GAMES.every((game) => window.LahapGames.SCORED.has(game[0])) })")
+    check("games: all ten games keep a best, an unknown game keeps none and a lower score never replaces the best", api["unknown"] is False and api["lower"] is False and api["best"] == 5 and api["all"] and api["scored"] == "burst,catch,claw,float,launch,magnet,slice,tap,tumble,water", api)
+
+    # games: the four free toys count what you do in them, with a real pointer
+    def game_state(key):
+        return page.evaluate(
+            """(key) => ({ best: Number(document.querySelector('#game-best-value').textContent), label: document.querySelector('#game-best .game-best-label').textContent,
+                          status: document.querySelector('#game-status').textContent, kept: window.LahapGames.bestScores()[key] || 0 })""",
+            key,
+        )
+
+    def start_game(key):
+        close_sheets()
+        open_studio("games")
+        page.locator(f"#dlg-studio [data-game='{key}']").first.click()
+        page.wait_for_selector("#game-canvas")
+        page.wait_for_timeout(400)
+        first = game_state(key)
+        return page.locator("#game-canvas").bounding_box(), first
+
+    def grid_points(area):
+        for row in range(1, 9):
+            for col in range(1, 7):
+                x = area["x"] + area["width"] * col / 7
+                y = area["y"] + area["height"] * row / 9
+                if 0 < y < 840:
+                    yield x, y
+
+    area, first = start_game("tumble")
+    for index in range(3):
+        page.mouse.click(area["x"] + area["width"] * (index + 1) / 4, area["y"] + area["height"] / 2)
+        page.wait_for_timeout(80)
+    page.wait_for_timeout(200)
+    state = game_state("tumble")
+    check("games: Tumble starts with Best 0 and counts each plate dropped", first["best"] == 0 and first["label"] == "Best" and state["best"] == 3 and state["kept"] == 3 and state["status"] == "3 piled" and state["label"] == "New best", {"first": first, "after": state})
+
+    area, first = start_game("float")
+    for x, y in grid_points(area):
+        page.mouse.move(x, y)
+        page.mouse.down()
+        page.mouse.move(x + 60, y + 40, steps=2)
+        page.mouse.up()
+        if game_state("float")["kept"] > 0:
+            break
+    page.wait_for_timeout(200)
+    state = game_state("float")
+    check("games: Float counts a plate that is grabbed and flung", first["best"] == 0 and state["best"] >= 1 and state["kept"] == state["best"] and "flung" in state["status"], {"first": first, "after": state})
+    before = state["best"]
+    for x, y in list(grid_points(area))[:12]:
+        page.mouse.click(x, y)
+    page.wait_for_timeout(200)
+    check("games: Float does not count a tap without a fling", game_state("float")["best"] == before, game_state("float"))
+
+    area, first = start_game("water")
+    page.wait_for_timeout(900)
+    for _ in range(4):
+        for x, y in grid_points(area):
+            page.mouse.click(x, y)
+        page.wait_for_timeout(150)
+        if game_state("water")["kept"] > 0:
+            break
+    state = game_state("water")
+    check("games: Water counts a plate that is tapped under", first["best"] == 0 and "dunk" in first["status"] and state["best"] >= 1 and state["kept"] == state["best"] and "dunked" in state["status"], {"first": first, "after": state})
+
+    area, first = start_game("magnet")
+    page.mouse.move(area["x"] + area["width"] / 2, area["y"] + area["height"] / 2)
+    page.mouse.down()
+    page.wait_for_timeout(2500)
+    held = game_state("magnet")
+    page.wait_for_timeout(600)
+    still = game_state("magnet")
+    page.mouse.up()
+    check("games: Magnet counts each plate pulled to the finger, once per hold", first["best"] == 0 and held["best"] >= 1 and held["kept"] == held["best"] and "pulled in" in held["status"] and still["best"] <= 10, {"first": first, "held": held, "still": still})
+
+    close_sheets()
+    open_studio("games")
+    chips = page.evaluate("() => [...document.querySelectorAll('#dlg-studio [data-game]')].filter((tile) => tile.querySelector('.game-best-chip')).map((tile) => tile.dataset.game).sort().join(',')")
+    check("games: the four toys show their best on the list next to the scored games", chips == "float,magnet,tap,tumble,water", chips)
+    close_sheets()
+    open_studio("games")
+    page.locator("#dlg-studio [data-game-reset]").click()
+    page.wait_for_timeout(300)
+    close_sheets()
+
+    # contrast: WCAG AA for every text node, in every look, on every view and the main sheets
+    contrast_js = (ROOT / "tests" / "fixtures" / "contrast.js").read_text(encoding="utf-8")
+    set_theme = "(theme) => { if (theme === 'receipt') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = theme; }"
+
+    def open_detail():
+        go("diary")
+        page.locator(".ticket").first.click()
+        page.wait_for_selector("#dlg-detail[open]")
+
+    def open_log():
+        go("diary")
+        page.locator('[data-action="log"]:visible').first.click()
+        page.wait_for_selector("#dlg-log[open]")
+
+    def open_game():
+        open_studio("games")
+        page.locator("#dlg-studio [data-game='tap']").first.click()
+        page.wait_for_selector("#game-canvas")
+        page.wait_for_timeout(300)
+
+    sheets = {
+        "meal sheet": open_detail,
+        "log sheet": open_log,
+        "share studio": lambda: open_studio("collage"),
+        "memory": lambda: open_studio("memory"),
+        "games list": lambda: open_studio("games"),
+        "tap game": open_game,
+    }
+    themes = page.evaluate("() => window.LahapStudioLogic.PALETTES.map((p) => p.id)")
+    check("looks: six palettes to measure", len(themes) == 6, themes)
+    field_js = (ROOT / "tests" / "fixtures" / "field-contrast.js").read_text(encoding="utf-8")
+    field_values = 0
+    field_hints = 0
+    field_failures = []
+    measured_total = 0
+    skipped_total = 0
+    for theme in themes:
+        failures = []
+        thin = []
+        page.evaluate(set_theme, theme)
+        for view in ("diary", "insights", "lab", "buds", "me"):
+            go(view)
+            found = page.evaluate(contrast_js)
+            measured_total += found["measured"]
+            skipped_total += found["skipped"]
+            if found["measured"] < 20:
+                thin.append(view)
+            failures += [dict(item, where=view) for item in found["failures"]]
+            fields = page.evaluate(field_js)
+            field_values += fields["values"]
+            field_hints += fields["hints"]
+            field_failures += [(theme, view, f["field"], f["kind"], f["ratio"]) for f in fields["failures"]]
+        for name, opener in sheets.items():
+            opener()
+            found = page.evaluate(contrast_js)
+            measured_total += found["measured"]
+            skipped_total += found["skipped"]
+            if found["measured"] < 4:
+                thin.append(name)
+            failures += [dict(item, where=name) for item in found["failures"]]
+            fields = page.evaluate(field_js)
+            field_values += fields["values"]
+            field_hints += fields["hints"]
+            field_failures += [(theme, name, f["field"], f["kind"], f["ratio"]) for f in fields["failures"]]
+            close_sheets()
+        check(f"contrast: {theme} look - every text meets WCAG AA (4.5:1, 3:1 large) on 5 views and 6 sheets", not failures and not thin, {"thin": thin, "fail": [(f["where"], f["cls"], f["text"], f["ratio"]) for f in failures[:4]]})
+    page.evaluate(set_theme, "receipt")
+    check("contrast: the check really measured the app (over 5,000 text nodes, under 2% skipped as text over a photo)", measured_total > 5000 and skipped_total < measured_total * 0.02, {"measured": measured_total, "skipped": skipped_total})
+    broken = page.evaluate(
+        """(source) => {
+          const probe = document.createElement('p');
+          probe.textContent = 'contrast self test';
+          probe.style.cssText = 'color:#999;background:#fff;font-size:14px;';
+          document.querySelector('.view:not([hidden])').appendChild(probe);
+          const found = (0, eval)('(' + source + ')')();
+          probe.remove();
+          return found.failures.filter((f) => f.text === 'contrast self test').length;
+        }""",
+        contrast_js,
+    )
+    check("contrast: the check fails grey-on-white text when it is planted (self test)", broken == 1, broken)
+
+    # fields: the typed value and the hint of every visible text field, in the same six looks
+    check("contrast: typed text in every field meets WCAG AA in all six looks", not [f for f in field_failures if f[3] == "value"], [f for f in field_failures if f[3] == "value"][:4])
+    check("contrast: the hint in every empty field meets WCAG AA in all six looks", not [f for f in field_failures if f[3] == "placeholder"], [f for f in field_failures if f[3] == "placeholder"][:4])
+    check("contrast: the field check really measured the app (over 40 typed values and 30 hints)", field_values > 40 and field_hints > 30, {"values": field_values, "hints": field_hints})
+    planted_field = page.evaluate(
+        """(source) => {
+          const style = document.createElement('style');
+          style.textContent = '#field-plant::placeholder { color: #cccccc; opacity: 1; }';
+          document.head.appendChild(style);
+          const plant = document.createElement('input');
+          plant.id = 'field-plant';
+          plant.placeholder = 'planted pale hint';
+          plant.style.cssText = 'background:#fff;color:#bbb;width:200px;height:40px;';
+          document.querySelector('.view:not([hidden])').appendChild(plant);
+          const found = (0, eval)('(' + source + ')')();
+          plant.remove();
+          style.remove();
+          return found.failures.filter((f) => f.field === 'field-plant').map((f) => f.kind).sort();
+        }""",
+        field_js,
+    )
+    check("contrast: a pale hint and pale typed text are both caught when planted (self test)", planted_field == ["placeholder", "value"], planted_field)
+
+    # widgets: the app's own snapshot bound into every template and drawn by the Adaptive Cards renderer
+    go("diary")
+    read_snapshot = "async () => { const cache = await caches.open('lahap-widgets'); const hit = await cache.match('widget-data.json'); return hit ? await hit.json() : null; }"
+    snapshot = None
+    for _ in range(40):
+        snapshot = page.evaluate(read_snapshot)
+        if snapshot and snapshot.get("count", 0) > 0:
+            break
+        page.wait_for_timeout(250)
+    check("widgets: the app wrote a snapshot of the diary for the widgets", bool(snapshot) and snapshot.get("count", 0) > 0 and bool(snapshot.get("craving")), {k: (snapshot or {}).get(k) for k in ("count", "craving", "memoryLabel")})
+    root = base.rsplit("/index.html", 1)[0]
+    card_page = context.new_page()
+    card_errors = []
+    card_page.on("pageerror", lambda error: card_errors.append(str(error)))
+    card_page.goto(root + "/tests/fixtures/widgets.html?wait=1")
+    card_page.wait_for_function("() => typeof window.renderAll === 'function'")
+    manifest = json.loads((ROOT / "manifest.webmanifest").read_text(encoding="utf-8"))
+    for label, data in (("app snapshot", snapshot), ("fallback data.json", None)):
+        rows = card_page.evaluate("(data) => window.renderAll(data)", data)
+        bad = [row for row in rows if not row["ok"] or row["unresolved"] or row["error"] or "${" in row["text"] or len(row["text"].strip()) < 10]
+        check(f"widgets: all {len(manifest['widgets'])} templates render with the {label}, nothing left unbound", len(rows) == len(manifest["widgets"]) == 4 and not bad, [(row["tag"], row["error"], row["text"][:60]) for row in bad])
+        check(f"widgets: every card shows its action buttons ({label})", all(row["actions"] == row["expectedActions"] and row["actions"] for row in rows), [(row["tag"], row["actions"], row["expectedActions"]) for row in rows])
+        if data:
+            everything = " ".join(row["text"] for row in rows)
+            wanted = [str(data["count"]), data["craving"], data.get("memoryLabel") or ""]
+            check("widgets: the cards show this diary's own numbers and dishes", all(value and value in everything for value in wanted), {"wanted": wanted, "got": everything[:200]})
+    check("widgets: render page has no JS errors", not card_errors, card_errors[:3])
+    card_page.close()
+    sw = (ROOT / "sw.js").read_text(encoding="utf-8")
+    check("widgets: the test-only renderer is never cached or loaded by the app", "adaptivecards" not in sw and "adaptivecards" not in (ROOT / "index.html").read_text(encoding="utf-8"))
+
+    # languages: composed text, templates and dates follow the chosen language; names stay exactly as typed
+    close_sheets()
+    tables = page.evaluate(
+        """() => {
+          const strings = window.LahapI18nStrings, codes = Object.keys(strings);
+          const slots = (text) => (String(text).match(/\\{\\d\\}/g) || []).sort().join('');
+          const base = Object.keys(strings[codes[0]]).sort().join('\\n');
+          const bad = [];
+          for (const code of codes) {
+            for (const [key, value] of Object.entries(strings[code])) {
+              if (!value || !String(value).trim()) bad.push(code + ': empty: ' + key);
+              else if (slots(key) !== slots(value)) bad.push(code + ': slots: ' + key);
+              else if (key.startsWith('# ') && !String(value).includes('#')) bad.push(code + ': count: ' + key);
+            }
+          }
+          return { codes: codes.length, keys: Object.keys(strings[codes[0]]).length, same: codes.every((code) => Object.keys(strings[code]).sort().join('\\n') === base), bad: bad.slice(0, 6), badCount: bad.length };
+        }"""
+    )
+    check("languages: all 13 translations carry the same keys", tables["codes"] == 13 and tables["same"] and tables["keys"] >= 600, {key: tables[key] for key in ("codes", "keys", "same")})
+    check("languages: no empty text, every {n} slot and # count kept in every translation", tables["badCount"] == 0, tables["bad"])
+    rules = page.evaluate(
+        """() => {
+          const tw = (code, text) => window.LahapI18n.translateWith(code, text);
+          const names = [...new Set(window.Lahap.state.entries.map((entry) => entry.name))];
+          return {
+            template: tw('id', 'Eaten 5 times'),
+            status: tw('id', '3 tapped · 1 got away'),
+            joiner: tw('id', '· You both like'),
+            match: tw('id', '87% match'),
+            cuisine: tw('ja', 'Japanese'),
+            recap: tw('id', 'November 2026 in food'),
+            names: names.length,
+            namesChanged: names.filter((name) => Object.keys(window.LahapI18nStrings).some((code) => { const out = tw(code, name); return out !== null && out !== name; })).slice(0, 5),
+            typed: tw('id', 'Nasi goreng kampung Bu Sri'),
+          };
+        }"""
+    )
+    check("languages: a template with a number is translated (Eaten 5 times)", rules["template"] == "Dimakan 5 kali", rules["template"])
+    check("languages: a game status is translated part by part", bool(rules["status"]) and "tapped" not in rules["status"] and "got away" not in rules["status"] and rules["status"].startswith("3 ") and " · 1 " in rules["status"], rules["status"])
+    check("languages: text that starts with the '·' joiner is translated and keeps it", bool(rules["joiner"]) and rules["joiner"].startswith("· ") and "You both" not in rules["joiner"], rules["joiner"])
+    check("languages: '% match' keeps its number", bool(rules["match"]) and "87%" in rules["match"] and "match" not in rules["match"], rules["match"])
+    check("languages: a cuisine is a cuisine label, not a language name", rules["cuisine"] == "和食", rules["cuisine"])
+    check("languages: the recap title keeps its month", bool(rules["recap"]) and "November 2026" in rules["recap"] and "in food" not in rules["recap"], rules["recap"])
+    check("languages: dish names stay as typed in all 13 languages", rules["names"] >= 5 and not rules["namesChanged"] and rules["typed"] is None, rules)
+    flows = page.evaluate(
+        """() => {
+          const samples = [
+            'We went: +30 pts',
+            'Makan with Rina',
+            'Plan makan at Krua Thai',
+            'Plan makan with Rina',
+            'Plan saved with Rina',
+            'Rina removed',
+            'Rina added to your buds',
+            'Logged Soto ayam',
+            'Updated Soto ayam',
+            'Logged Soto ayam · +10 connection points',
+            'Photo of Soto ayam',
+            'Plate drawing of Soto ayam',
+            'Your plate is empty',
+            'somewhere new',
+            'Delete this meal?',
+            'Remove the 12 sample meals? Your own meals stay.',
+            'Erase every meal, photo, bud and plan on this device? Export a backup first if you want to keep them.',
+            'Prices now shown in IDR',
+            'Shopping list copied (8 items)',
+            '. Your body burns about 2100 kcal a day (Mifflin-St Jeor, 1500 kcal at rest, times your activity), minus 300 kcal for your goal.',
+          ];
+          const codes = Object.keys(window.LahapI18nStrings);
+          const missing = [];
+          const lostData = [];
+          for (const sample of samples) {
+            for (const code of codes) {
+              const out = window.LahapI18n.translateWith(code, sample);
+              if (out === null || out === sample) missing.push(code + ': ' + sample.slice(0, 40));
+              else {
+                for (const data of ['Rina', 'Krua Thai', 'Soto ayam', '2100', '1500', '300', '+30', '+10', 'IDR']) {
+                  if (sample.includes(data) && !out.includes(data)) lostData.push(code + ': ' + sample.slice(0, 30) + ' lost ' + data);
+                }
+              }
+            }
+          }
+          return { samples: samples.length, codes: codes.length, missing: missing.slice(0, 8), missingCount: missing.length, lostData: lostData.slice(0, 8), lostCount: lostData.length, logged: window.LahapI18n.translateWith('id', 'Logged Soto ayam') };
+        }"""
+    )
+    check("languages: the makan-plan flow, toasts, confirm boxes and empty states translate in all 13 languages", flows["samples"] >= 20 and flows["codes"] == 13 and flows["missingCount"] == 0, flows["missing"])
+    check("languages: names, places and numbers inside a translated sentence stay as they are", flows["lostCount"] == 0 and "Soto ayam" in (flows["logged"] or ""), flows["lostData"] or flows["logged"])
+    go("me")
+    page.select_option("#set-lang", "id")
+    page.wait_for_timeout(500)
+    go("diary")
+    page.wait_for_timeout(400)
+    diary_id = page.evaluate(
+        """() => {
+          const names = new Set(window.Lahap.state.entries.map((entry) => entry.name));
+          const titles = [...document.querySelectorAll('#view-diary .ticket .title')].map((node) => node.textContent.trim());
+          return {
+            lang: document.documentElement.lang,
+            heads: [...document.querySelectorAll('#view-diary .day-head h2')].map((node) => node.textContent.trim()),
+            titles: titles.length,
+            changed: titles.filter((title) => !names.has(title)).slice(0, 4),
+          };
+        }"""
+    )
+    # month short names are left out: Jan, Feb, Mar, Apr, Jun, Jul, Sep and Nov are spelled the same in Bahasa Indonesia
+    english_day = re.compile(r"\b(Today|Yesterday|Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b")
+    local_day = re.compile(r"^(Min|Sen|Sel|Rab|Kam|Jum|Sab)\b")
+    heads = diary_id["heads"]
+    dated_heads = [head for head in heads if head not in ("Hari ini", "Kemarin")]
+    check("languages: diary day headings follow the app language (Bahasa Indonesia)", diary_id["lang"] == "id" and len(heads) >= 3 and not [head for head in heads if english_day.search(head)] and len(dated_heads) >= 1 and all(local_day.search(head) for head in dated_heads), heads[:5])
+    check("languages: meal names on the diary stay as typed", diary_id["titles"] >= 3 and not diary_id["changed"], diary_id["changed"])
+    go("buds")
+    page.wait_for_timeout(400)
+    buds_id = page.evaluate(
+        """() => {
+          const known = new Set(window.Lahap.PEOPLE ? window.Lahap.PEOPLE.map((person) => person.name) : []);
+          const labels = [...document.querySelectorAll('#view-buds .match')].map((node) => node.textContent.trim());
+          const names = [...document.querySelectorAll('#view-buds .name')].map((node) => node.childNodes[0] ? node.childNodes[0].textContent.trim() : '');
+          return { labels: labels.slice(0, 4), names: names.slice(0, 4), known: known.size };
+        }"""
+    )
+    check("languages: the bud '% match' label is translated, with its number", len(buds_id["labels"]) >= 1 and all(re.search(r"\d+%", label) and "match" not in label for label in buds_id["labels"]), buds_id)
+    open_studio("games")
+    page.locator("#dlg-studio [data-game='tap']").first.click()
+    page.wait_for_selector("#game-canvas")
+    page.wait_for_timeout(500)
+    game_id = page.evaluate("() => ({ label: document.querySelector('#game-best .game-best-label').textContent.trim(), want: window.LahapI18nStrings.id['Best'], value: document.querySelector('#game-best-value').textContent.trim() })")
+    check("languages: the game 'Best' label is translated and the score stays a number", game_id["label"] == game_id["want"] != "Best" and game_id["value"].isdigit(), game_id)
+    close_sheets()
+    go("me")
+    asked = page.evaluate(
+        """() => {
+          const original = window.confirm;
+          let message = '';
+          window.confirm = (text) => { message = String(text); return false; };
+          const before = window.Lahap.state.entries.length;
+          document.querySelector('#erase').click();
+          window.confirm = original;
+          return { message, before, after: window.Lahap.state.entries.length, want: window.LahapI18nStrings.id['Erase every meal, photo, bud and plan on this device? Export a backup first if you want to keep them.'] };
+        }"""
+    )
+    check("languages: the Erase confirm box follows the app language, and saying no erases nothing", bool(asked["message"]) and asked["message"] == asked["want"] and "Erase every" not in asked["message"] and asked["before"] == asked["after"] >= 5, {key: str(asked[key])[:70] for key in asked})
+    page.select_option("#set-lang", "en")
+    page.wait_for_timeout(500)
+    go("diary")
+    back_heads = page.evaluate("() => [...document.querySelectorAll('#view-diary .day-head h2')].map((node) => node.textContent.trim())")
+    check("languages: switching back to English restores the English diary", page.evaluate("() => document.documentElement.lang") == "en" and "Today" in back_heads, back_heads[:3])
+
+    # desktop: featured answer and Top places
+    desktop = context.new_page()
+    desktop.set_viewport_size({"width": 1280, "height": 900})
+    desktop.on("pageerror", lambda error: errors.append(str(error)))
+    desktop.goto(base + "?demo=1&nosw=1")
+    desktop.wait_for_selector("html[data-ready='1']")
+    desktop.wait_for_timeout(600)
+    hero = desktop.evaluate(
+        """() => {
+          const hero = document.querySelector('.answer.featured');
+          if (!hero) return null;
+          const thumb = hero.querySelector('.answer-thumb'), stats = hero.querySelector('dl');
+          if (!thumb || !stats) return { thumb: !!thumb, stats: !!stats };
+          const t = thumb.getBoundingClientRect(), s = stats.getBoundingClientRect(), h = hero.getBoundingClientRect();
+          return { w: Math.round(t.width), h: Math.round(t.height), beside: s.left >= t.right - 1, inside: s.right <= h.right + 1 && t.bottom <= h.bottom + 1 };
+        }"""
+    )
+    check("desktop: the 'On repeat' photo is a real size with its numbers beside it", bool(hero) and hero.get("w", 0) >= 140 and hero.get("h", 0) >= 140 and hero.get("beside") and hero.get("inside"), hero)
+    desktop.evaluate("() => location.hash = 'insights'")
+    desktop.wait_for_timeout(500)
+    places = desktop.evaluate(
+        """() => [...document.querySelectorAll('#view-insights .place-list .place-row')].map((row) => {
+          const r = row.getBoundingClientRect(), amount = row.querySelector('.place-amount').getBoundingClientRect(), name = row.querySelector('.name');
+          return { h: Math.round(r.height), gap: Math.round(r.right - amount.right), cut: name.scrollWidth > name.clientWidth + 1 && !name.title && getComputedStyle(name).textOverflow !== 'ellipsis' };
+        })"""
+    )
+    heights = sorted({row["h"] for row in places})
+    check("desktop: Top places rows are one height with amounts flush right", len(places) >= 2 and len(heights) == 1 and len({row["gap"] for row in places}) == 1, places[:4])
+    check("solid: no sideways scroll on desktop insights", desktop.evaluate("() => document.documentElement.scrollWidth - innerWidth") <= 0)
+    desktop.close()
+
+    check("solid: no console errors", not errors, errors[:3])
+    context.close()
+
+
+GATE_AUDIT_JS = """(rootSelector) => {
+  const root = rootSelector ? document.querySelector(rootSelector) : document.body;
+  const seen = (el) => {
+    const box = el.getBoundingClientRect();
+    if (box.width <= 0 || box.height <= 0) return false;
+    if (el.checkVisibility && !el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) return false;
+    if (!rootSelector && el.closest('dialog:not([open])')) return false;
+    return true;
+  };
+  // a checkbox or radio inside a label is tapped through the label, so the label is what gets measured
+  const target = (el) => ((el.type === 'checkbox' || el.type === 'radio') && el.closest('label')) || el;
+  const label = (el) => (el.textContent || el.getAttribute('aria-label') || el.getAttribute('name') || el.id || el.className || '').toString().trim().slice(0, 28);
+  const small = [...root.querySelectorAll('button, a, input, select, [role=button]')]
+    .filter(seen)
+    .filter((el) => target(el).getBoundingClientRect().width < 32 || target(el).getBoundingClientRect().height < 32)
+    .map((el) => {
+      const box = target(el).getBoundingClientRect();
+      return el.tagName.toLowerCase() + (el.type ? ':' + el.type : '') + ' "' + label(el) + '" ' + Math.round(box.width) + 'x' + Math.round(box.height);
+    });
+  const tiny = [...root.querySelectorAll('*')]
+    .filter((el) => el.children.length === 0 && el.textContent.trim() && seen(el))
+    .filter((el) => !['SCRIPT', 'STYLE', 'OPTION', 'TITLE'].includes(el.tagName) && !el.closest('svg'))
+    .filter((el) => parseFloat(getComputedStyle(el).fontSize) < 12)
+    .map((el) => el.tagName.toLowerCase() + ' "' + el.textContent.trim().slice(0, 24) + '" ' + getComputedStyle(el).fontSize);
+  const body = rootSelector ? root.querySelector('.sheet-body') : null;
+  const box = root.getBoundingClientRect();
+  return {
+    open: rootSelector ? !!root.open : true,
+    page: document.documentElement.scrollWidth - window.innerWidth,
+    sheet: body ? body.scrollWidth - body.clientWidth : 0,
+    outside: rootSelector ? (box.left < -0.5 || box.right > window.innerWidth + 0.5) : false,
+    targets: root.querySelectorAll('button, a, input, select, [role=button]').length,
+    small: [...new Set(small)],
+    tiny: [...new Set(tiny)],
+  };
+}"""
+
+GATE_PLANT_JS = """() => {
+  const holder = document.createElement('div');
+  holder.id = 'gate-plant';
+  holder.innerHTML = '<button type="button" style="position:fixed;top:70px;left:4px;width:20px;height:20px;min-height:0;padding:0">x</button>'
+    + '<span style="position:fixed;top:100px;left:4px;font-size:10px">planted tiny text</span>'
+    + '<div style="width:150vw;height:1px"></div>';
+  document.body.appendChild(holder);
+}"""
+
+
+def gate_checks(browser, base):
+    """r41: the layout gates measured directly - five tabs and seven sheets at 320, 390 and 1280 px: nothing scrolls sideways, no tap target under 32 px, no text under 12 px."""
+    context = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=1, reduced_motion="reduce")
+    page = context.new_page()
+    errors = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.on("console", lambda message: errors.append(message.text) if message.type == "error" and "tile.openstreetmap" not in message.text and "ERR_" not in message.text else None)
+    page.on("dialog", lambda dialog: dialog.accept())
+    page.goto(base + "?demo=1&nosw=1")
+    page.wait_for_selector("html[data-ready='1']")
+    page.wait_for_timeout(600)
+
+    def go(view):
+        page.evaluate(f"() => location.hash = '{view}'")
+        page.wait_for_timeout(350)
+
+    def close_sheets():
+        page.evaluate("() => document.querySelectorAll('dialog[open]').forEach((d) => d.close())")
+        page.wait_for_timeout(200)
+
+    def open_studio(tile):
+        go("insights")
+        page.locator(f".studio-tile[data-studio='{tile}']").first.click()
+        page.wait_for_selector("#dlg-studio[open]")
+        page.wait_for_timeout(700)
+
+    def open_detail():
+        go("diary")
+        page.locator(".ticket").first.click()
+        page.wait_for_selector("#dlg-detail[open]")
+        page.wait_for_timeout(400)
+
+    def open_log():
+        go("diary")
+        page.locator('[data-action="log"]:visible').first.click()
+        page.wait_for_selector("#dlg-log[open]")
+        page.wait_for_timeout(400)
+
+    def open_stamps():
+        go("diary")
+        page.click("[data-stamps]")
+        page.wait_for_selector("#dlg-memory[open]")
+        page.wait_for_timeout(400)
+
+    def open_game():
+        open_studio("games")
+        page.locator("#dlg-studio [data-game='tap']").first.click()
+        page.wait_for_selector("#game-canvas")
+        page.wait_for_timeout(600)
+
+    # the audit has to be able to fail: plant a 20 px button, 10 px text and a block wider than the page
+    go("diary")
+    page.evaluate(GATE_PLANT_JS)
+    planted = page.evaluate(GATE_AUDIT_JS, None)
+    page.evaluate("() => document.getElementById('gate-plant').remove()")
+    check(
+        "gates: the audit catches a planted 20 px button, 10 px text and a block wider than the page",
+        any("20x20" in item for item in planted["small"]) and any("planted tiny text" in item for item in planted["tiny"]) and planted["page"] > 0,
+        planted,
+    )
+
+    sheets = [
+        ("meal detail", "#dlg-detail", open_detail),
+        ("log sheet", "#dlg-log", open_log),
+        ("stamp book", "#dlg-memory", open_stamps),
+        ("share studio collage", "#dlg-studio", lambda: open_studio("collage")),
+        ("memory lane", "#dlg-studio", lambda: open_studio("memory")),
+        ("games list", "#dlg-studio", lambda: open_studio("games")),
+        ("tap game", "#dlg-studio", open_game),
+    ]
+    for width in (320, 390, 1280):
+        page.set_viewport_size({"width": width, "height": 844 if width < 1000 else 900})
+        page.wait_for_timeout(300)
+        rows = []
+        notes = []
+        for view in ("diary", "insights", "lab", "buds", "me"):
+            close_sheets()
+            go(view)
+            row = page.evaluate(GATE_AUDIT_JS, None)
+            row["where"] = "tab " + view
+            rows.append(row)
+        for name, selector, opener in sheets:
+            try:
+                close_sheets()
+                opener()
+                row = page.evaluate(GATE_AUDIT_JS, selector)
+                row["where"] = "sheet " + name
+                rows.append(row)
+            except Exception as error:
+                notes.append(f"{name}: {str(error)[:120]}")
+        close_sheets()
+        measured = len(rows) == 12 and all(row["open"] and row["targets"] > 0 for row in rows)
+        sideways = [f"{row['where']}: page {row['page']}, sheet {row['sheet']}" for row in rows if row["page"] > 0 or row["sheet"] > 0 or row["outside"]]
+        small = [f"{row['where']}: {item}" for row in rows for item in row["small"]]
+        tiny = [f"{row['where']}: {item}" for row in rows for item in row["tiny"]]
+        check(f"gates @ {width}: all 5 tabs and 7 sheets opened and were measured", measured, notes or [row["where"] for row in rows])
+        check(f"gates @ {width}: nothing scrolls sideways on any tab or sheet", measured and not sideways, sideways[:4])
+        check(f"gates @ {width}: no tap target under 32 px on any tab or sheet", measured and not small, small[:4])
+        check(f"gates @ {width}: no text under 12 px on any tab or sheet", measured and not tiny, tiny[:4])
+
+    check("gates: no console errors", not errors, errors[:3])
+    context.close()
+
+
+LANG_NAV_JS = """() => {
+  const bar = document.querySelector('.bottombar').getBoundingClientRect();
+  const items = [];
+  for (const item of document.querySelectorAll('.bottombar > *')) {
+    const label = item.querySelector('span');
+    const icon = item.querySelector('svg');
+    const isFab = label.classList.contains('fab-label');
+    let box;
+    if (isFab) {
+      box = label.getBoundingClientRect();
+    } else {
+      const range = document.createRange();
+      range.selectNodeContents(label);
+      box = range.getBoundingClientRect();
+    }
+    const itemBox = item.getBoundingClientRect();
+    const lineHeight = parseFloat(getComputedStyle(label).lineHeight) || 14;
+    items.push({
+      text: label.textContent,
+      fab: isFab,
+      left: box.left,
+      right: box.right,
+      bottom: box.bottom,
+      lines: Math.round(box.height / lineHeight),
+      cut: label.scrollWidth > label.clientWidth + 1,
+      font: parseFloat(getComputedStyle(label).fontSize),
+      iconTop: icon ? icon.getBoundingClientRect().top : null,
+      itemLeft: itemBox.left,
+      itemRight: itemBox.right,
+      itemWidth: itemBox.width,
+    });
+  }
+  const tabs = items.filter((item) => !item.fab);
+  const iconTops = tabs.map((item) => item.iconTop);
+  let gap = 999;
+  for (let i = 1; i < items.length; i++) gap = Math.min(gap, items[i].left - items[i - 1].right);
+  return {
+    count: items.length,
+    gap: Math.round(gap * 10) / 10,
+    lines: Math.max(...items.map((item) => item.lines)),
+    cut: items.filter((item) => item.cut).map((item) => item.text),
+    font: Math.min(...items.map((item) => item.font)),
+    iconSpread: Math.round((Math.max(...iconTops) - Math.min(...iconTops)) * 10) / 10,
+    below: Math.round((bar.bottom - Math.max(...tabs.map((item) => item.bottom))) * 10) / 10,
+    minTab: Math.round(Math.min(...tabs.map((item) => item.itemWidth)) * 10) / 10,
+    outside: items.filter((item) => item.itemLeft < -0.5 || item.itemRight > innerWidth + 0.5).map((item) => item.text),
+  };
+}"""
+
+LANG_PORTION_JS = """() => {
+  const canvas = document.getElementById('log-plate').getBoundingClientRect();
+  const rows = [];
+  for (const row of document.querySelectorAll('#dlg-log .portion')) {
+    const seg = row.querySelector('.seg');
+    const tops = [];
+    for (const button of seg.querySelectorAll('button')) {
+      const top = button.getBoundingClientRect().top;
+      if (!tops.some((seen) => Math.abs(seen - top) < 6)) tops.push(top);
+    }
+    const box = seg.getBoundingClientRect();
+    const overlap = !(box.right <= canvas.left || box.left >= canvas.right || box.bottom <= canvas.top || box.top >= canvas.bottom);
+    rows.push({ label: row.querySelector('span').textContent, rows: tops.length, overlap });
+  }
+  const sheet = document.querySelector('#dlg-log');
+  const body = sheet.querySelector('.sheet-body') || sheet;
+  return {
+    count: rows.length,
+    maxRows: Math.max(...rows.map((row) => row.rows)),
+    overlap: rows.filter((row) => row.overlap).map((row) => row.label),
+    sideways: Math.max(sheet.scrollWidth - sheet.clientWidth, body.scrollWidth - body.clientWidth),
+  };
+}"""
+
+LANG_STUDIO_JS = """() => {
+  const sheet = document.querySelector('#dlg-studio');
+  const rect = (el) => (el ? el.getBoundingClientRect() : null);
+  const tray = sheet.querySelector('.template-row');
+  const trayBox = rect(tray);
+  const chips = [...tray.children].map((chip) => chip.getBoundingClientRect());
+  const centres = [];
+  for (const chip of chips) {
+    const centre = chip.top + chip.height / 2;
+    if (!centres.some((seen) => Math.abs(seen - centre) < 6)) centres.push(centre);
+  }
+  const undo = rect(sheet.querySelector('[data-collage-undo]'));
+  const pen = rect(sheet.querySelector('.doodle-bar .ink'));
+  const shuffle = rect(sheet.querySelector('[data-collage-shuffle]'));
+  const chosen = rect(tray.querySelector('[aria-checked="true"], .on'));
+  const footOut = [...sheet.querySelectorAll('.sheet-foot button, .sheet-foot a')].filter((el) => {
+    const box = el.getBoundingClientRect();
+    return box.width > 0 && (box.left < -0.5 || box.right > innerWidth + 0.5);
+  }).length;
+  return {
+    templates: sheet.querySelectorAll('[data-collage-template]').length,
+    undoOnPenRow: !!undo && !!pen && Math.abs((undo.top + undo.height / 2) - (pen.top + pen.height / 2)) < 6,
+    shuffleInside: !!shuffle && shuffle.left >= trayBox.left - 1 && shuffle.right <= trayBox.right + 1 && shuffle.right <= innerWidth + 0.5,
+    shuffleSize: shuffle ? Math.round(Math.min(shuffle.width, shuffle.height)) : 0,
+    shuffleName: sheet.querySelector('[data-collage-shuffle]')?.getAttribute('aria-label') || '',
+    trayRows: centres.length,
+    tallest: Math.round(Math.max(...chips.map((chip) => chip.height))),
+    chosenVisible: !!chosen && !!shuffle && chosen.left >= trayBox.left - 1 && chosen.right <= shuffle.left + 1,
+    sideways: Math.max(document.documentElement.scrollWidth - innerWidth, sheet.scrollWidth - sheet.clientWidth),
+    footOut,
+  };
+}"""
+
+# A control counts as clipped when part of it sits past a screen edge and nothing lets the person scroll to it.
+# Things parked wholly off the left edge on purpose (the skip link, the visually hidden search label) are left out.
+LANG_STRIP_JS = """() => {
+  const strip = document.querySelector('#view-diary a.week-strip');
+  if (!strip || strip.offsetParent === null) return { missing: true };
+  const stripBox = strip.getBoundingClientRect();
+  const textBox = (el) => {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    return range.getBoundingClientRect();
+  };
+  // a word that sits on two lines was broken inside the word
+  const brokenWords = (el) => {
+    const broken = [];
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const pattern = /\\S+/g;
+      for (let match = pattern.exec(node.data); match; match = pattern.exec(node.data)) {
+        const range = document.createRange();
+        range.setStart(node, match.index);
+        range.setEnd(node, match.index + match[0].length);
+        const tops = new Set([...range.getClientRects()].map((rect) => Math.round(rect.top)));
+        if (tops.size > 1) broken.push(match[0]);
+      }
+    }
+    return broken;
+  };
+  const cells = [...strip.children].map((cell) => {
+    const cellBox = cell.getBoundingClientRect();
+    const parts = [...cell.children].map((part) => {
+      const box = textBox(part);
+      return {
+        cls: part.className,
+        text: part.textContent.trim(),
+        right: Math.round(box.right),
+        lines: Math.round(box.height / parseFloat(getComputedStyle(part).lineHeight || 16)),
+        broken: brokenWords(part),
+      };
+    });
+    return { left: Math.round(cellBox.left), right: Math.round(cellBox.right), parts };
+  });
+  const search = document.querySelector('#q');
+  const style = search ? getComputedStyle(search) : null;
+  return {
+    stripRight: Math.round(stripBox.right),
+    screen: window.innerWidth,
+    sideways: strip.scrollWidth - strip.clientWidth,
+    cells,
+    hintOverflow: style ? style.textOverflow : null,
+  };
+}"""
+
+
+def week_strip_faults(row):
+    """What is wrong with one measured week strip: text past its own column, a number on two lines, a word broken inside."""
+    cells = row.get("cells") or []
+    if row.get("missing") or len(cells) != 4:
+        return ["the strip is missing or does not hold four numbers"]
+    faults = []
+    if row["stripRight"] > row["screen"] or row["sideways"] > 1:
+        faults.append("the strip leaves the screen")
+    for cell in cells:
+        for part in cell["parts"]:
+            if part["right"] > cell["right"] + 1:
+                faults.append(f"'{part['text']}' runs {part['right'] - cell['right']} px past its column")
+            if "ws-value" in part["cls"] and part["lines"] > 1:
+                faults.append(f"'{part['text']}' is on {part['lines']} lines")
+            if part["broken"]:
+                faults.append(f"'{part['broken'][0]}' is broken inside the word")
+    return faults
+
+
+LANG_CLIP_JS = """(rootSelector) => {
+  const root = rootSelector ? document.querySelector(rootSelector) : document.body;
+  const slides = (el) => {
+    for (let node = el.parentElement; node && node !== document.body; node = node.parentElement) {
+      const flow = getComputedStyle(node).overflowX;
+      if ((flow === 'auto' || flow === 'scroll') && node.scrollWidth > node.clientWidth + 1) return true;
+    }
+    return false;
+  };
+  const seen = (el) => {
+    const box = el.getBoundingClientRect();
+    if (box.width <= 1 || box.height <= 1) return false;
+    if (el.checkVisibility && !el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) return false;
+    if (!rootSelector && el.closest('dialog:not([open])')) return false;
+    return true;
+  };
+  const leaf = (el) => el.matches('button, a, input, select, [role=button]') || (el.children.length === 0 && el.textContent.trim());
+  const clipped = [...root.querySelectorAll('*')]
+    .filter((el) => leaf(el) && seen(el) && !el.closest('svg') && !['SCRIPT', 'STYLE', 'OPTION'].includes(el.tagName))
+    .filter((el) => {
+      const box = el.getBoundingClientRect();
+      if (box.right <= 0) return false;
+      return (box.left < -0.5 || box.right > innerWidth + 0.5) && !slides(el);
+    })
+    .map((el) => {
+      const box = el.getBoundingClientRect();
+      return el.tagName.toLowerCase() + ' "' + (el.textContent || el.getAttribute('aria-label') || '').trim().slice(0, 26) + '" ' + Math.round(box.left) + '..' + Math.round(box.right);
+    });
+  const body = rootSelector ? root.querySelector('.sheet-body') : null;
+  return {
+    open: rootSelector ? !!root.open : true,
+    page: document.documentElement.scrollWidth - innerWidth,
+    sheet: body ? body.scrollWidth - body.clientWidth : 0,
+    clipped: [...new Set(clipped)].slice(0, 6),
+  };
+}"""
+
+
+def language_checks(browser, base):
+    """r41: the layout holds in all 14 languages, not only English - bottom nav, portion controls and Share Studio rows at 320, 360 and 390 px, clipped controls on five tabs and seven sheets at 320 px, and field placeholders follow the app language."""
+    context = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=1, reduced_motion="reduce")
+    page = context.new_page()
+    errors = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.on("console", lambda message: errors.append(message.text) if message.type == "error" and "tile.openstreetmap" not in message.text and "ERR_" not in message.text else None)
+    page.on("dialog", lambda dialog: dialog.accept())
+    page.goto(base + "?demo=1&nosw=1")
+    page.wait_for_selector("html[data-ready='1']")
+    page.wait_for_timeout(600)
+    widths = (320, 360, 390)
+
+    def go(view):
+        page.evaluate(f"() => location.hash = '{view}'")
+        page.wait_for_timeout(250)
+
+    def close_sheets():
+        page.evaluate("() => document.querySelectorAll('dialog[open]').forEach((d) => d.close())")
+        page.wait_for_timeout(130)
+
+    def resize(width):
+        page.set_viewport_size({"width": width, "height": 844})
+        page.wait_for_timeout(250)
+
+    def set_language(code):
+        resize(390)
+        close_sheets()
+        go("me")
+        page.wait_for_selector("#set-lang option", state="attached")
+        page.select_option("#set-lang", code)
+        page.wait_for_timeout(350)
+
+    def open_studio(tile):
+        go("insights")
+        page.locator(f".studio-tile[data-studio='{tile}']").first.click()
+        page.wait_for_selector("#dlg-studio[open]")
+        page.wait_for_timeout(500)
+
+    def open_detail():
+        go("diary")
+        page.locator(".ticket").first.click()
+        page.wait_for_selector("#dlg-detail[open]")
+        page.wait_for_timeout(300)
+
+    def open_log():
+        go("diary")
+        page.locator('[data-action="log"]:visible').first.click()
+        page.wait_for_selector("#dlg-log[open]")
+        page.wait_for_timeout(300)
+
+    def open_stamps():
+        go("diary")
+        page.click("[data-stamps]")
+        page.wait_for_selector("#dlg-memory[open]")
+        page.wait_for_timeout(300)
+
+    def open_game():
+        open_studio("games")
+        page.locator("#dlg-studio [data-game='tap']").first.click()
+        page.wait_for_selector("#game-canvas")
+        page.wait_for_timeout(400)
+
+    def placeholders():
+        # every hint that holds text, in any script: a Japanese hint has no Latin letters at all
+        return page.evaluate(
+            """() => [...document.querySelectorAll('#q, #dlg-log input[placeholder], #dlg-log textarea[placeholder]')]
+              .map((field) => [field.id || field.name, (field.getAttribute('placeholder') || '').trim()])
+              .filter((pair) => pair[1].length >= 3)"""
+        )
+
+    def zoom_labels():
+        page.evaluate("() => window.Lahap.openShare(window.Lahap.state.entries[0])")
+        page.wait_for_selector("#dlg-share[open]")
+        page.wait_for_timeout(400)
+        first = page.get_attribute("#share-zoom", "aria-label")
+        page.click("#share-zoom")
+        page.wait_for_timeout(350)
+        second = page.get_attribute("#share-zoom", "aria-label")
+        page.click("#share-zoom")
+        page.wait_for_timeout(200)
+        close_sheets()
+        return first, second
+
+    # --- field placeholders and a label the app changes after first render ---
+    go("me")
+    page.wait_for_selector("#set-lang option", state="attached")
+    langs = page.evaluate("() => [...document.querySelectorAll('#set-lang option')].map((option) => option.value)")
+    check("language: the app offers 14 languages", len(langs) == 14 and langs[0] == "en", langs)
+    open_log()
+    english_fields = dict(placeholders())
+    close_sheets()
+    english_zoom = zoom_labels()
+    untranslated = {}
+    for code in ("fr", "ja"):
+        set_language(code)
+        open_log()
+        shown = dict(placeholders())
+        close_sheets()
+        same = [name for name, value in english_fields.items() if shown.get(name) == value]
+        missing = [name for name in english_fields if name not in shown]
+        if same or missing or len(shown) != len(english_fields):
+            untranslated[code] = {"same": same, "missing": missing, "shown": len(shown)}
+    check(
+        "language: the search box and the log sheet's field hints are shown in French and Japanese, not English",
+        len(english_fields) >= 5 and not untranslated,
+        {"english": english_fields, "untranslated": untranslated},
+    )
+    set_language("fr")
+    french_zoom = zoom_labels()
+    check(
+        "language: the share sheet's zoom button label follows its state in French",
+        english_zoom[0] != english_zoom[1]
+        and french_zoom[0] != french_zoom[1]
+        and not set(french_zoom) & set(english_zoom),
+        {"english": english_zoom, "french": french_zoom},
+    )
+    set_language("en")
+    open_log()
+    restored = dict(placeholders())
+    close_sheets()
+    check("language: back in English the field hints are the English ones again", restored == english_fields, restored)
+
+    # --- the measures have to be able to fail ---
+    resize(320)
+    go("diary")
+    page.evaluate(
+        """() => {
+          const label = document.querySelector('.bottombar a span');
+          label.dataset.was = label.textContent;
+          label.textContent = 'Supercalifragilisticexpialidocious';
+        }"""
+    )
+    page.wait_for_timeout(200)
+    planted_nav = page.evaluate(LANG_NAV_JS)
+    page.evaluate(
+        """() => {
+          const label = document.querySelector('.bottombar a span');
+          label.textContent = label.dataset.was;
+          delete label.dataset.was;
+        }"""
+    )
+    check(
+        "language nav: the measure catches a planted label too long for a 320 px screen",
+        bool(planted_nav["outside"] or planted_nav["cut"]),
+        planted_nav,
+    )
+    page.evaluate(
+        """() => {
+          const plant = document.createElement('button');
+          plant.id = 'clip-plant';
+          plant.textContent = 'planted off-screen control';
+          plant.style.cssText = 'position:fixed;top:120px;left:' + (innerWidth - 12) + 'px;width:90px;height:44px;z-index:99';
+          document.body.appendChild(plant);
+        }"""
+    )
+    planted_clip = page.evaluate(LANG_CLIP_JS, None)
+    page.evaluate("() => document.getElementById('clip-plant').remove()")
+    check(
+        "language clip: the measure catches a planted control that leaves the screen",
+        any("planted off-screen control" in item for item in planted_clip["clipped"]),
+        planted_clip,
+    )
+
+    # --- every language ---
+    sheets = [
+        ("meal detail", "#dlg-detail", open_detail),
+        ("log sheet", "#dlg-log", open_log),
+        ("stamp book", "#dlg-memory", open_stamps),
+        ("share studio collage", "#dlg-studio", lambda: open_studio("collage")),
+        ("memory lane", "#dlg-studio", lambda: open_studio("memory")),
+        ("games list", "#dlg-studio", lambda: open_studio("games")),
+        ("tap game", "#dlg-studio", open_game),
+    ]
+    nav_rows = []
+    portion_rows = []
+    studio_rows = []
+    clip_rows = []
+    strip_rows = []
+    notes = []
+
+    def measure_portion(code, width):
+        row = page.evaluate(LANG_PORTION_JS)
+        row.update({"lang": code, "width": width})
+        portion_rows.append(row)
+
+    def measure_studio(code, width):
+        row = page.evaluate(LANG_STUDIO_JS)
+        page.locator("#dlg-studio [data-collage-template]").last.click()
+        page.wait_for_timeout(350)
+        row["lastVisible"] = page.evaluate(LANG_STUDIO_JS)["chosenVisible"]
+        page.locator("#dlg-studio [data-collage-template]").first.click()
+        page.wait_for_timeout(200)
+        row.update({"lang": code, "width": width})
+        studio_rows.append(row)
+
+    for code in langs:
+        set_language(code)
+        resize(320)
+        for view in ("diary", "insights", "lab", "buds", "me"):
+            go(view)
+            row = page.evaluate(LANG_CLIP_JS, None)
+            row.update({"lang": code, "where": "tab " + view})
+            clip_rows.append(row)
+        go("diary")
+        for width in widths:
+            resize(width)
+            row = page.evaluate(LANG_NAV_JS)
+            row.update({"lang": code, "width": width})
+            nav_rows.append(row)
+            row = page.evaluate(LANG_STRIP_JS)
+            row.update({"lang": code, "width": width})
+            strip_rows.append(row)
+        resize(320)
+        for name, selector, opener in sheets:
+            try:
+                close_sheets()
+                opener()
+                row = page.evaluate(LANG_CLIP_JS, selector)
+                row.update({"lang": code, "where": "sheet " + name})
+                clip_rows.append(row)
+                if name == "log sheet":
+                    measure_portion(code, 320)
+                if name == "share studio collage":
+                    measure_studio(code, 320)
+            except Exception as error:
+                notes.append(f"{code} {name}: {str(error)[:120]}")
+        for width in (360, 390):
+            try:
+                close_sheets()
+                resize(width)
+                open_log()
+                measure_portion(code, width)
+                close_sheets()
+                open_studio("collage")
+                measure_studio(code, width)
+            except Exception as error:
+                notes.append(f"{code} @ {width}: {str(error)[:120]}")
+        close_sheets()
+    set_language("en")
+
+    def where(row):
+        return f"{row['lang']} @ {row['width']}"
+
+    states = len(langs) * len(widths)
+
+    # bottom nav
+    check(
+        f"language nav: all {states} states were measured (14 languages at 320, 360 and 390 px)",
+        len(nav_rows) == states and all(row["count"] == 6 for row in nav_rows),
+        notes[:3] or len(nav_rows),
+    )
+    bad = [f"{where(row)}: cut {row['cut']}, {row['lines']} lines" for row in nav_rows if row["cut"] or row["lines"] > 2]
+    check("language nav: no tab label is cut short or runs past two lines in any language", len(nav_rows) == states and not bad, bad[:4])
+    bad = [f"{where(row)}: outside {row['outside']}, gap {row['gap']}" for row in nav_rows if row["outside"] or row["gap"] < 3]
+    check("language nav: every tab stays on screen and neighbouring labels keep at least 3 px apart", len(nav_rows) == states and not bad, bad[:4])
+    bad = [
+        f"{where(row)}: font {row['font']}, icons {row['iconSpread']}, under label {row['below']}, tab {row['minTab']}"
+        for row in nav_rows
+        if row["font"] < 12 or row["iconSpread"] > 0.5 or row["below"] < 1.5 or row["minTab"] < 44
+    ]
+    check("language nav: labels are 12 px or larger, icons line up, labels clear the bar's edge and tabs stay 44 px wide", len(nav_rows) == states and not bad, bad[:4])
+    english = [row for row in nav_rows if row["lang"] == "en"]
+    check("language nav: the English labels stay on one line at every width", len(english) == 3 and all(row["lines"] == 1 for row in english), english)
+
+    # portion controls on the log sheet
+    check(
+        f"language portion: all {states} states were measured with the four portion rows",
+        len(portion_rows) == states and all(row["count"] == 4 for row in portion_rows),
+        notes[:3] or len(portion_rows),
+    )
+    bad = [f"{where(row)}: {row['maxRows']} rows" for row in portion_rows if row["maxRows"] > 2]
+    english = [row for row in portion_rows if row["lang"] == "en"]
+    check(
+        "language portion: each choice row fits on one line in English and on at most two in every language",
+        len(portion_rows) == states and not bad and len(english) == 3 and all(row["maxRows"] == 1 for row in english),
+        bad[:4] or english,
+    )
+    bad = [f"{where(row)}: overlap {row['overlap']}, sideways {row['sideways']}" for row in portion_rows if row["overlap"] or row["sideways"] > 0]
+    check("language portion: no choice row covers the live plate or makes the sheet scroll sideways", len(portion_rows) == states and not bad, bad[:4])
+
+    # Share Studio rows
+    check(
+        f"language studio: all {states} collage states were measured with four templates",
+        len(studio_rows) == states and all(row["templates"] == 4 for row in studio_rows),
+        notes[:3] or len(studio_rows),
+    )
+    bad = [f"{where(row)}" for row in studio_rows if not row["undoOnPenRow"]]
+    check("language studio: Undo stays on the pen row in every language", len(studio_rows) == states and not bad, bad[:4])
+    bad = [
+        f"{where(row)}: inside {row['shuffleInside']}, size {row['shuffleSize']}, name {row['shuffleName']!r}"
+        for row in studio_rows
+        if not row["shuffleInside"] or row["shuffleSize"] < 32 or not row["shuffleName"]
+    ]
+    check("language studio: Shuffle stays whole on the template row, 32 px or larger, with a name", len(studio_rows) == states and not bad, bad[:4])
+    bad = [f"{where(row)}: {row['trayRows']} rows, tallest {row['tallest']}" for row in studio_rows if row["trayRows"] != 1 or row["tallest"] > 40]
+    check("language studio: the templates stay on one row and no chip grows taller than 40 px", len(studio_rows) == states and not bad, bad[:4])
+    bad = [f"{where(row)}" for row in studio_rows if not row["lastVisible"]]
+    check("language studio: the last template can be picked and then sits fully visible beside Shuffle", len(studio_rows) == states and not bad, bad[:4])
+    bad = [f"{where(row)}: sideways {row['sideways']}, foot {row['footOut']}" for row in studio_rows if row["sideways"] > 0 or row["footOut"]]
+    check("language studio: the sheet never scrolls sideways and its action buttons stay on screen", len(studio_rows) == states and not bad, bad[:4])
+
+    # clipped controls at 320 px
+    expected = len(langs) * 12
+    opened = len(clip_rows) == expected and all(row["open"] for row in clip_rows)
+    check(
+        f"language clip: all {expected} states opened and were measured (14 languages x 5 tabs and 7 sheets at 320 px)",
+        opened,
+        notes[:3] or len(clip_rows),
+    )
+    bad = [f"{row['lang']} {row['where']}: {row['clipped'][:2]}" for row in clip_rows if row["clipped"]]
+    check("language clip: no button, link, field or text leaves a 320 px screen in any language", opened and not bad, bad[:4])
+    bad = [f"{row['lang']} {row['where']}: page {row['page']}, sheet {row['sheet']}" for row in clip_rows if row["page"] > 0 or row["sheet"] > 0]
+    check("language clip: no tab or sheet scrolls sideways at 320 px in any language", opened and not bad, bad[:4])
+
+    # week strip on the phone Diary: 14 languages x 320, 360 and 390 px
+    bad = [f"{where(row)}: {week_strip_faults(row)[0]}" for row in strip_rows if week_strip_faults(row)]
+    check(
+        "language week strip: in every language each number and label stays inside its own column, numbers on one line, no word broken inside",
+        len(strip_rows) == states and not bad,
+        bad[:4] or len(strip_rows),
+    )
+    bad = [where(row) for row in strip_rows if row.get("hintOverflow") != "ellipsis"]
+    check("language search: a hint longer than the search field ends with an ellipsis, not a cut letter", len(strip_rows) == states and not bad, bad[:4])
+    # the measure must be able to fail: put back the old equal columns in German at 320 px and expect a finding
+    set_language("de")
+    resize(320)
+    go("diary")
+    page.add_style_tag(
+        content="#view-diary a.week-strip{grid-template-columns:repeat(4,minmax(0,1fr)) !important}"
+        "#view-diary a.week-strip .ws-label{overflow-wrap:anywhere !important}"
+    )
+    page.wait_for_timeout(200)
+    planted = week_strip_faults(page.evaluate(LANG_STRIP_JS))
+    check("language week strip: the measure reports a planted spill (old equal columns, German, 320 px)", len(planted) >= 1, planted[:2])
+    page.evaluate("() => document.head.querySelectorAll('style').forEach((s) => { if (s.textContent.includes('a.week-strip{grid-template-columns')) s.remove(); })")
+    set_language("en")
+
+    check("language: no console errors", not errors, errors[:3])
     context.close()
 
 
@@ -3519,6 +4760,9 @@ def main():
         # ---- memory: stamps, places, buds, picker, recap, favourites ----
         memory_checks(browser, base)
         studio_checks(browser, base)
+        solid_checks(browser, base)
+        gate_checks(browser, base)
+        language_checks(browser, base)
 
         # ---- persistence ----
         page.reload()

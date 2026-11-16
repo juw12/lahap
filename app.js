@@ -244,6 +244,12 @@
     return L.formatMoney(value, state.settings.currency);
   }
 
+  // dates and times follow the chosen interface language; English keeps the phone's own format
+  function dateLocale() {
+    const code = state.settings && state.settings.lang;
+    return code && code !== "en" ? code : undefined;
+  }
+
   function uid() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   }
@@ -256,6 +262,11 @@
     const names = {};
     for (const person of PEOPLE) names[person.id] = person.name;
     return names;
+  }
+
+  // a native confirm box is outside the page, so its text is translated here
+  function ask(message) {
+    return confirm(window.LahapI18n ? window.LahapI18n.t(message) : message);
   }
 
   function toast(message) {
@@ -274,11 +285,11 @@
     const yesterday = new Date(today);
     yesterday.setDate(today.getDate() - 1);
     if (key === L.dayKey(yesterday)) return "Yesterday";
-    return date.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+    return date.toLocaleDateString(dateLocale(), { weekday: "short", day: "numeric", month: "short" });
   }
 
   function timeLabel(ts) {
-    return new Date(ts).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    return new Date(ts).toLocaleTimeString(dateLocale(), { hour: "2-digit", minute: "2-digit" });
   }
 
   function relative(ts) {
@@ -647,7 +658,7 @@
       <div class="ticket-wrap">
       <button type="button" class="ticket" data-open="${esc(entry.id)}">
         <img class="thumb${entry.cutout ? " cut" : ""}" src="${imageFor(entry)}" alt="${entry.photo ? "Photo of " + esc(entry.name) : "Plate drawing of " + esc(entry.name)}" width="72" height="72" loading="lazy">
-        <span>
+        <span class="ticket-main">
           <span class="title">${esc(entry.name)}${entry.fav ? ` <span class="fav-mark" role="img" aria-label="Favourite">${ICON_HEART}</span>` : ""}</span>
           <span class="meta">${meta.map((part) => `<span class="seg">${esc(part)}</span>`).join(" · ")}</span>
           <span class="tags">${tags}${withWho}</span>
@@ -667,7 +678,7 @@
   function answerStatsHtml(summary) {
     const ranged = summary.minPrice !== summary.maxPrice;
     const rangeNote = ranged ? `<small class="dd-note">${esc(money(summary.minPrice))} – ${esc(money(summary.maxPrice))}</small>` : "";
-    const firstNote = `<small class="dd-note">since ${esc(new Date(summary.first.ts).toLocaleDateString(undefined, { day: "numeric", month: "short" }))}</small>`;
+    const firstNote = `<small class="dd-note">since ${esc(new Date(summary.first.ts).toLocaleDateString(dateLocale(), { day: "numeric", month: "short" }))}</small>`;
     return `
         <dl class="answer-stats">
           <div><dt>Avg price</dt><dd>${esc(money(summary.avgPrice))}${rangeNote}</dd></div>
@@ -713,7 +724,7 @@
     const last = summary.last;
     const where = last.place ? " at " + esc(last.place) : "";
     return `
-      <div class="answer featured" role="status">
+      <div class="answer featured hero-wide" role="status">
         <div class="answer-hero">
           <img class="answer-thumb${last.cutout ? " cut" : ""}" src="${imageFor(last)}" alt="${last.photo ? "Photo of " + esc(last.name) : "Plate drawing of " + esc(last.name)}" width="144" height="144">
           <div class="answer-hero-body">
@@ -763,7 +774,7 @@
       : `<button type="button" class="btn" data-add="${best.person.id}">Add bud</button>`;
     const pick = isBud ? planPlaceFor(best.person) : null;
     const why = pick ? `<span class="plan-why">Try ${esc(pick.place.name)}: ${esc(pick.why)}</span>` : "";
-    return `<div class="bud-nudge">${avatar(best.person)}<span><strong>${esc(best.person.name)} · ${best.match}% match</strong><span class="muted small">${esc(reasonsFor(best.person))}</span>${why}</span>${action}</div>`;
+    return `<div class="bud-nudge">${avatar(best.person)}<span><strong>${esc(best.person.name)} · ${best.match}% match</strong><span class="muted small">${reasonsHtml(best.person)}</span>${why}</span>${action}</div>`;
   }
 
   // r21: the social loop and the share action on the Diary's first screen, under the latest day's header:
@@ -790,7 +801,7 @@
       .sort((a, b) => new Date(a.when) - new Date(b.when))[0];
     if (plan) {
       const friend = personById(plan.friend);
-      const when = new Date(plan.when).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+      const when = new Date(plan.when).toLocaleDateString(dateLocale(), { weekday: "short", day: "numeric", month: "short" });
       return `<div class="day-pulse pulse-plan">${avatar(friend)}<span class="pulse-text"><strong>Makan with ${esc(friend.name)}</strong><span class="muted small">${esc(plan.place || "somewhere new")} · ${esc(when)}<span class="pulse-extra"> · +${L.POINTS.hangout} pts</span></span></span><button type="button" class="btn small primary" data-done="${esc(plan.id)}">We went</button>${shareButton}</div>`;
     }
     if (!ranked.length) {
@@ -798,7 +809,8 @@
     }
     const { person, level } = ranked[0];
     const match = hasTasteProfile() ? ` · ${matchFor(person)}% match` : "";
-    return `<div class="day-pulse">${avatar(person)}<span class="pulse-text"><strong>${esc(person.name)}${match}</strong><span class="muted small">${level.toNext} pts to ${esc(level.next)}<span class="pulse-extra"> · +${L.POINTS.tag} a tag</span></span><span class="pulse-meter" aria-hidden="true"><span style="width:${Math.max(4, Math.round((level.progress || 0) * 100))}%"></span></span></span><button type="button" class="btn small primary" data-tag-meal="${esc(person.id)}">Tag ${esc(person.name)}</button>${shareButton}</div>`;
+    const why = hasTasteProfile() ? `<span class="pulse-why small">${reasonsHtml(person, 3)}</span>` : "";
+    return `<div class="day-pulse">${avatar(person)}<span class="pulse-text"><strong>${esc(person.name)}${match}</strong>${why}<span class="muted small">${level.toNext} pts to ${esc(level.next)}<span class="pulse-extra"> · +${L.POINTS.tag} a tag</span></span><span class="pulse-meter" aria-hidden="true"><span style="width:${Math.max(4, Math.round((level.progress || 0) * 100))}%"></span></span></span><button type="button" class="btn small primary" data-tag-meal="${esc(person.id)}">Tag ${esc(person.name)}</button>${shareButton}</div>`;
   }
 
   // r16: short money for the phone week strip - "IDR 533k", "IDR 1.2M"
@@ -1060,7 +1072,7 @@
       const key = L.dayKey(date);
       const meals = state.entries.filter((entry) => L.dayKey(entry.ts) === key);
       const score = meals.length ? Math.round(meals.reduce((sum, entry) => sum + L.healthScore(entry.plate), 0) / meals.length) : 0;
-      days.push({ label: date.toLocaleDateString(undefined, { weekday: "short" }), score, meals: meals.length, plate: averagePlate(meals) });
+      days.push({ label: date.toLocaleDateString(dateLocale(), { weekday: "short" }), score, meals: meals.length, plate: averagePlate(meals) });
     }
     const strip = `<div class="plate-week" role="img" aria-label="Plate score per day, last 7 days: ${days.map((day) => (day.meals ? day.score : "no meals")).join(", ")}">${days.map((day) => `<div class="pday"><img src="${plateThumb({ name: day.label + day.score, plate: day.plate }, 96)}" alt="" width="44" height="44"><b class="${day.meals ? scoreClass(day.score) : "none"}">${day.meals ? day.score : "–"}</b><span>${esc(day.label)}</span></div>`).join("")}</div>`;
 
@@ -1115,7 +1127,7 @@
         </section>
         <section class="panel">
           <h2>Top places</h2>
-          ${places.length ? `<div class="place-list">${places.map((place) => `<div class="person" style="grid-template-columns:minmax(0,1fr) auto"><div><div class="name">${esc(place.name)}</div><div class="why">${place.count} ${place.count === 1 ? "visit" : "visits"} · ${esc(place.cuisines.join(", "))}</div></div><span class="mono">${esc(money(place.spend))}</span></div>`).join("")}</div>` : '<p class="muted">No places yet.</p>'}
+          ${places.length ? `<div class="place-list">${places.map((place) => `<div class="person place-row"><div class="place-main"><div class="name">${esc(place.name)}</div><div class="why" title="${esc(place.cuisines.join(", "))}"><span class="place-visits">${place.count} ${place.count === 1 ? "visit" : "visits"}</span>${place.cuisines.length ? ` · ${place.cuisines.slice(0, 2).map((cuisine) => `<span>${esc(cuisine)}</span>`).join(", ")}${place.cuisines.length > 2 ? ` <span class="place-more" data-no-i18n>+${place.cuisines.length - 2}</span>` : ""}` : ""}</div></div><span class="mono place-amount">${esc(money(place.spend))}</span></div>`).join("")}</div>` : '<p class="muted">No places yet.</p>'}
         </section>
         <section class="panel">
           <h2>Where the money went</h2>
@@ -1159,13 +1171,23 @@
     return L.matchScore(myVector, myCuisines(), person.tastes, person.cuisines);
   }
 
-  function reasonsFor(person) {
+  function sharedWith(person) {
     const myVector = L.tasteVector(state.entries);
     const tastes = TASTES.filter((taste, index) => myVector[index] >= 0.5 && person.tastes[index] >= 0.5).slice(0, 2);
     const mine = myCuisines();
     const cuisines = person.cuisines.filter((cuisine) => mine.includes(cuisine)).slice(0, 2);
-    const both = tastes.concat(cuisines);
-    return both.length ? `You both like ${both.join(", ")}` : "Different tastes: good for trying new food";
+    return tastes.concat(cuisines);
+  }
+
+  // r41: the same reason as markup - the lead-in and each taste are separate text nodes, so every
+  // language can translate them whatever the mix (a whole sentence only matched the demo's own mixes)
+  function reasonsHtml(person, limit) {
+    const both = sharedWith(person).slice(0, limit || 4);
+    if (!both.length) return "Different tastes: good for trying new food";
+    const items = both.map((item) => `<span class="why-item">${esc(item)}</span>`);
+    // the second and later tastes sit in .why-more, so the one-row phone pulse can show just the first
+    const more = items.length > 1 ? `<span class="why-more">, ${items.slice(1).join(", ")}</span>` : "";
+    return `You both like ${items[0]}${more}`;
   }
 
   // one concrete, shared thing per bud: where you two actually eat (and what), else a place of yours in a cuisine they like
@@ -1326,7 +1348,7 @@
   async function removeFriend(id) {
     const person = PEOPLE.find((p) => p.id === id);
     const name = person ? person.name : "this bud";
-    if (!confirm(`Remove ${name} from your buds? Your past meals stay tagged, but they won't count for points anymore.`)) return;
+    if (!ask(`Remove ${name} from your buds? Your past meals stay tagged, but they won't count for points anymore.`)) return;
     state.friends = state.friends.filter((x) => x !== id);
     delete state.points[id];
     // invited buds live in the people store; drop them so they don't reappear after reload
@@ -1370,13 +1392,13 @@
             ${friends.length ? friends.map((person) => {
               const points = state.points[person.id] || 0;
               const level = L.levelFor(points);
-              return `<div class="person"><button type="button" class="avatar-btn" data-bud="${esc(person.id)}" aria-label="Your meals with ${esc(person.name)}">${avatar(person)}</button><div><div class="name"><button type="button" class="name-btn" data-bud="${esc(person.id)}">${esc(person.name)}</button> <span class="match">${matchLabel(matchFor(person))}</span></div><div class="why">${esc(level.name)} · ${points} pts · ${esc(lastTogether(person.id))}</div>${spotFor(person) ? `<div class="spot">${esc(spotFor(person))}</div>` : ""}${pendingPlanHtml(person.id)}${person.id === featuredId ? `<div class="featured-note">Next level shown above</div>` : `${level.next ? `<div class="next-step">${esc(nextStep(level))}</div>` : ""}<div class="level"><div class="track"><div class="fill" style="width:${Math.round(level.progress * 100)}%"></div></div></div>`}</div><div class="person-actions"><button type="button" class="btn small" data-hangout="${person.id}" aria-label="Plan makan with ${esc(person.name)}">Plan makan</button><button type="button" class="person-remove" data-remove="${person.id}" aria-label="Remove ${esc(person.name)}" title="Remove ${esc(person.name)}">Remove</button></div></div>`;
+              return `<div class="person"><button type="button" class="avatar-btn" data-bud="${esc(person.id)}" aria-label="Your meals with ${esc(person.name)}">${avatar(person)}</button><div><div class="name"><button type="button" class="name-btn" data-bud="${esc(person.id)}">${esc(person.name)}</button> <span class="match" data-i18n>${matchLabel(matchFor(person))}</span></div><div class="why">${esc(level.name)} · ${points} pts · ${esc(lastTogether(person.id))}</div>${spotFor(person) ? `<div class="spot">${esc(spotFor(person))}</div>` : ""}${pendingPlanHtml(person.id)}${person.id === featuredId ? `<div class="featured-note">Next level shown above</div>` : `${level.next ? `<div class="next-step">${esc(nextStep(level))}</div>` : ""}<div class="level"><div class="track"><div class="fill" style="width:${Math.round(level.progress * 100)}%"></div></div></div>`}</div><div class="person-actions"><button type="button" class="btn small" data-hangout="${person.id}" aria-label="Plan makan with ${esc(person.name)}">Plan makan</button><button type="button" class="person-remove" data-remove="${person.id}" aria-label="Remove ${esc(person.name)}" title="Remove ${esc(person.name)}">Remove</button></div></div>`;
             }).join("") : '<p class="muted">No buds yet. Invite a friend, or add an example profile below to try tagging and hangouts.</p>'}
           </section>
           <details class="panel suggested-panel suggested-fold"${isPhone() && !friends.length ? " open" : ""}>
             <summary><h2>${hasTasteProfile() ? "Demo matches · suggested by taste" : "Example buds to try"}</h2><span class="demo-badge" aria-hidden="true">Demo</span></summary>
             <p class="muted small panel-sub suggested-why">${hasTasteProfile() ? "Example profiles, ranked by how close their tastes are to the meals you logged. Worked out on this phone; nothing is uploaded. Real friends join through your invite link." : "Example profiles to try tagging and hangouts. Log a few meals and they get ranked by taste."}</p>
-            ${others.length ? others.map(({ person, match }) => `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match">${matchLabel(match)}</span></div><div class="why">${esc(hasTasteProfile() ? reasonsFor(person) : "Log a few meals to see what you share")} · ${esc(person.area)}</div>${hasTasteProfile() && spotFor(person) ? `<div class="spot">${esc(spotFor(person))}</div>` : ""}</div><button type="button" class="btn" data-add="${person.id}" aria-label="Add ${esc(person.name)} as a bud on this device">Add bud</button></div>`).join("") : '<p class="muted">You added everyone. Nice.</p>'}
+            ${others.length ? others.map(({ person, match }) => `<div class="person">${avatar(person)}<div><div class="name">${esc(person.name)} <span class="match" data-i18n>${matchLabel(match)}</span></div><div class="why">${hasTasteProfile() ? reasonsHtml(person) : "Log a few meals to see what you share"} <span class="why-area">· ${esc(person.area)}</span></div>${hasTasteProfile() && spotFor(person) ? `<div class="spot">${esc(spotFor(person))}</div>` : ""}</div><button type="button" class="btn" data-add="${person.id}" aria-label="Add ${esc(person.name)} as a bud on this device">Add bud</button></div>`).join("") : '<p class="muted">You added everyone. Nice.</p>'}
             <p class="notice">These are example profiles so you can try matching, tagging and hangouts. Lahap has no server yet: buds and points stay on this device, and invites go out through WhatsApp or your phone's share sheet.</p>
           </details>
         </div>
@@ -1385,7 +1407,7 @@
             <h2>Plan makan</h2>
             ${invites.length ? invites.map((invite) => {
               const person = personById(invite.friend) || { name: "?" };
-              const when = new Date(invite.when).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+              const when = new Date(invite.when).toLocaleString(dateLocale(), { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
               return `<div class="invite"><strong>${esc(person.name)} · ${esc(invite.place || "somewhere new")}</strong><span class="muted small">${esc(when)} · ${invite.done ? "eaten together" : "planned"}</span>${invite.done ? "" : `<div class="btn-row"><button type="button" class="btn" data-done="${esc(invite.id)}">We went: +${L.POINTS.hangout} pts</button><button type="button" class="btn ghost" data-cancel="${esc(invite.id)}">Cancel</button></div>`}</div>`;
             }).join("") : suggestedPlanHtml(friends)}
           </section>
@@ -1431,7 +1453,7 @@
   function pendingPlanHtml(personId) {
     const plan = state.invites.find((invite) => invite.friend === personId && !invite.done);
     if (!plan) return "";
-    const when = new Date(plan.when).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    const when = new Date(plan.when).toLocaleString(dateLocale(), { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
     return `<div class="plan-pending">Planned: ${esc(when)} · ${esc(plan.place || "somewhere new")}. Mark \u201cWe went\u201d after for +${L.POINTS.hangout}.</div>`;
   }
 
@@ -1462,7 +1484,7 @@
     if (!best) return '<p class="muted">No plans yet. Add a bud first.</p>';
     const pick = planPlaceFor(best.person);
     const place = pick && pick.place;
-    return `<div class="invite suggested"><span class="eyebrow">Suggested</span><strong>Makan with ${esc(best.person.name)}${place ? " at " + esc(place.name) : ""}</strong><span class="muted small">${best.match}% match. ${esc(reasonsFor(best.person))}.</span>${pick ? `<span class="plan-why">Why ${esc(place.name)}: ${esc(pick.why)}</span>` : ""}<div class="btn-row"><button type="button" class="btn primary" data-hangout="${best.person.id}">${place ? "Plan makan at " + esc(place.name) : "Plan makan with " + esc(best.person.name)}</button></div></div>`;
+    return `<div class="invite suggested"><span class="eyebrow">Suggested</span><strong>Makan with ${esc(best.person.name)}${place ? " at " + esc(place.name) : ""}</strong><span class="muted small"><span>${best.match}% match</span> · ${reasonsHtml(best.person)}</span>${pick ? `<span class="plan-why">Why ${esc(place.name)}: ${esc(pick.why)}</span>` : ""}<div class="btn-row"><button type="button" class="btn primary" data-hangout="${best.person.id}">${place ? "Plan makan at " + esc(place.name) : "Plan makan with " + esc(best.person.name)}</button></div></div>`;
   }
 
   // the bud closest to their next level, for the log form nudge
@@ -1502,7 +1524,7 @@
       <form method="dialog" id="hangout-form">
         <div class="sheet-head"><h2 id="hangout-title">Makan with ${esc(person.name)}</h2><button type="button" class="icon-btn" data-close aria-label="Close">${ICON_CLOSE}</button></div>
         <div class="sheet-body">
-          <p class="muted" style="margin-bottom:16px">${match}% taste match. ${esc(reasonsFor(person))}.</p>
+          <p class="muted" style="margin-bottom:16px"><span>${match}% taste match</span> · ${reasonsHtml(person)}</p>
           <label class="field"><span>Where</span><input type="text" name="place" value="${esc(places[0] ? places[0].name : "")}" list="hangout-places" required></label>
           <datalist id="hangout-places">${L.topPlaces(state.entries, 12).map((place) => `<option value="${esc(place.name)}">`).join("")}</datalist>
           ${places.length ? `<div class="suggest" style="margin:-8px 0 16px">${places.map((place) => `<button type="button" data-pick-place="${esc(place.name)}">${esc(place.name)}</button>`).join("")}</div>` : ""}
@@ -1518,7 +1540,7 @@
     const form = $("#hangout-form");
     const updateMessage = () => {
       const when = new Date(form.when.value);
-      const label = isNaN(when) ? "" : when.toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+      const label = isNaN(when) ? "" : when.toLocaleString(dateLocale(), { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
       form.message.value = `Hi ${person.name}! Lahap says our tastes are a ${match}% match. Makan together at ${form.place.value || "a new place"} on ${label}?`;
       $("#hangout-wa").href = `https://wa.me/?text=${encodeURIComponent(form.message.value)}`;
     };
@@ -1642,7 +1664,7 @@
       render();
     });
     $("#erase").addEventListener("click", async () => {
-      if (!confirm("Erase every meal, photo, bud and plan on this device? Export a backup first if you want to keep them.")) return;
+      if (!ask("Erase every meal, photo, bud and plan on this device? Export a backup first if you want to keep them.")) return;
       await store.clear();
       state.entries = [];
       state.friends = [];
@@ -2677,7 +2699,7 @@
       <div class="sheet-body">
         <img class="detail-photo${entry.cutout ? " cut" : ""}" id="detail-photo" src="${entry.cutout || entry.photo || plateThumb(entry, 480)}" alt="${entry.photo ? "Photo of " + esc(entry.name) : "Plate drawing of " + esc(entry.name)}">
         ${entry.cutout && entry.photo ? '<button type="button" class="btn small" id="detail-swap" style="margin-top:8px">Show original photo</button>' : ""}
-        <p class="muted" style="margin-top:12px">${esc(new Date(entry.ts).toLocaleString(undefined, { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }))} · ${esc(SOURCES[entry.source])}${placeLinkHtml(entry)}</p>
+        <p class="muted" style="margin-top:12px">${esc(new Date(entry.ts).toLocaleString(dateLocale(), { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }))} · ${esc(SOURCES[entry.source])}${placeLinkHtml(entry)}</p>
         <div class="stat-grid" style="margin-top:16px">
           <div class="stat"><div class="label">Price</div><div class="value money">${esc(money(entry.price))}</div></div>
           <div class="stat num-only"><div class="label">Plate score</div><div class="value">${score}</div></div>
@@ -2727,7 +2749,7 @@
     const format = { day: "numeric", month: "short" };
     // The year only earns its space once the meal is from another year.
     if (date.getFullYear() !== new Date().getFullYear()) format.year = "numeric";
-    return date.toLocaleDateString(undefined, format);
+    return date.toLocaleDateString(dateLocale(), format);
   }
 
   function placeLinkHtml(entry) {
@@ -2900,7 +2922,7 @@
 
   function periodLabel(year, month) {
     if (month === null || month === undefined) return String(year);
-    return new Date(year, month, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+    return new Date(year, month, 1).toLocaleDateString(dateLocale(), { month: "long", year: "numeric" });
   }
 
   function openRecap(year, month) {
@@ -2936,7 +2958,7 @@
     memorySheet(yearly ? "Your year in food" : "Your month in food", `
       <div class="chips" role="group" aria-label="Recap period">${chips.map((period) => {
         const pressed = period.year === year && (period.month === null ? yearly : period.month === month && !yearly);
-        return `<button type="button" class="chip" data-recap-period="${period.year}${period.month === null ? "" : "-" + period.month}" aria-pressed="${pressed}">${esc(period.month === null ? "All of " + period.year : new Date(period.year, period.month, 1).toLocaleDateString(undefined, { month: "short", year: "numeric" }))}</button>`;
+        return `<button type="button" class="chip" data-recap-period="${period.year}${period.month === null ? "" : "-" + period.month}" aria-pressed="${pressed}">${esc(period.month === null ? "All of " + period.year : new Date(period.year, period.month, 1).toLocaleDateString(dateLocale(), { month: "short", year: "numeric" }))}</button>`;
       }).join("")}</div>
       <div class="recap-slip" id="recap-slip">
         <p class="recap-brand">LAHAP</p>
@@ -2954,14 +2976,27 @@
   // picked per meal (stable hash) so share cards feel varied instead of all showing one plate.
   const DISH_PHOTOS = ["assets/dish/noodle.jpg", "assets/dish/salad.jpg", "assets/dish/pizza.jpg"];
 
+  // r41: one decode per picture. A share redraw paints four canvases from the same photo, and
+  // every tap on a size, backdrop or template redraws - so the loads are shared, not repeated.
+  // A failed load is not kept, so the next draw tries again.
+  const imageCache = new Map();
+  const IMAGE_CACHE_MAX = 16;
   function loadImage(src) {
-    return new Promise((resolve) => {
-      if (!src) return resolve(null);
+    if (!src) return Promise.resolve(null);
+    const cached = imageCache.get(src);
+    if (cached) return cached;
+    const pending = new Promise((resolve) => {
       const image = new Image();
       image.onload = () => resolve(image);
       image.onerror = () => resolve(null);
       image.src = src;
+    }).then((image) => {
+      if (!image) imageCache.delete(src);
+      return image;
     });
+    imageCache.set(src, pending);
+    if (imageCache.size > IMAGE_CACHE_MAX) imageCache.delete(imageCache.keys().next().value);
+    return pending;
   }
 
   function wrapText(ctx, text, maxWidth, maxLines) {
@@ -3018,6 +3053,17 @@
     const scale = (opts && opts.scale) || 1;
     const preview = !!(opts && opts.preview);
     const H = size === "story" ? 1920 : 1080;
+    const isWeek = share.subject === "week";
+    const entry = isWeek ? null : share.subject;
+    // r41: every picture is loaded BEFORE the canvas is resized. Resizing wipes a canvas, so the old
+    // order (wipe, wait for the photo, paint) could leave a preview blank for as long as a load took.
+    // Now the wipe and the paint run in one go, and a draw that was overtaken by a newer one for the
+    // same canvas stops here instead of painting stale choices over it.
+    const drawSeq = (canvas.__drawSeq = (canvas.__drawSeq || 0) + 1);
+    const photo = entry && entry.photo ? await loadImage(entry.photo) : null;
+    const cutout = entry && entry.cutout ? await loadImage(entry.cutout) : null;
+    const fallbackDish = bg === "photo" && !photo ? await loadImage(dishPhotoFor(entry)) : null;
+    if (canvas.__drawSeq !== drawSeq) return;
     if (!preview) drawShare.boxes = [];
     if (!preview) drawShare.statLabels = [];
     if (!preview) drawShare.stamp = null;
@@ -3029,12 +3075,8 @@
     const ctx = canvas.getContext("2d");
     if (scale !== 1) ctx.scale(scale, scale);
     ctx.clearRect(0, 0, W, H);
-    const isWeek = share.subject === "week";
-    const entry = isWeek ? null : share.subject;
     const stage = canvas.closest(".canvas-stage");
     if (stage) stage.classList.toggle("checker", bg === "clear");
-    const photo = entry && entry.photo ? await loadImage(entry.photo) : null;
-    const cutout = entry && entry.cutout ? await loadImage(entry.cutout) : null;
     const light = bg === "paper";
     const ink = light ? "#1d1813" : "#ffffff";
     const sub = light ? "#5e554a" : "rgba(255,255,255,0.86)";
@@ -3100,7 +3142,7 @@
         // r16: no photo of this meal - use a bundled real dish photo (rotates per meal), cover-cropped.
         // The scrim below keeps the white text readable. Falls back to the plate glyph only if the
         // image can't load (e.g. offline before the first precache).
-        const dish = await loadImage(dishPhotoFor(entry));
+        const dish = fallbackDish;
         if (dish) {
           backdrop = dish;
           paintBackdrop(dish);
@@ -3285,7 +3327,7 @@
       ctx.fillText("/100", scoreX + scoreW / 2 + (story ? 8 : 6), scoreY);
       ctx.textAlign = "center";
       // r18: the label is ink and bold so the metric is understood at feed size; the date follows quieter
-      const when = isWeek ? "LAST 7 DAYS" : new Date(entry.ts).toLocaleDateString(undefined, { day: "numeric", month: "short" }).toUpperCase();
+      const when = isWeek ? "LAST 7 DAYS" : new Date(entry.ts).toLocaleDateString(dateLocale(), { day: "numeric", month: "short" }).toUpperCase();
       const labelText = `PLATE SCORE · ${L.healthLabel(score).toUpperCase()}`;
       const whenText = `  ·  ${when}`;
       ctx.font = mono(story ? 38 : 30, 700);
@@ -3354,7 +3396,7 @@
         ctx.textAlign = "center";
         ctx.fillStyle = sub;
         ctx.font = mono(26, 600);
-        ctx.fillText(day.date.toLocaleDateString(undefined, { weekday: "short" }).toUpperCase(), cx, top);
+        ctx.fillText(day.date.toLocaleDateString(dateLocale(), { weekday: "short" }).toUpperCase(), cx, top);
         const rows = size === "story" ? 3 : 2;
         day.meals.slice(0, rows).forEach((meal, row) => {
           drawPlate(ctx, cx, top + 70 + row * (cell + 18), cell * 0.42, meal.plate, meal.name);
@@ -3440,7 +3482,7 @@
 
     ctx.fillStyle = sub;
     ctx.font = mono(30, 600);
-    const metaLine = [new Date(entry.ts).toLocaleDateString(undefined, { day: "numeric", month: "short" }).toUpperCase(), entry.place ? entry.place.toUpperCase() : null, SOURCES[entry.source] ? SOURCES[entry.source].toUpperCase() : null].filter(Boolean).join(" · ");
+    const metaLine = [new Date(entry.ts).toLocaleDateString(dateLocale(), { day: "numeric", month: "short" }).toUpperCase(), entry.place ? entry.place.toUpperCase() : null, SOURCES[entry.source] ? SOURCES[entry.source].toUpperCase() : null].filter(Boolean).join(" · ");
     ctx.fillText(wrapText(ctx, metaLine, W - pad * 2, 1)[0], pad, baseY);
     ctx.fillStyle = ink;
     ctx.font = serif(titleSize);
@@ -3629,7 +3671,7 @@
     ctx.fillStyle = faded;
     ctx.fillText(`FOOD DIARY · STRUK NO. ${struk}`, W / 2, cursor);
     cursor += 40;
-    const dateText = isWeek ? `WEEK ENDING ${new Date().toLocaleDateString(undefined, { day: "numeric", month: "short" }).toUpperCase()}` : new Date(entry.ts).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).toUpperCase();
+    const dateText = isWeek ? `WEEK ENDING ${new Date().toLocaleDateString(dateLocale(), { day: "numeric", month: "short" }).toUpperCase()}` : new Date(entry.ts).toLocaleString(dateLocale(), { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).toUpperCase();
     ctx.fillText(dateText, W / 2, cursor);
     cursor += 26;
     const rule = () => {
@@ -3996,7 +4038,7 @@
     }
     const remove = target.closest("[data-delete]");
     if (remove) {
-      if (!confirm("Delete this meal?")) return;
+      if (!ask("Delete this meal?")) return;
       try {
         await store.remove(remove.dataset.delete);
       } catch (error) {
@@ -4049,7 +4091,7 @@
       return;
     }
     if (target.closest("[data-clear-sample]")) {
-      if (!confirm(`Remove the ${sampleCount()} sample meals? Your own meals stay.`)) return;
+      if (!ask(`Remove the ${sampleCount()} sample meals? Your own meals stay.`)) return;
       await clearSample();
       return;
     }

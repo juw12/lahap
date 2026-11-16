@@ -17,6 +17,7 @@
   const norm = (value) => (L && L.normalize ? L.normalize(value) : String(value || "").trim().toLowerCase());
 
   const ICON_CLOSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+  const ICON_SHUFFLE = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>';
 
   function entries() {
     return api.state.entries.filter((entry) => entry && entry.name);
@@ -501,9 +502,9 @@
     collage = { list, images: images.filter(Boolean), template: "scatter", title: fromCollection ? (allCollections().find((item) => item.id === fromCollection) || {}).name || "My plates" : "My plates", strokes: [], ink: INKS[1], drawing: false, seed: 7 };
     sheet("Share Studio", `
       <div class="studio-canvas-wrap"><canvas id="collage-canvas" width="1080" height="1350" aria-label="Collage preview"></canvas></div>
-      <div class="chips" role="radiogroup" aria-label="Template">${TEMPLATES.map(([key, name]) => `<button type="button" class="chip${key === collage.template ? " on" : ""}" role="radio" aria-checked="${key === collage.template}" data-collage-template="${key}">${name}</button>`).join("")}<button type="button" class="chip" data-collage-shuffle>Shuffle</button></div>
-      <label class="field"><span>Title</span><input type="text" id="collage-title" value="${esc(collage.title)}" maxlength="32"></label>
       <div class="doodle-bar"><span class="muted small">Doodle on it:</span>${INKS.map((ink) => `<button type="button" class="ink${ink === collage.ink ? " on" : ""}" data-collage-ink="${ink}" style="background:${ink}" aria-label="Pen colour ${ink}"></button>`).join("")}<button type="button" class="chip" data-collage-undo>Undo</button></div>
+      <div class="chips template-row" role="radiogroup" aria-label="Template">${TEMPLATES.map(([key, name]) => `<button type="button" class="chip${key === collage.template ? " on" : ""}" role="radio" aria-checked="${key === collage.template}" data-collage-template="${key}">${name}</button>`).join("")}<button type="button" class="chip" data-collage-shuffle aria-label="Shuffle" title="Shuffle">${ICON_SHUFFLE}<span class="chip-word">Shuffle</span></button></div>
+      <label class="field"><span>Title</span><input type="text" id="collage-title" value="${esc(collage.title)}" maxlength="32"></label>
       <p class="muted small" id="collage-status">${api.plural(collage.images.length, "meal")} on the page.</p>`,
       `<button type="button" class="btn" data-collage-video>Looping video</button><button type="button" class="btn primary" data-collage-save>Save image</button>`, true);
     const canvas = $("#collage-canvas");
@@ -513,6 +514,19 @@
       drawCollage(0);
     });
     drawCollage(0);
+  }
+
+  // The template row scrolls sideways when a language needs more room than the phone has;
+  // Shuffle stays pinned at its end, so the chosen template is brought out from under it.
+  function revealChip(chip) {
+    const row = chip.closest(".template-row");
+    const pinned = row && row.querySelector("[data-collage-shuffle]");
+    if (!row || !pinned) return;
+    const rowBox = row.getBoundingClientRect();
+    const box = chip.getBoundingClientRect();
+    const limit = pinned.getBoundingClientRect().left - 6;
+    if (box.right > limit) row.scrollLeft += box.right - limit;
+    else if (box.left < rowBox.left) row.scrollLeft -= rowBox.left - box.left;
   }
 
   function seeded(seed) {
@@ -946,6 +960,7 @@
         chip.classList.toggle("on", chip === template);
         chip.setAttribute("aria-checked", String(chip === template));
       });
+      revealChip(template);
       return drawCollage(0);
     }
     if (target.closest("[data-collage-shuffle]")) {
