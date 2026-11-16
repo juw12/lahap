@@ -77,7 +77,7 @@ Limits (honest)
 - Suggested buds are example profiles. Invited buds are real but one-way snapshots: there is no server, so buds,
   matching and points live on each device and do not sync after the invite.
 
-Tests: `python tests/test_app.py` (Playwright, 619 checks, including a real cut-out and OCR run). Design rules: `design.md`.
+Tests: `python tests/test_app.py` (Playwright, 624 checks, including a real cut-out and OCR run). Design rules: `design.md`.
 
 Lahap vs PlateDiary (checked against platediary.app/features on 13 Nov 2026)
 

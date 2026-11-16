@@ -4988,3 +4988,38 @@ textarea {
 .search input {
   text-overflow: ellipsis;
 }
+
+/* r42: the dropdowns (language, currency, Table window source) drop the system arrow for
+   the app's own small chevron in the muted ink, so they read as the same field as the
+   inputs and pills beside them in every look. The chevron belongs to the wrapper and sits
+   over the dropdown's right padding, so no image is ever painted behind the chosen text. */
+.select-wrap {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.select-wrap select {
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 38px;
+  text-overflow: ellipsis;
+}
+
+.select-wrap::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 15px;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted);
+  transform: translateY(-70%) rotate(45deg);
+  pointer-events: none;
+}
+
+.table-controls .select-wrap {
+  flex: 1 1 140px;
+}

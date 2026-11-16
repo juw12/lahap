@@ -688,6 +688,8 @@ def studio_checks(browser, base):
         page.select_option("#table-source", first_collection)
         page.wait_for_timeout(200)
     check("table window: a collection can be the source", bool(first_collection) and page.locator("#table-source").input_value() == first_collection, first_collection)
+    table_select = [item for item in page.evaluate("() => [...document.querySelectorAll('select')].map((el) => { const s = getComputedStyle(el); const wrap = el.closest('.select-wrap'); const mark = wrap ? getComputedStyle(wrap, '::after') : null; const box = el.getBoundingClientRect(); const outer = wrap ? wrap.getBoundingClientRect() : null; return { id: el.id, appearance: s.appearance, plain: s.backgroundImage === 'none', chevron: !!mark && mark.content !== 'none' && parseFloat(mark.borderRightWidth) >= 1 && parseFloat(mark.borderBottomWidth) >= 1 && parseFloat(mark.right) + parseFloat(mark.width) < parseFloat(s.paddingRight), fills: !!outer && Math.abs(outer.width - box.width) < 1.5, pad: parseFloat(s.paddingRight), radius: parseFloat(s.borderTopLeftRadius), border: parseFloat(s.borderTopWidth) }; })") if item["id"] == "table-source"]
+    check("table window: the source dropdown uses the app's field style and chevron, not the system arrow", len(table_select) == 1 and table_select[0]["appearance"] == "none" and table_select[0]["plain"] and table_select[0]["chevron"] and table_select[0]["fills"] and table_select[0]["pad"] >= 30 and table_select[0]["radius"] > 0 and table_select[0]["border"] >= 1, table_select)
     table_overflow = page.evaluate("() => { const box = document.querySelector('#table-window'); return box ? box.scrollWidth - box.clientWidth : -1; }")
     check("table window: fits the sheet at 390 px", table_overflow == 0, table_overflow)
     page.click("[data-table-style='scatter']")
@@ -757,6 +759,8 @@ def studio_checks(browser, base):
 
     # looks + language, persisted
     go("me")
+    me_selects = page.evaluate("() => [...document.querySelectorAll('select')].map((el) => { const s = getComputedStyle(el); const wrap = el.closest('.select-wrap'); const mark = wrap ? getComputedStyle(wrap, '::after') : null; const box = el.getBoundingClientRect(); const outer = wrap ? wrap.getBoundingClientRect() : null; return { id: el.id, appearance: s.appearance, plain: s.backgroundImage === 'none', chevron: !!mark && mark.content !== 'none' && parseFloat(mark.borderRightWidth) >= 1 && parseFloat(mark.borderBottomWidth) >= 1 && parseFloat(mark.right) + parseFloat(mark.width) < parseFloat(s.paddingRight), fills: !!outer && Math.abs(outer.width - box.width) < 1.5, pad: parseFloat(s.paddingRight), radius: parseFloat(s.borderTopLeftRadius), border: parseFloat(s.borderTopWidth) }; })")
+    check("dropdowns: language and every other dropdown on Me use the app's chevron, not the system arrow", any(item["id"] == "set-lang" for item in me_selects) and all(item["appearance"] == "none" and item["plain"] and item["chevron"] and item["fills"] and item["pad"] >= 30 for item in me_selects), me_selects)
     page.click("[data-look-palette='night']")
     page.click("[data-look-type='rounded']")
     page.select_option("#set-lang", "id")
@@ -778,7 +782,7 @@ def studio_checks(browser, base):
     manifest = json.loads((ROOT / "manifest.webmanifest").read_text(encoding="utf-8"))
     check("widgets: four Windows widgets in the manifest (Quick Snap, Memory Lane, Craving Shuffle, Table Window)", len(manifest.get("widgets", [])) == 4 and all((ROOT / w["ms_ac_template"]).exists() for w in manifest["widgets"]))
     sw = (ROOT / "sw.js").read_text(encoding="utf-8")
-    check("sw: studio files cached and widget events handled", "studio.js" in sw and "widgetinstall" in sw and "lahap-v61" in sw)
+    check("sw: studio files cached and widget events handled", "studio.js" in sw and "widgetinstall" in sw and "lahap-v62" in sw)
     check("studio: no console errors", not errors, errors[:3])
     context.close()
 
