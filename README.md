@@ -148,3 +148,13 @@ tesseract.js and its English and Indonesian data (Apache-2.0), Leaflet 1.9.4 (BS
 `tests/fixtures/`: the Adaptive Cards renderer, templating and expressions libraries (MIT, Microsoft); the app never loads them.
 
 Licence: MIT.
+
+## Get it on your device
+
+- **Windows:** [`Lahap-Windows-Setup.exe`](https://github.com/juw12/lahap/releases/download/desktop/Lahap-Windows-Setup.exe) (no admin needed; if Windows says it protected your PC, choose *More info → Run anyway*), or without installing [`Lahap-Windows-Portable.zip`](https://github.com/juw12/lahap/releases/download/desktop/Lahap-Windows-Portable.zip).
+- **Mac:** [`Lahap-macOS-AppleSilicon.dmg`](https://github.com/juw12/lahap/releases/download/desktop/Lahap-macOS-AppleSilicon.dmg) (M1 and newer) or [`Lahap-macOS-Intel.dmg`](https://github.com/juw12/lahap/releases/download/desktop/Lahap-macOS-Intel.dmg). The first time, macOS blocks it because it is not notarized: **System Settings → Privacy & Security → Open Anyway**.
+- **Android:** [`Lahap-android.apk`](https://github.com/juw12/lahap/releases/download/android/Lahap-android.apk): open the file on the phone and allow your browser to install apps once.
+- **iPhone:** open https://juw12.github.io/lahap/ in Safari, tap Share, then **Add to Home Screen**.
+
+The Windows, Mac and Android apps are the web app in its own window ([`desktop/`](desktop/README.md), [`android/`](android/README.md)) and change with it. Each build is opened on GitHub's machines before it is published: on Windows and on a Mac the page loads, the app starts and can store data; on an Android emulator it installs, opens and stays up. They are not code-signed or notarised, and no real phone or PC has run them yet.
+
